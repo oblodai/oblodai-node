@@ -40,13 +40,13 @@
   },
   "license": "MIT",
   "author": "Oblodai",
-  "homepage": "https://github.com/oblodai/oblodai-sdk#readme",
+  "homepage": "https://github.com/oblodai/oblodai-node#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/oblodai/oblodai-sdk.git"
+    "url": "git+https://github.com/oblodai/oblodai-node.git"
   },
   "bugs": {
-    "url": "https://github.com/oblodai/oblodai-sdk/issues"
+    "url": "https://github.com/oblodai/oblodai-node/issues"
   },
   "publishConfig": {
     "access": "public"
