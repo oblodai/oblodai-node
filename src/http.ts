@@ -21,6 +21,8 @@ function parseRetryAfterMs(header: string | null): number | undefined {
   return seconds * 1000;
 }
 const DEFAULT_TIMEOUT_MS = 30_000;
+/** Абсолютный потолок для серверного `Retry-After` (защита от абсурдных значений), 5 минут. */
+const MAX_RETRY_AFTER_MS = 300_000;
 const DEFAULT_RETRY: Required<RetryOptions> = {
   maxAttempts: 4,
   initialDelayMs: 500,
@@ -102,9 +104,13 @@ export class HttpClient {
           throw err;
         }
         // Уважаем Retry-After от сервера (напр. 429), иначе — собственный backoff с джиттером.
+        // Серверную подсказку НЕ ограничиваем maxDelayMs (это потолок только для собственного
+        // backoff): если сервер просит подождать 60с — ждём 60с. Ограничиваем лишь абсолютным
+        // потолком MAX_RETRY_AFTER_MS от абсурдных значений.
         const suggested =
           err instanceof OblodaiApiError && err.retryAfterMs != null ? err.retryAfterMs : undefined;
-        const delay = suggested != null ? Math.min(suggested, this.retry!.maxDelayMs) : this.backoffDelay(attempt);
+        const delay =
+          suggested != null ? Math.min(suggested, MAX_RETRY_AFTER_MS) : this.backoffDelay(attempt);
         this.log('warn', 'oblodai: retrying', {
           method,
           path,

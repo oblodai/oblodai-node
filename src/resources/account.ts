@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { BaseResource } from './base.js';
 import type { Balance, ReferralInfo } from '../models.js';
 
@@ -13,7 +14,12 @@ export class Account extends BaseResource {
     return this.http.request<ReferralInfo>('/v1/referral/info', {});
   }
 
-  /** Перевод средств на личный кошелёк владельца. `POST /v1/transfer/to-personal` */
+  /**
+   * Перевод средств на личный кошелёк владельца. `POST /v1/transfer/to-personal`
+   *
+   * Если `order_id` не задан, SDK подставляет стабильный ключ идемпотентности (`idem-<uuid>`)
+   * ДО отправки — чтобы автоматический повтор не создал повторный перевод.
+   */
   transferToPersonal(params: {
     amount: string;
     currency: string;
@@ -24,6 +30,9 @@ export class Account extends BaseResource {
     direction: string;
     personal_balance: string;
   }> {
+    if (!params.order_id) {
+      params.order_id = `idem-${randomUUID()}`;
+    }
     return this.http.request('/v1/transfer/to-personal', params);
   }
 

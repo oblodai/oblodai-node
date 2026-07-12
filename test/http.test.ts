@@ -60,11 +60,15 @@ describe('HttpClient через OblodaiClient', () => {
     ).rejects.toMatchObject({ code: 'payout.insufficient_funds', status: 409 });
   });
 
-  it('isRetriable корректен для funds_maturing', async () => {
+  it('funds_maturing терминальна (НЕ retriable), 5xx/429 — retriable', async () => {
+    // payout.funds_maturing — бизнес-состояние «средства дозревают», а не транспортный сбой:
+    // повторять его бессмысленно, обрабатываем в коде.
     const err = new OblodaiApiError('payout.funds_maturing', 'maturing', 409, {});
-    expect(err.isRetriable).toBe(true);
+    expect(err.isRetriable).toBe(false);
     const err2 = new OblodaiApiError('payout.insufficient_funds', 'no', 409, {});
     expect(err2.isRetriable).toBe(false);
+    expect(new OblodaiApiError('gateway.unavailable', 'x', 503, {}).isRetriable).toBe(true);
+    expect(new OblodaiApiError('http.429', 'x', 429, {}).isRetriable).toBe(true);
   });
 
   it('повторяет 503 и добивается успеха при включённых ретраях', async () => {

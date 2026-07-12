@@ -43,10 +43,11 @@ export class OblodaiApiError extends OblodaiError {
 
   /** Класс ошибки — временная ли она (стоит ли повторять с backoff). */
   get isRetriable(): boolean {
-    // 5xx и 429-подобные — временные; funds_maturing — временное «дозревание».
+    // Повторяем только транспортно-временные сбои: 5xx и 429. `payout.funds_maturing` —
+    // терминальная бизнес-ошибка (средства ещё дозревают): её нужно обрабатывать в коде,
+    // а не крутить бесполезные повторы, поэтому она НЕ retriable.
     if (this.status >= 500) return true;
     if (this.status === 429) return true;
-    if (this.code === 'payout.funds_maturing') return true;
     return false;
   }
 }

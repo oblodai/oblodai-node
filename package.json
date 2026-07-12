@@ -1,8 +1,9 @@
 {
   "name": "@oblodai-npm/sdk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Официальный TypeScript/Node.js SDK для платёжного шлюза Oblodai: приём платежей, выплаты, статические кошельки, вебхуки.",
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,7 +18,8 @@
     "dist",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    ".env.example"
   ],
   "scripts": {
     "build": "tsup",
@@ -51,8 +53,10 @@
   "publishConfig": {
     "access": "public"
   },
+  "dependencies": {
+    "@types/node": "^20.12.0"
+  },
   "devDependencies": {
-    "@types/node": "^20.12.0",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
