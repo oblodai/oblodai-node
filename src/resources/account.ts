@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { BaseResource } from './base.js';
+import { needsIdempotencyKey } from './idempotency.js';
 import type { Balance, ReferralInfo } from '../models.js';
 
 /** Баланс, рефералы, перевод на личный кошелёк, VRCS. */
@@ -17,8 +18,9 @@ export class Account extends BaseResource {
   /**
    * Перевод средств на личный кошелёк владельца. `POST /v1/transfer/to-personal`
    *
-   * Если `order_id` не задан, SDK подставляет стабильный ключ идемпотентности (`idem-<uuid>`)
-   * ДО отправки — чтобы автоматический повтор не создал повторный перевод.
+   * Если `order_id` не задан (или пуст/из одних пробелов), SDK подставляет стабильный
+   * ключ идемпотентности (`idem-<uuid>`) ДО отправки — чтобы автоматический повтор не
+   * создал повторный перевод. Ключ инъектируется в КОПИЮ — объект вызывающего не мутируется.
    */
   transferToPersonal(params: {
     amount: string;
@@ -30,10 +32,10 @@ export class Account extends BaseResource {
     direction: string;
     personal_balance: string;
   }> {
-    if (!params.order_id) {
-      params.order_id = `idem-${randomUUID()}`;
-    }
-    return this.http.request('/v1/transfer/to-personal', params);
+    const body = needsIdempotencyKey(params)
+      ? { ...params, order_id: `idem-${randomUUID()}` }
+      : params;
+    return this.http.request('/v1/transfer/to-personal', body);
   }
 
   /** Включить/выключить VRCS. Без enabled — чтение. `POST /v1/vrcs` */

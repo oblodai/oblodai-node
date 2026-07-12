@@ -79,6 +79,62 @@ describe('автоматический ключ идемпотентности o
     expect(second).toBe(first);
   });
 
+  it('payments.create НЕ мутирует объект вызывающего (ключ только в теле запроса)', async () => {
+    const { fn, calls } = mockFetch([
+      { status: 200, body: { state: 0, result: { uuid: 'p1', order_id: 'x' } } },
+    ]);
+    const client = makeClient(fn);
+
+    const obj: { amount: string; currency: string; order_id?: string } = {
+      amount: '10',
+      currency: 'USD',
+    };
+    await client.payments.create(obj);
+
+    // Объект вызывающего не тронут…
+    expect('order_id' in obj).toBe(false);
+    expect(obj.order_id).toBeUndefined();
+    // …но в отправленном теле ключ есть.
+    const sent = sentOrderId(calls[0]!.init);
+    expect(typeof sent).toBe('string');
+    expect(sent as string).toMatch(/^idem-/);
+  });
+
+  it('переиспользование одного объекта в двух create() даёт РАЗНЫЕ order_id на проводе', async () => {
+    const { fn, calls } = mockFetch([
+      { status: 200, body: { state: 0, result: { uuid: 'p1', order_id: 'x' } } },
+    ]);
+    const client = makeClient(fn);
+
+    const obj = { amount: '10', currency: 'USD' };
+    await client.payments.create(obj);
+    await client.payments.create(obj);
+
+    expect(calls.length).toBe(2);
+    const first = sentOrderId(calls[0]!.init);
+    const second = sentOrderId(calls[1]!.init);
+    expect(typeof first).toBe('string');
+    expect(typeof second).toBe('string');
+    expect(first as string).toMatch(/^idem-/);
+    expect(second as string).toMatch(/^idem-/);
+    // Каждый вызов получает собственный ключ — операции не схлопываются в одну.
+    expect(second).not.toBe(first);
+  });
+
+  it('order_id из одних пробелов трактуется как отсутствующий и заменяется на провод', async () => {
+    const { fn, calls } = mockFetch([
+      { status: 200, body: { state: 0, result: { uuid: 'p1', order_id: 'x' } } },
+    ]);
+    const client = makeClient(fn);
+
+    await client.payments.create({ amount: '10', currency: 'USD', order_id: '   ' });
+
+    const sent = sentOrderId(calls[0]!.init);
+    expect(typeof sent).toBe('string');
+    expect(sent as string).not.toBe('   ');
+    expect(sent as string).toMatch(/^idem-/);
+  });
+
   it('account.transferToPersonal без order_id инъектит ключ идемпотентности', async () => {
     const { fn, calls } = mockFetch([
       {

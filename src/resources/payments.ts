@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { BaseResource } from './base.js';
+import { needsIdempotencyKey } from './idempotency.js';
 import type {
   Payment,
   CreatePaymentParams,
@@ -15,15 +16,17 @@ export class Payments extends BaseResource {
   /**
    * Создать платёжный счёт (инвойс). `POST /v1/payment`
    *
-   * Если `order_id` не задан, SDK подставляет стабильный ключ идемпотентности
-   * (`idem-<uuid>`) ДО отправки — так автоматический повтор (таймаут/5xx/сеть) не создаёт
-   * дубль счёта: бэкенд дедуплицирует по `order_id`.
+   * Если `order_id` не задан (или пуст/из одних пробелов), SDK подставляет стабильный
+   * ключ идемпотентности (`idem-<uuid>`) ДО отправки — так автоматический повтор
+   * (таймаут/5xx/сеть) не создаёт дубль счёта: бэкенд дедуплицирует по `order_id`.
+   *
+   * Ключ инъектируется в КОПИЮ параметров — объект вызывающего не мутируется.
    */
   create(params: CreatePaymentParams): Promise<Payment> {
-    if (!params.order_id) {
-      params.order_id = `idem-${randomUUID()}`;
-    }
-    return this.http.request<Payment>('/v1/payment', params);
+    const body = needsIdempotencyKey(params)
+      ? { ...params, order_id: `idem-${randomUUID()}` }
+      : params;
+    return this.http.request<Payment>('/v1/payment', body);
   }
 
   /** Информация о счёте по uuid или order_id. `POST /v1/payment/info` */
