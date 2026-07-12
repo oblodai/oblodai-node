@@ -1,6 +1,6 @@
 # Releasing
 
-This package (`@oblodai/sdk`) is published to **npm** by CI when a `v*` tag is pushed.
+This package (`@oblodai-npm/sdk`) is published to **npm** by CI when a `v*` tag is pushed.
 
 ## Setup (one-time)
 **Repo secret:** `NPM_TOKEN` — npm *automation* token with publish rights for the `@oblodai` scope.

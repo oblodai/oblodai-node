@@ -9,7 +9,7 @@
 ## Установка
 
 ```bash
-npm install @oblodai/sdk
+npm install @oblodai-npm/sdk
 ```
 
 Требуется Node.js 18+ (используется глобальный `fetch`). Пакет поставляется в ESM и CommonJS с
@@ -26,7 +26,7 @@ export OBLODAI_SECRET=oblodai_live_...
 ```
 
 ```ts
-import { OblodaiClient } from '@oblodai/sdk';
+import { OblodaiClient } from '@oblodai-npm/sdk';
 
 const client = OblodaiClient.fromEnv(); // OBLODAI_PUBLIC_ID / OBLODAI_SECRET / OBLODAI_BASE_URL
 ```
@@ -34,7 +34,7 @@ const client = OblodaiClient.fromEnv(); // OBLODAI_PUBLIC_ID / OBLODAI_SECRET / 
 ## Быстрый старт
 
 ```ts
-import { OblodaiClient } from '@oblodai/sdk';
+import { OblodaiClient } from '@oblodai-npm/sdk';
 
 // либо явно (эквивалент fromEnv выше):
 const client = new OblodaiClient({
@@ -65,7 +65,7 @@ console.log(payment.url);     // hosted-страница оплаты
 
 ```ts
 import express from 'express';
-import { constructWebhookEvent, OblodaiSignatureError, type WebhookEvent } from '@oblodai/sdk';
+import { constructWebhookEvent, OblodaiSignatureError, type WebhookEvent } from '@oblodai-npm/sdk';
 
 const app = express();
 const WEBHOOK_SECRET = process.env.OBLODAI_WEBHOOK_SECRET!; // из client.webhooks.register()
@@ -100,7 +100,7 @@ app.post('/oblodai/callback', express.raw({ type: '*/*' }), (req, res) => {
 Все ошибки API — экземпляры `OblodaiApiError` с машиночитаемым `.code`. Ветвитесь по коду.
 
 ```ts
-import { OblodaiApiError } from '@oblodai/sdk';
+import { OblodaiApiError } from '@oblodai-npm/sdk';
 
 try {
   await client.payouts.create({
