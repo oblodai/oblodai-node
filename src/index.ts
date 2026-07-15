@@ -43,6 +43,7 @@ export type {
 // Модели объектов и параметры
 export type {
   Payment,
+  PaymentRefundEntry,
   CreatePaymentParams,
   Lookup,
   HistoryParams,
@@ -68,4 +69,37 @@ export type {
   Delivery,
   AcceptedMethod,
   AutoWithdrawRule,
+  // v1.1.0: батчи
+  BatchOnError,
+  BatchOptions,
+  BatchStatus,
+  BatchSubmitResult,
+  BatchItem,
+  BatchInfo,
+  RefundBatchItem,
+  // v1.1.0: платёжные ссылки
+  PaymentLinkAmountMode,
+  CreatePaymentLinkParams,
+  PaymentLinkCreated,
+  PaymentLink,
+  PaymentLinkInfo,
+  LinkCheckoutParams,
+  // v1.1.0: сплиты
+  CreateSplitRuleParams,
+  SplitRule,
+  SplitConfig,
+  // v1.1.0: счёт на e-mail и resolve
+  SendEmailParams,
+  SendEmailResult,
+  ResolveParams,
+  ResolveResult,
+  // v1.1.0: payout-ссылки (крипто-чеки)
+  PayoutLinkStatus,
+  CreatePayoutLinkParams,
+  PayoutLink,
+  PayoutLinkCreated,
+  PayoutLinkBatchItem,
+  PayoutLinkBatchResult,
+  PayoutLinkClaimInfo,
+  PayoutLinkClaimResult,
 } from './models.js';

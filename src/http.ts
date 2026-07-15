@@ -29,6 +29,17 @@ const DEFAULT_RETRY: Required<RetryOptions> = {
   maxDelayMs: 30_000,
 };
 
+/** Дополнительные опции одного вызова транспорта. */
+export interface RequestOpts {
+  /**
+   * Значение заголовка `Idempotency-Key`. Вызывающий генерирует его ОДИН раз до цикла ретраев,
+   * поэтому все внутренние повторы уходят с одним и тем же ключом — бэкенд дедуплицирует
+   * повтор и вернёт закешированный результат первой попытки. В подпись запроса заголовок
+   * НЕ входит (подписываются только timestamp/method/path/body).
+   */
+  idempotencyKey?: string;
+}
+
 /**
  * Транспортный слой. Подписывает каждый запрос, отправляет POST+JSON, разбирает конверт
  * `state`/`result`, бросает типизированные ошибки и (при включённых ретраях) повторяет временные сбои
@@ -68,8 +79,8 @@ export class HttpClient {
    * Выполняет подписанный POST-запрос к `path` с телом `payload`. Возвращает поле `result` из
    * конверта. Публичные (неподписанные) вызовы используют {@link requestPublic}.
    */
-  async request<T>(path: string, payload: unknown = {}): Promise<T> {
-    return this.execute<T>(path, payload, true);
+  async request<T>(path: string, payload: unknown = {}, opts: RequestOpts = {}): Promise<T> {
+    return this.execute<T>(path, payload, true, 'POST', opts);
   }
 
   /** Выполняет запрос БЕЗ подписи (для публичных эндпоинтов). */
@@ -86,6 +97,7 @@ export class HttpClient {
     payload: unknown,
     signed: boolean,
     method: 'GET' | 'POST' = 'POST',
+    opts: RequestOpts = {},
   ): Promise<T> {
     const attempts = this.retry?.maxAttempts ?? 1;
     let lastErr: unknown;
@@ -93,7 +105,7 @@ export class HttpClient {
     for (let attempt = 1; attempt <= attempts; attempt++) {
       this.log('debug', 'oblodai: request', { method, path, attempt, attempts });
       try {
-        return await this.once<T>(path, payload, signed, method);
+        return await this.once<T>(path, payload, signed, method, opts);
       } catch (err) {
         lastErr = err;
         const retriable = this.isRetriable(err);
@@ -130,6 +142,7 @@ export class HttpClient {
     payload: unknown,
     signed: boolean,
     method: 'GET' | 'POST',
+    opts: RequestOpts = {},
   ): Promise<T> {
     const url = this.baseUrl + path;
     const body = method === 'GET' ? undefined : JSON.stringify(payload ?? {});
@@ -141,6 +154,9 @@ export class HttpClient {
       headers['X-Timestamp'] = s.timestamp;
       headers['X-Signature'] = s.signature;
     }
+    // Заголовок идемпотентности одинаков на всех попытках (генерируется до цикла ретраев)
+    // и не участвует в подписи.
+    if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);

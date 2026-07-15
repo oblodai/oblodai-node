@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto';
 import { BaseResource } from './base.js';
-import { needsIdempotencyKey } from './idempotency.js';
+import { idempotencyKeyFor } from './idempotency.js';
 import type {
   Payment,
   CreatePaymentParams,
@@ -9,6 +8,14 @@ import type {
   PaymentList,
   ServiceMethod,
   AcceptedMethod,
+  RefundParams,
+  BatchOptions,
+  BatchSubmitResult,
+  RefundBatchItem,
+  SendEmailParams,
+  SendEmailResult,
+  ResolveParams,
+  ResolveResult,
 } from '../models.js';
 
 /** Методы приёма платежей. */
@@ -16,17 +23,80 @@ export class Payments extends BaseResource {
   /**
    * Создать платёжный счёт (инвойс). `POST /v1/payment`
    *
-   * Если `order_id` не задан (или пуст/из одних пробелов), SDK подставляет стабильный
-   * ключ идемпотентности (`idem-<uuid>`) ДО отправки — так автоматический повтор
-   * (таймаут/5xx/сеть) не создаёт дубль счёта: бэкенд дедуплицирует по `order_id`.
+   * Идемпотентность (v1.1.0): SDK генерирует ключ ОДИН раз до цикла ретраев и шлёт его
+   * HTTP-заголовком `Idempotency-Key` (в подпись не входит) — автоматический повтор
+   * (таймаут/5xx/сеть) не создаёт дубль счёта. Свой ключ — через `params.idempotency_key`
+   * (уйдёт в заголовок, НЕ в тело).
    *
-   * Ключ инъектируется в КОПИЮ параметров — объект вызывающего не мутируется.
+   * ЛОМАЮЩЕЕ изменение против v1.0.x: SDK больше НЕ подставляет автоматический
+   * `order_id` (`idem-<uuid>`) — `order_id` уходит ровно так, как передали вы
+   * (не задали — в платеже его не будет). Задавайте свой `order_id`, чтобы потом
+   * находить платёж через `payments.info`.
    */
   create(params: CreatePaymentParams): Promise<Payment> {
-    const body = needsIdempotencyKey(params)
-      ? { ...params, order_id: `idem-${randomUUID()}` }
-      : params;
-    return this.http.request<Payment>('/v1/payment', body);
+    const { idempotency_key, ...body } = params;
+    return this.http.request<Payment>('/v1/payment', body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key),
+    });
+  }
+
+  /**
+   * Массовое создание платежей — до 5000 одним подписанным запросом (одна отметка rate-limit).
+   * `POST /v1/payment/batch`. Обработка в фоне: результат по элементам — через
+   * `client.batches.info(batch_id)`.
+   *
+   * На каждом элементе ОБЯЗАТЕЛЕН `order_id` (`batch.order_id_required`); дубликат внутри
+   * батча → `batch.duplicate_order_id`. Идемпотентность вызова — заголовком `Idempotency-Key`
+   * (генерируется SDK или `opts.idempotency_key`).
+   */
+  createBatch(payments: CreatePaymentParams[], opts: BatchOptions = {}): Promise<BatchSubmitResult> {
+    const body: Record<string, unknown> = { payments };
+    if (opts.onError) body.on_error = opts.onError;
+    return this.http.request<BatchSubmitResult>('/v1/payment/batch', body, {
+      idempotencyKey: idempotencyKeyFor(opts.idempotency_key),
+    });
+  }
+
+  /**
+   * Массовый возврат — до 5000 одним запросом. `POST /v1/refund/batch`.
+   * На каждом элементе обязательны `reference` (per-item ключ дедупликации) и
+   * `uuid`/`order_id` инвойса. Идемпотентность вызова — заголовком `Idempotency-Key`.
+   * Результат по элементам — `client.batches.info(batch_id)`.
+   */
+  refundBatch(refunds: RefundBatchItem[], opts: BatchOptions = {}): Promise<BatchSubmitResult> {
+    const body: Record<string, unknown> = { refunds };
+    if (opts.onError) body.on_error = opts.onError;
+    return this.http.request<BatchSubmitResult>('/v1/refund/batch', body, {
+      idempotencyKey: idempotencyKeyFor(opts.idempotency_key),
+    });
+  }
+
+  /**
+   * Отправить покупателю счёт на e-mail (письмо с кнопкой «Оплатить»). `POST /v1/payment/send-email`
+   *
+   * Получатель — `email` или `payer_email` платежа. Лимит: 10 писем/час на адрес получателя
+   * (`email.rate_limited`). Заголовок `Idempotency-Key` на этом эндпоинте не действует
+   * (эндпоинт им не обёрнут) — повтор вызова отправит письмо ещё раз.
+   */
+  sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
+    return this.http.request<SendEmailResult>('/v1/payment/send-email', params);
+  }
+
+  /**
+   * Решить судьбу НЕДОПЛАЧЕННОГО платежа (`payment_status === 'wrong_amount'`).
+   * `POST /v1/payment/resolve` (нужен payout-ключ — операция может двигать деньги наружу).
+   *
+   * `action: 'accept'` — оставить частичную оплату себе (глушит авто-возврат);
+   * `action: 'refund'` — вернуть плательщику (по умолчанию на `payer_address`; для UTXO
+   * передайте `address`). Идемпотентно и заголовком `Idempotency-Key` (SDK генерирует сам),
+   * и доменно: повторный accept — no-op, повторный refund — реплей той же выплаты.
+   * Платёж в другом статусе → `resolution.not_underpaid` (409).
+   */
+  resolve(params: ResolveParams): Promise<ResolveResult> {
+    const { idempotency_key, ...body } = params;
+    return this.http.request<ResolveResult>('/v1/payment/resolve', body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key),
+    });
   }
 
   /** Информация о счёте по uuid или order_id. `POST /v1/payment/info` */
@@ -54,15 +124,18 @@ export class Payments extends BaseResource {
     return this.http.request<{ result: boolean }>('/v1/payment/resend', lookup);
   }
 
-  /** Возврат средств платежа. `POST /v1/payment/refund` (см. также client.payouts.refund) */
-  refund(params: {
-    address: string;
-    uuid?: string;
-    order_id?: string;
-    network?: string;
-    amount?: string;
-  }): Promise<unknown> {
-    return this.http.request('/v1/payment/refund', params);
+  /**
+   * Возврат средств платежа. `POST /v1/payment/refund` (см. также client.payouts.refund)
+   *
+   * С v1.1.0 `address` не обязателен — по умолчанию вернём на адрес плательщика
+   * (для Bitcoin/UTXO он неизвестен — там `address` нужен). Идемпотентность — заголовком
+   * `Idempotency-Key` (SDK генерирует сам; свой — `params.idempotency_key`).
+   */
+  refund(params: RefundParams): Promise<unknown> {
+    const { idempotency_key, ...body } = params;
+    return this.http.request('/v1/payment/refund', body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key),
+    });
   }
 
   // ── Настройки приёма ──

@@ -23,6 +23,14 @@ type PaymentStatus = 'check' | 'confirm_check' | 'wrong_amount_waiting' | 'paid'
 type PayoutStatus = 'check' | 'process' | 'paid' | 'fail' | 'cancel';
 /** Коды сетей, поддерживаемые каталогом. */
 type Network = 'ethereum' | 'bsc' | 'polygon' | 'avalanche' | 'base' | 'arbitrum' | 'tron' | 'solana' | 'ton' | 'bitcoin';
+/**
+ * Пользовательский логгер SDK. Вызывается с уровнем, сообщением и (опционально) структурированными
+ * полями. Реализация решает, куда и как писать. По умолчанию логирование выключено.
+ *
+ * БЕЗОПАСНОСТЬ: SDK НИКОГДА не передаёт в `fields` секреты, подписи, заголовок Authorization или
+ * тела запросов/ответов — только method/path/status/ms/attempt/delay/код ошибки. `publicId` безопасен.
+ */
+type OblodaiLogger = (level: 'debug' | 'info' | 'warn' | 'error', message: string, fields?: Record<string, unknown>) => void;
 /** Конфигурация клиента. */
 interface OblodaiConfig {
     /** `public_id` — несекретный идентификатор ключа. */
@@ -30,8 +38,7 @@ interface OblodaiConfig {
     /** `secret` — секрет для подписи запросов. Только на сервере. */
     secret: string;
     /**
-     * Базовый URL API. По умолчанию `https://api.oblodai.example` (плейсхолдер из документации —
-     * укажите реальный).
+     * Базовый URL API. По умолчанию `https://api.oblodai.com` (боевой; переопределяется полем `baseUrl`).
      */
     baseUrl?: string;
     /** Таймаут запроса в миллисекундах. По умолчанию 30000. */
@@ -40,6 +47,12 @@ interface OblodaiConfig {
     retry?: RetryOptions | false;
     /** Кастомная реализация fetch (по умолчанию глобальный `fetch`). */
     fetch?: typeof fetch;
+    /**
+     * Опциональный логгер. Если не задан, но переменная окружения `OBLODAI_LOG` равна
+     * `debug`/`info`/`warn`/`error`, используется встроенный console-логгер с фильтром по этому уровню.
+     * Иначе логирование выключено. SDK не логирует секреты/подписи/тела — см. {@link OblodaiLogger}.
+     */
+    logger?: OblodaiLogger;
 }
 /** Настройки повторов с экспоненциальным backoff. */
 interface RetryOptions {
@@ -57,6 +70,16 @@ interface Paginate {
     offset: number;
 }
 
+/** Дополнительные опции одного вызова транспорта. */
+interface RequestOpts {
+    /**
+     * Значение заголовка `Idempotency-Key`. Вызывающий генерирует его ОДИН раз до цикла ретраев,
+     * поэтому все внутренние повторы уходят с одним и тем же ключом — бэкенд дедуплицирует
+     * повтор и вернёт закешированный результат первой попытки. В подпись запроса заголовок
+     * НЕ входит (подписываются только timestamp/method/path/body).
+     */
+    idempotencyKey?: string;
+}
 /**
  * Транспортный слой. Подписывает каждый запрос, отправляет POST+JSON, разбирает конверт
  * `state`/`result`, бросает типизированные ошибки и (при включённых ретраях) повторяет временные сбои
@@ -69,16 +92,19 @@ declare class HttpClient {
     private readonly timeoutMs;
     private readonly retry;
     private readonly fetchImpl;
+    private readonly log;
     constructor(config: OblodaiConfig);
     /**
      * Выполняет подписанный POST-запрос к `path` с телом `payload`. Возвращает поле `result` из
      * конверта. Публичные (неподписанные) вызовы используют {@link requestPublic}.
      */
-    request<T>(path: string, payload?: unknown): Promise<T>;
+    request<T>(path: string, payload?: unknown, opts?: RequestOpts): Promise<T>;
     /** Выполняет запрос БЕЗ подписи (для публичных эндпоинтов). */
     requestPublic<T>(path: string, payload?: unknown, method?: 'GET' | 'POST'): Promise<T>;
     private execute;
     private once;
+    /** Человекочитаемая причина повтора для логов (без секретов и тел). */
+    private retryReason;
     private isRetriable;
     private backoffDelay;
     private sleep;
@@ -125,6 +151,23 @@ interface Payment {
     confirmations: number;
     required_confirmations: number;
     txid: string;
+    /** С v1.1.0: адрес, с которого пришли деньги (если известен; в UTXO-сетях может отсутствовать). */
+    payer_address?: string;
+    /** С v1.1.0: возвраты по платежу. */
+    refunds?: PaymentRefundEntry[];
+    /** С v1.1.0: агрегированный статус возвратов. */
+    refund_status?: 'none' | 'partial' | 'full';
+}
+/** Запись возврата в `Payment.refunds` (v1.1.0). */
+interface PaymentRefundEntry {
+    uuid?: string;
+    amount?: string;
+    currency?: string;
+    network?: string;
+    address?: string;
+    status?: string;
+    created_at?: string;
+    [key: string]: unknown;
 }
 /** Параметры создания платежа (`POST /v1/payment`). */
 interface CreatePaymentParams {
@@ -144,6 +187,11 @@ interface CreatePaymentParams {
     theme?: 'dark' | 'light';
     is_payment_multiple?: boolean;
     is_refresh?: boolean;
+    /**
+     * Свой ключ идемпотентности (v1.1.0). Уходит HTTP-заголовком `Idempotency-Key`, НЕ в тело.
+     * Если не задан, SDK генерирует UUID один раз на вызов (стабилен между внутренними повторами).
+     */
+    idempotency_key?: string;
 }
 /** Ссылка на объект по uuid или order_id (нужен хотя бы один). */
 interface Lookup {
@@ -245,6 +293,11 @@ interface CreatePayoutParams {
     url_callback?: string;
     from_currency?: string;
     source?: 'api' | 'manual';
+    /**
+     * Свой ключ идемпотентности (v1.1.0). Уходит HTTP-заголовком `Idempotency-Key`, НЕ в тело.
+     * Если не задан, SDK генерирует UUID один раз на вызов (стабилен между внутренними повторами).
+     */
+    idempotency_key?: string;
 }
 interface MassPayoutItem {
     uuid?: string;
@@ -270,11 +323,20 @@ interface PayoutCalculation {
     to_amount: string;
 }
 interface RefundParams {
-    address: string;
+    /**
+     * Адрес возврата. С v1.1.0 не обязателен — по умолчанию средства вернутся на адрес плательщика
+     * (`payer_address`). Для Bitcoin/UTXO-сетей адрес плательщика неизвестен — там `address` нужен.
+     */
+    address?: string;
     uuid?: string;
     order_id?: string;
     network?: string;
     amount?: string;
+    /**
+     * Свой ключ идемпотентности (v1.1.0). Уходит HTTP-заголовком `Idempotency-Key`, НЕ в тело.
+     * Если не задан, SDK генерирует UUID один раз на вызов.
+     */
+    idempotency_key?: string;
 }
 interface ExchangeRate {
     from: string;
@@ -351,11 +413,344 @@ interface AutoWithdrawRule {
     /** Порог в minor-единицах ("0" = без порога). */
     min_minor: string;
 }
+/** Поведение батча при ошибке элемента: продолжать (по умолчанию) или остановиться на первой. */
+type BatchOnError = 'continue' | 'stop';
+/** Опции создающих batch-методов. */
+interface BatchOptions {
+    /** `continue` (по умолчанию) — плохой элемент фейлит только себя; `stop` — остановиться на первой ошибке. */
+    onError?: BatchOnError;
+    /** Свой ключ идемпотентности. Уходит заголовком `Idempotency-Key`; если не задан — SDK генерирует UUID. */
+    idempotency_key?: string;
+}
+/** Ответ постановки батча (`/v1/payment/batch`, `/v1/refund/batch`, `/v1/payout/batch`). */
+interface BatchSubmitResult {
+    batch_id: string;
+    kind: string;
+    count: number;
+    status: BatchStatus;
+}
+type BatchStatus = 'pending' | 'processing' | 'completed';
+/** Элемент возврата в `payments.refundBatch`. `reference` и `uuid`/`order_id` инвойса обязательны. */
+interface RefundBatchItem {
+    /** Per-item ключ дедупликации возврата (обязателен в батче; скоуп — инвойс). */
+    reference: string;
+    uuid?: string;
+    order_id?: string;
+    /** С v1.1.0 не обязателен — по умолчанию адрес плательщика (кроме Bitcoin/UTXO). */
+    address?: string;
+    network?: string;
+    amount?: string;
+}
+/** Результат одного элемента батча в `batches.info`. */
+interface BatchItem {
+    idx: number;
+    status: string;
+    order_id?: string;
+    /** Байт-в-байт сохранённый result соответствующего единичного эндпоинта. */
+    result?: unknown;
+    error?: string;
+}
+/** Ответ `POST /v1/batch/info`. */
+interface BatchInfo {
+    batch_id: string;
+    kind: string;
+    status: BatchStatus;
+    on_error: BatchOnError;
+    total: number;
+    succeeded: number;
+    failed: number;
+    created_at: string;
+    updated_at: string;
+    items: BatchItem[];
+}
+/** Режим суммы платёжной ссылки: фиксированная, свободная или диапазон. */
+type PaymentLinkAmountMode = 'fixed' | 'open' | 'range';
+/** Параметры создания платёжной ссылки (`POST /v1/payment/link`). */
+interface CreatePaymentLinkParams {
+    amount_mode: PaymentLinkAmountMode;
+    /** Валюта ЦЕНЫ (фиат или монета — как в `payments.create`). */
+    currency: string;
+    title?: string;
+    description?: string;
+    /** Обязательна при `amount_mode: 'fixed'`. */
+    amount_fixed?: string;
+    /** Нижняя граница при `amount_mode: 'range'`. */
+    amount_min?: string;
+    /** Верхняя граница при `amount_mode: 'range'`. */
+    amount_max?: string;
+    /** Закрепить валюту расчёта (иначе выберет плательщик). */
+    pinned_currency?: string;
+    /** Закрепить сеть расчёта. */
+    pinned_network?: string;
+    /** Срок жизни в СЕКУНДАХ. 0 или отсутствие — бессрочная ссылка. */
+    expires_in?: number;
+}
+/** Ответ создания платёжной ссылки. */
+interface PaymentLinkCreated {
+    link_id: string;
+    url: string;
+}
+/** Платёжная ссылка в list/info. */
+interface PaymentLink {
+    link_id: string;
+    title?: string;
+    description?: string;
+    amount_mode: PaymentLinkAmountMode;
+    currency: string;
+    active: boolean;
+    url: string;
+    created_at: string;
+    amount_fixed?: string;
+    amount_min?: string;
+    amount_max?: string;
+    pinned_currency?: string;
+    pinned_network?: string;
+    expires_at?: string;
+}
+/** Ответ `links.info`: ссылка + платежи по ней. */
+interface PaymentLinkInfo extends PaymentLink {
+    payments: Array<{
+        uuid: string;
+        status: string;
+        amount: string;
+        currency: string;
+        created_at: string;
+        order_id?: string;
+    }>;
+}
+/** Параметры публичного чекаута по ссылке (`POST /v1/link/{id}/checkout`). */
+interface LinkCheckoutParams {
+    /** Обязательна при `amount_mode: 'open' | 'range'`; у `fixed` игнорируется. */
+    amount?: string;
+    /** Валюта расчёта (если не закреплена в ссылке). */
+    currency?: string;
+    /** Сеть расчёта (если не закреплена в ссылке). */
+    network?: string;
+    payer_email?: string;
+}
+/**
+ * Параметры правила сплита: ЛИБО внешний адрес (`address`+`network`, необратимо),
+ * ЛИБО аккаунт на платформе (`merchant_id`, обратимо при возврате). Ровно одно из двух.
+ */
+interface CreateSplitRuleParams {
+    address?: string;
+    network?: string;
+    merchant_id?: string;
+    /** Доля в процентах, шаг 0.01 (0 < percent ≤ 100; сумма активных правил тоже ≤ 100). */
+    percent: number;
+    note?: string;
+}
+/** Правило сплита в `splits.listRules`. */
+interface SplitRule {
+    rule_id: string;
+    percent: number;
+    active: boolean;
+    note?: string;
+    address?: string;
+    network?: string;
+    merchant_id?: string;
+    /** `false` — доля ушла на внешний адрес (необратимо); `true` — партнёру на платформе (отзовётся при возврате). */
+    reversible: boolean;
+}
+/** Настройки сплитов: окно удержания исходящей маршрутизации после settle. */
+interface SplitConfig {
+    refund_hold_hours: number;
+}
+/** Параметры `payments.sendEmail` (`POST /v1/payment/send-email`). */
+interface SendEmailParams {
+    uuid?: string;
+    order_id?: string;
+    /** Получатель. Если не задан — берётся `payer_email` платежа (иначе `email.no_recipient`). */
+    email?: string;
+}
+interface SendEmailResult {
+    sent: boolean;
+    email: string;
+    uuid: string;
+}
+/** Параметры `payments.resolve` (`POST /v1/payment/resolve`) — судьба недоплаченного платежа. */
+interface ResolveParams {
+    uuid?: string;
+    order_id?: string;
+    /** `accept` — оставить частичную оплату (глушит авто-возврат); `refund` — вернуть плательщику. */
+    action: 'accept' | 'refund';
+    /** Только refund: адрес возврата; по умолчанию `payer_address` инвойса (для UTXO обязателен). */
+    address?: string;
+    /** Только refund: сеть; по умолчанию сеть инвойса. */
+    network?: string;
+    /** Только refund: per-refund ключ дедупликации (уйдёт в reference рефанд-выплаты). */
+    reference?: string;
+    /** Свой ключ идемпотентности. Уходит заголовком `Idempotency-Key`; если не задан — SDK генерирует UUID. */
+    idempotency_key?: string;
+}
+/** Результат `payments.resolve`. Набор полей зависит от `resolution`. */
+interface ResolveResult {
+    payment_uuid: string;
+    order_id: string;
+    resolution: 'accepted' | 'refunded';
+    currency: string;
+    /** accept: сколько оставлено мерчанту. */
+    amount_kept?: string;
+    /** refund: uuid рефанд-выплаты. */
+    uuid?: string;
+    /** refund: сумма возврата. */
+    amount?: string;
+    /** refund: адрес возврата. */
+    address?: string;
+    /** refund: статус рефанд-выплаты (`check`/`process`/`paid`/`fail`/`cancel`). */
+    status?: string;
+    /** refund: терминальность статуса. */
+    is_final?: boolean;
+}
+/**
+ * Статус payout-ссылки:
+ * - `funded` — создана, резерв удержан, ждёт claim;
+ * - `claiming` — claim в процессе (адрес зафиксирован, выплата порождается);
+ * - `claimed` — выплата порождена (терминальный);
+ * - `expired` — срок вышел без claim, резерв возвращён (терминальный);
+ * - `cancelled` — отменена мерчантом до claim, резерв возвращён (терминальный).
+ */
+type PayoutLinkStatus = 'funded' | 'claiming' | 'claimed' | 'expired' | 'cancelled';
+/** Параметры создания payout-ссылки (`POST /v1/payout/link`). */
+interface CreatePayoutLinkParams {
+    /** Крипто-актив выплаты (uppercase), например `USDT`. */
+    currency: string;
+    /** Сеть выплаты получателю, например `tron`. */
+    network: string;
+    /** Сумма (строкой) в `currency`. */
+    amount: string;
+    /**
+     * Per-link ключ дедупликации (уникален в рамках мерчанта). Именно он защищает от дублей —
+     * заголовок `Idempotency-Key` на этом эндпоинте не действует.
+     */
+    reference?: string;
+    /** Лейбл, виден получателю. */
+    title?: string;
+    /** Заметка, видна получателю (и в письме). */
+    note?: string;
+    /** E-mail получателя — придёт письмо с кнопкой claim (best-effort). */
+    email?: string;
+    /**
+     * Окно claim в ЧАСАХ, клампится в [1, 720]. РЕКОМЕНДУЕТСЯ задавать явно:
+     * при 0/отсутствии бэкенд клампит к 1 часу (НЕ к 720).
+     */
+    expires_in_hours?: number;
+}
+/** Payout-ссылка в list/info/cancel (без claim-токена). */
+interface PayoutLink {
+    link_id: string;
+    status: PayoutLinkStatus;
+    amount: string;
+    currency: string;
+    network: string;
+    title?: string;
+    note?: string;
+    expires_at: string;
+    created_at: string;
+    reference?: string;
+    email?: string;
+    /** UUID порождённой выплаты (после claim). */
+    payout_id?: string;
+    /** Адрес получателя (после claim). */
+    claim_address?: string;
+    /** Общий id батча (для ссылок из `createBatch`). */
+    batch_id?: string;
+}
+/**
+ * Ответ создания payout-ссылки. `claim_token`/`claim_url` возвращаются ТОЛЬКО здесь
+ * (хранится лишь хеш токена) — сохраните их сразу.
+ */
+interface PayoutLinkCreated extends PayoutLink {
+    claim_token: string;
+    claim_url: string;
+}
+/** Элемент ответа `payoutLinks.createBatch` (index-aligned с запросом). */
+interface PayoutLinkBatchItem {
+    ok: boolean;
+    link?: PayoutLinkCreated;
+    error?: string;
+    message?: string;
+}
+/** Ответ `POST /v1/payout/link/batch`. */
+interface PayoutLinkBatchResult {
+    created: number;
+    total: number;
+    results: PayoutLinkBatchItem[];
+}
+/** Публичные детали ссылки для страницы claim (`GET /v1/claim/{token}`). */
+interface PayoutLinkClaimInfo {
+    status: PayoutLinkStatus;
+    amount: string;
+    currency: string;
+    network: string;
+    title?: string;
+    note?: string;
+    expires_at: string;
+    /** Можно ли забрать прямо сейчас (`funded` и срок не вышел). */
+    claimable: boolean;
+}
+/** Результат успешного claim (`POST /v1/claim/{token}`). */
+interface PayoutLinkClaimResult {
+    status: 'claimed';
+    payout_id: string;
+    amount: string;
+    currency: string;
+    network: string;
+    address: string;
+}
 
 /** Методы приёма платежей. */
 declare class Payments extends BaseResource {
-    /** Создать платёжный счёт (инвойс). `POST /v1/payment` */
+    /**
+     * Создать платёжный счёт (инвойс). `POST /v1/payment`
+     *
+     * Идемпотентность (v1.1.0): SDK генерирует ключ ОДИН раз до цикла ретраев и шлёт его
+     * HTTP-заголовком `Idempotency-Key` (в подпись не входит) — автоматический повтор
+     * (таймаут/5xx/сеть) не создаёт дубль счёта. Свой ключ — через `params.idempotency_key`
+     * (уйдёт в заголовок, НЕ в тело).
+     *
+     * ЛОМАЮЩЕЕ изменение против v1.0.x: SDK больше НЕ подставляет автоматический
+     * `order_id` (`idem-<uuid>`) — `order_id` уходит ровно так, как передали вы
+     * (не задали — в платеже его не будет). Задавайте свой `order_id`, чтобы потом
+     * находить платёж через `payments.info`.
+     */
     create(params: CreatePaymentParams): Promise<Payment>;
+    /**
+     * Массовое создание платежей — до 5000 одним подписанным запросом (одна отметка rate-limit).
+     * `POST /v1/payment/batch`. Обработка в фоне: результат по элементам — через
+     * `client.batches.info(batch_id)`.
+     *
+     * На каждом элементе ОБЯЗАТЕЛЕН `order_id` (`batch.order_id_required`); дубликат внутри
+     * батча → `batch.duplicate_order_id`. Идемпотентность вызова — заголовком `Idempotency-Key`
+     * (генерируется SDK или `opts.idempotency_key`).
+     */
+    createBatch(payments: CreatePaymentParams[], opts?: BatchOptions): Promise<BatchSubmitResult>;
+    /**
+     * Массовый возврат — до 5000 одним запросом. `POST /v1/refund/batch`.
+     * На каждом элементе обязательны `reference` (per-item ключ дедупликации) и
+     * `uuid`/`order_id` инвойса. Идемпотентность вызова — заголовком `Idempotency-Key`.
+     * Результат по элементам — `client.batches.info(batch_id)`.
+     */
+    refundBatch(refunds: RefundBatchItem[], opts?: BatchOptions): Promise<BatchSubmitResult>;
+    /**
+     * Отправить покупателю счёт на e-mail (письмо с кнопкой «Оплатить»). `POST /v1/payment/send-email`
+     *
+     * Получатель — `email` или `payer_email` платежа. Лимит: 10 писем/час на адрес получателя
+     * (`email.rate_limited`). Заголовок `Idempotency-Key` на этом эндпоинте не действует
+     * (эндпоинт им не обёрнут) — повтор вызова отправит письмо ещё раз.
+     */
+    sendEmail(params: SendEmailParams): Promise<SendEmailResult>;
+    /**
+     * Решить судьбу НЕДОПЛАЧЕННОГО платежа (`payment_status === 'wrong_amount'`).
+     * `POST /v1/payment/resolve` (нужен payout-ключ — операция может двигать деньги наружу).
+     *
+     * `action: 'accept'` — оставить частичную оплату себе (глушит авто-возврат);
+     * `action: 'refund'` — вернуть плательщику (по умолчанию на `payer_address`; для UTXO
+     * передайте `address`). Идемпотентно и заголовком `Idempotency-Key` (SDK генерирует сам),
+     * и доменно: повторный accept — no-op, повторный refund — реплей той же выплаты.
+     * Платёж в другом статусе → `resolution.not_underpaid` (409).
+     */
+    resolve(params: ResolveParams): Promise<ResolveResult>;
     /** Информация о счёте по uuid или order_id. `POST /v1/payment/info` */
     info(lookup: Lookup): Promise<Payment>;
     /** Список платежей мерчанта. `POST /v1/payment/history` */
@@ -370,14 +765,14 @@ declare class Payments extends BaseResource {
     resend(lookup: Lookup): Promise<{
         result: boolean;
     }>;
-    /** Возврат средств платежа. `POST /v1/payment/refund` (см. также client.payouts.refund) */
-    refund(params: {
-        address: string;
-        uuid?: string;
-        order_id?: string;
-        network?: string;
-        amount?: string;
-    }): Promise<unknown>;
+    /**
+     * Возврат средств платежа. `POST /v1/payment/refund` (см. также client.payouts.refund)
+     *
+     * С v1.1.0 `address` не обязателен — по умолчанию вернём на адрес плательщика
+     * (для Bitcoin/UTXO он неизвестен — там `address` нужен). Идемпотентность — заголовком
+     * `Idempotency-Key` (SDK генерирует сам; свой — `params.idempotency_key`).
+     */
+    refund(params: RefundParams): Promise<unknown>;
     /** Список принимаемых валют для агностичных счетов. `POST /v1/payment/accepted/list` */
     listAccepted(): Promise<{
         accepted: AcceptedMethod[];
@@ -423,12 +818,32 @@ declare class Payments extends BaseResource {
 
 /** Методы выплат и возвратов. */
 declare class Payouts extends BaseResource {
-    /** Создать выплату на внешний адрес. `POST /v1/payout` */
+    /**
+     * Создать выплату на внешний адрес. `POST /v1/payout`
+     *
+     * `order_id` обязателен всегда (`payout.order_id_required`) — это ВАШ бизнес-идентификатор.
+     * Идемпотентность повторов (v1.1.0) — заголовком `Idempotency-Key`: SDK генерирует UUID
+     * один раз до цикла ретраев; свой ключ — `params.idempotency_key` (в заголовок, не в тело).
+     */
     create(params: CreatePayoutParams): Promise<Payout>;
-    /** Массовая выплата (до 100). `POST /v1/payout/mass` */
-    createMass(payouts: CreatePayoutParams[], source?: string): Promise<{
+    /**
+     * Массовая выплата (до 100, синхронная). `POST /v1/payout/mass`
+     * Идемпотентность вызова — заголовком `Idempotency-Key` (генерируется SDK или
+     * `opts.idempotency_key`). Для тысяч выплат используйте {@link createBatch}.
+     */
+    createMass(payouts: CreatePayoutParams[], source?: string, opts?: {
+        idempotency_key?: string;
+    }): Promise<{
         items: MassPayoutItem[];
     }>;
+    /**
+     * Массовое создание выплат — до 5000 одним подписанным запросом, обработка в фоне.
+     * `POST /v1/payout/batch`. Результат по элементам — `client.batches.info(batch_id)`.
+     *
+     * На каждом элементе ОБЯЗАТЕЛЕН `order_id` (`batch.order_id_required`); дубликат внутри
+     * батча → `batch.duplicate_order_id`. Идемпотентность вызова — заголовком `Idempotency-Key`.
+     */
+    createBatch(payouts: CreatePayoutParams[], opts?: BatchOptions): Promise<BatchSubmitResult>;
     /** Информация о выплате по uuid или order_id. `POST /v1/payout/info` */
     info(lookup: Lookup): Promise<Payout>;
     /** История выплат. `POST /v1/payout/history` */
@@ -442,7 +857,11 @@ declare class Payouts extends BaseResource {
     calculate(params: CalculatePayoutParams): Promise<PayoutCalculation>;
     /** Подтвердить выплату в статусе pending (для API-ключа обычно не нужно). `POST /v1/payout/approve` */
     approve(uuid: string): Promise<unknown>;
-    /** Возврат средств платежа (движок выплат). `POST /v1/payment/refund` */
+    /**
+     * Возврат средств платежа (движок выплат). `POST /v1/payment/refund`
+     * С v1.1.0 `address` не обязателен (по умолчанию — адрес плательщика; для Bitcoin/UTXO нужен).
+     * Идемпотентность — заголовком `Idempotency-Key` (SDK генерирует сам).
+     */
     refund(params: RefundParams): Promise<unknown>;
     /** Кто платит сетевую комиссию выплаты — чтение. `POST /v1/payout/fee-config/get` */
     getFeeConfig(): Promise<{
@@ -489,11 +908,20 @@ declare class Account extends BaseResource {
     balance(): Promise<Balance>;
     /** Реферальная статистика. `POST /v1/referral/info` */
     referral(): Promise<ReferralInfo>;
-    /** Перевод средств на личный кошелёк владельца. `POST /v1/transfer/to-personal` */
+    /**
+     * Перевод средств на личный кошелёк владельца. `POST /v1/transfer/to-personal`
+     *
+     * Идемпотентность (v1.1.0): SDK генерирует ключ один раз до цикла ретраев и шлёт заголовком
+     * `Idempotency-Key` — автоматический повтор не создаёт повторный перевод. Свой ключ —
+     * `params.idempotency_key` (в заголовок, не в тело). ЛОМАЮЩЕЕ изменение против v1.0.x:
+     * автоматический `order_id` (`idem-<uuid>`) больше НЕ подставляется — `order_id` уходит как есть.
+     */
     transferToPersonal(params: {
         amount: string;
         currency: string;
         order_id?: string;
+        /** Свой ключ идемпотентности — уйдёт заголовком `Idempotency-Key`, не в тело. */
+        idempotency_key?: string;
     }): Promise<{
         currency: string;
         amount: string;
@@ -603,13 +1031,176 @@ declare class Rates extends BaseResource {
 }
 
 /**
+ * Статус массовых операций (v1.1.0). Постановка батча — методами `payments.createBatch`,
+ * `payments.refundBatch`, `payouts.createBatch`; здесь — прогресс и результаты по элементам.
+ */
+declare class Batches extends BaseResource {
+    /**
+     * Прогресс и результаты батча. `POST /v1/batch/info` (read-only, идемпотентен сам по себе).
+     * `limit` вне (0, 500] заменяется бэкендом на 100. `items[].result` — байт-в-байт result
+     * соответствующего единичного эндпоинта.
+     */
+    info(batchId: string, params?: {
+        limit?: number;
+        offset?: number;
+    }): Promise<BatchInfo>;
+}
+
+/**
+ * Платёжные ссылки (v1.1.0): переиспользуемая ссылка, по которой платят многие —
+ * каждый платёж порождает свой инвойс со своим адресом. Единственный способ принимать
+ * платежи вообще без бэкенда (Tilda, Wix и т.п.).
+ *
+ * Management-методы (create/list/info/toggle) подписываются платёжным ключом; заголовок
+ * `Idempotency-Key` на них не действует (эндпоинты им не обёрнуты). `publicGet`/`checkout` —
+ * публичные, без подписи (для кода на стороне плательщика).
+ */
+declare class Links extends BaseResource {
+    /**
+     * Создать платёжную ссылку. `POST /v1/payment/link`
+     * `expires_in` — в СЕКУНДАХ; 0/отсутствие = бессрочная. Ответ: `{ link_id, url }`.
+     */
+    create(params: CreatePaymentLinkParams): Promise<PaymentLinkCreated>;
+    /** Список ссылок мерчанта. `POST /v1/payment/link/list` */
+    list(params?: {
+        limit?: number;
+        offset?: number;
+    }): Promise<PaymentLink[]>;
+    /** Ссылка + платежи по ней. `POST /v1/payment/link/info` */
+    info(linkId: string): Promise<PaymentLinkInfo>;
+    /** Включить/выключить ссылку. `POST /v1/payment/link/toggle` */
+    toggle(linkId: string, active: boolean): Promise<{
+        link_id: string;
+        active: boolean;
+    }>;
+    /**
+     * Публичные детали ссылки. `GET /v1/link/{id}` — БЕЗ подписи (можно дергать со страницы
+     * плательщика). Неактивная/истёкшая ссылка → `paylink.not_found` (404).
+     */
+    publicGet(linkId: string): Promise<PaymentLink>;
+    /**
+     * Публичный чекаут по ссылке: порождает обычный инвойс. `POST /v1/link/{id}/checkout` —
+     * БЕЗ подписи. Закреплённые в ссылке валюта/сеть побеждают переданные. Лимит: 30 инвойсов/мин
+     * на ссылку (`paylink.rate_limited`). Ответ — обычный объект платежа (`uuid` + `url`).
+     */
+    checkout(linkId: string, params?: LinkCheckoutParams): Promise<Payment>;
+}
+
+/**
+ * Сплит-платежи (v1.1.0): доля каждого входящего платежа автоматически уходит партнёру.
+ * Все методы требуют payout-ключ. Заголовок `Idempotency-Key` на этих эндпоинтах не
+ * действует (не обёрнуты) — но операции декларативны (правила), повтор безопасен по смыслу.
+ *
+ * ВАЖНО про возвраты: отправка долей откладывается на окно `refund_hold_hours` — возврат внутри
+ * окна сам уменьшает/отменяет отчисление. Долю, уже ушедшую на внешний адрес, вернуть нельзя.
+ */
+declare class Splits extends BaseResource {
+    /**
+     * Создать правило сплита. `POST /v1/split/rule`
+     * Ровно одно из двух: `address`+`network` (внешний адрес, необратимо) ИЛИ `merchant_id`
+     * (партнёр на платформе, обратимо). `percent` — 0 < x ≤ 100, шаг 0.01; сумма активных
+     * правил тоже ≤ 100. Удобные обёртки: {@link splitToAddress}, {@link splitToMerchant}.
+     */
+    createRule(params: CreateSplitRuleParams): Promise<{
+        rule_id: string;
+        percent: number;
+    }>;
+    /** Доля на внешний адрес (необратимо при возврате). Обёртка над {@link createRule}. */
+    splitToAddress(address: string, network: string, percent: number, note?: string): Promise<{
+        rule_id: string;
+        percent: number;
+    }>;
+    /** Доля аккаунту на платформе (возврат отзовёт долю). Обёртка над {@link createRule}. */
+    splitToMerchant(merchantId: string, percent: number, note?: string): Promise<{
+        rule_id: string;
+        percent: number;
+    }>;
+    /** Список правил сплита. `POST /v1/split/rule/list` */
+    listRules(): Promise<SplitRule[]>;
+    /** Удалить правило. `POST /v1/split/rule/delete` */
+    deleteRule(ruleId: string): Promise<{
+        deleted: boolean;
+    }>;
+    /** Настройки сплитов (окно удержания перед отправкой долей). `POST /v1/split/config/get` */
+    getConfig(): Promise<SplitConfig>;
+    /**
+     * Задать окно удержания `refund_hold_hours` — отсрочка исходящей маршрутизации
+     * (сплиты/авто-вывод/авто-конверсия) после settle. `POST /v1/split/config/set`
+     */
+    setConfig(refundHoldHours: number): Promise<SplitConfig>;
+}
+
+/**
+ * Payout-ссылки — «крипто-чеки» (v1.1.0): вы резервируете средства в claimable-ссылку,
+ * НЕ зная кошелька получателя. Получатель открывает `claim_url`, вводит свой адрес — из
+ * резерва порождается обычная выплата. Непорученная ссылка возвращает резерв при
+ * истечении срока или отмене.
+ *
+ * Management-методы (create/createBatch/list/info/cancel) требуют PAYOUT-ключ.
+ * `claimInfo`/`claim` — публичные, БЕЗ подписи (авторизация — сам 256-битный токен в URL).
+ *
+ * Идемпотентность: заголовок `Idempotency-Key` на `/v1/payout/link*` НЕ действует (эндпоинты
+ * им не обёрнуты) — дедупликация здесь через опциональный per-link `reference` (уникален в
+ * рамках мерчанта). ⚠ Повторный create с тем же `reference` сейчас отдаёт HTTP 500
+ * (unique violation), а не реплей — не ретрайте его вслепую.
+ */
+declare class PayoutLinks extends BaseResource {
+    /**
+     * Создать payout-ссылку (средства резервируются сразу: available → payout_held).
+     * `POST /v1/payout/link`
+     *
+     * РЕКОМЕНДУЕТСЯ задавать `expires_in_hours` явно: при 0/отсутствии бэкенд клампит окно
+     * claim к 1 часу (НЕ к максимуму); допустимый диапазон [1, 720] часов.
+     * `claim_token`/`claim_url` возвращаются ТОЛЬКО в этом ответе (хранится лишь хеш) —
+     * сохраните их сразу. При `email` получателю уйдёт письмо с кнопкой claim (best-effort).
+     */
+    create(params: CreatePayoutLinkParams): Promise<PayoutLinkCreated>;
+    /**
+     * Создать до 500 ссылок одним запросом. `POST /v1/payout/link/batch`
+     * Каждый элемент резервируется в своей транзакции (плохой фейлит только себя); ответ
+     * index-aligned (`results[i]` ↔ `links[i]`), все созданные ссылки получают общий `batch_id`.
+     * Больше 500 → `payoutlink.batch_too_large`. Дедуп — per-item `reference` (см. create).
+     */
+    createBatch(links: CreatePayoutLinkParams[]): Promise<PayoutLinkBatchResult>;
+    /** Список ссылок (created_at DESC; limit вне (0,200] → 50). `POST /v1/payout/link/list` */
+    list(params?: {
+        limit?: number;
+        offset?: number;
+    }): Promise<PayoutLink[]>;
+    /** Информация о ссылке (после claim содержит `payout_id`, `claim_address`). `POST /v1/payout/link/info` */
+    info(linkId: string): Promise<PayoutLink>;
+    /**
+     * Отменить непорученную (`funded`) ссылку — резерв вернётся на available.
+     * `POST /v1/payout/link/cancel`. Уже забранная → `payoutlink.not_funded` (409);
+     * гонка с claim разрешается в пользу claim (вернётся `status: 'claimed'` + `payout_id`).
+     */
+    cancel(linkId: string): Promise<PayoutLink>;
+    /**
+     * ПУБЛИЧНО (без подписи): детали ссылки для страницы claim. `GET /v1/claim/{token}`
+     * Ничего мерчант-приватного не возвращает. `claimable === true` — можно забирать.
+     */
+    claimInfo(token: string): Promise<PayoutLinkClaimInfo>;
+    /**
+     * ПУБЛИЧНО (без подписи): забрать средства на адрес получателя. `POST /v1/claim/{token}`
+     * `memo` — dest tag/comment для сетей вроде TON. Идемпотентно: повторный claim уже
+     * забранной ссылки возвращает ту же выплату; claim с ДРУГИМ адресом на взятой ссылке →
+     * `payoutlink.claim_in_progress` (409). Истёкшая/отменённая → `payoutlink.expired` /
+     * `payoutlink.cancelled` (409).
+     */
+    claim(token: string, params: {
+        address: string;
+        memo?: string;
+    }): Promise<PayoutLinkClaimResult>;
+}
+
+/**
  * Клиент Oblodai API.
  *
  * ```ts
  * const client = new OblodaiClient({
  *   publicId: process.env.OBLODAI_PUBLIC_ID!,
  *   secret: process.env.OBLODAI_SECRET!,
- *   baseUrl: 'https://api.oblodai.example', // укажите реальный
+ *   baseUrl: 'https://api.oblodai.com', // необязательно — это и есть умолчание
  * });
  *
  * const payment = await client.payments.create({
@@ -633,6 +1224,16 @@ declare class OblodaiClient {
     readonly settings: Settings;
     /** Публичные курсы валют. */
     readonly rates: Rates;
+    /** Статус массовых операций (v1.1.0). */
+    readonly batches: Batches;
+    /** Платёжные ссылки (v1.1.0). */
+    readonly links: Links;
+    /** Синоним {@link links} — платёжные ссылки (не путать с {@link payoutLinks}). */
+    readonly paymentLinks: Links;
+    /** Сплит-платежи (v1.1.0). */
+    readonly splits: Splits;
+    /** Payout-ссылки — «крипто-чеки» (v1.1.0). */
+    readonly payoutLinks: PayoutLinks;
     private readonly http;
     constructor(config: OblodaiConfig);
     /**
@@ -672,6 +1273,11 @@ interface VerifyWebhookOptions {
     maxAgeSeconds?: number;
     /** Текущее время в мс (для тестов). По умолчанию Date.now(). */
     now?: number;
+    /**
+     * Опциональный логгер. Если не задан, применяется env-опция `OBLODAI_LOG` (см. {@link OblodaiLogger}).
+     * Логируются только факт успеха и причина отказа — секрет, подпись и тело НЕ логируются.
+     */
+    logger?: OblodaiLogger;
 }
 /**
  * Проверяет подпись и свежесть вебхука. Возвращает `true` при успехе, иначе бросает
@@ -763,4 +1369,4 @@ declare class OblodaiTimeoutError extends OblodaiConnectionError {
 declare class OblodaiSignatureError extends OblodaiError {
 }
 
-export { type AcceptedMethod, type AutoWithdrawRule, type Balance, type BlockWalletParams, type BlockedRefundParams, type CalculatePayoutParams, type CreatePaymentParams, type CreatePayoutParams, type CreateWalletParams, type Currency, type CurrencyNetwork, type Delivery, type Envelope, type ErrorEnvelope, type ExchangeRate, type HistoryParams, type Lookup, type MassPayoutItem, type Network, OblodaiApiError, OblodaiClient, type OblodaiConfig, OblodaiConnectionError, OblodaiError, OblodaiSignatureError, OblodaiTimeoutError, type Paginate, type Payment, type PaymentList, type PaymentStatus, type Payout, type PayoutCalculation, type PayoutStatus, type ReferralInfo, type RefundParams, type RetryOptions, type ServiceMethod, type SignedRequest, type VerifyWebhookOptions, type Wallet, type WebhookEvent, type WebhookHeaders, type WebhookRegistration, constructWebhookEvent, signRequest, verifyWebhook };
+export { type AcceptedMethod, type AutoWithdrawRule, type Balance, type BatchInfo, type BatchItem, type BatchOnError, type BatchOptions, type BatchStatus, type BatchSubmitResult, type BlockWalletParams, type BlockedRefundParams, type CalculatePayoutParams, type CreatePaymentLinkParams, type CreatePaymentParams, type CreatePayoutLinkParams, type CreatePayoutParams, type CreateSplitRuleParams, type CreateWalletParams, type Currency, type CurrencyNetwork, type Delivery, type Envelope, type ErrorEnvelope, type ExchangeRate, type HistoryParams, type LinkCheckoutParams, type Lookup, type MassPayoutItem, type Network, OblodaiApiError, OblodaiClient, type OblodaiConfig, OblodaiConnectionError, OblodaiError, type OblodaiLogger, OblodaiSignatureError, OblodaiTimeoutError, type Paginate, type Payment, type PaymentLink, type PaymentLinkAmountMode, type PaymentLinkCreated, type PaymentLinkInfo, type PaymentList, type PaymentRefundEntry, type PaymentStatus, type Payout, type PayoutCalculation, type PayoutLink, type PayoutLinkBatchItem, type PayoutLinkBatchResult, type PayoutLinkClaimInfo, type PayoutLinkClaimResult, type PayoutLinkCreated, type PayoutLinkStatus, type PayoutStatus, type ReferralInfo, type RefundBatchItem, type RefundParams, type ResolveParams, type ResolveResult, type RetryOptions, type SendEmailParams, type SendEmailResult, type ServiceMethod, type SignedRequest, type SplitConfig, type SplitRule, type VerifyWebhookOptions, type Wallet, type WebhookEvent, type WebhookHeaders, type WebhookRegistration, constructWebhookEvent, signRequest, verifyWebhook };

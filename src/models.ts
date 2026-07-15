@@ -36,6 +36,24 @@ export interface Payment {
   confirmations: number;
   required_confirmations: number;
   txid: string;
+  /** С v1.1.0: адрес, с которого пришли деньги (если известен; в UTXO-сетях может отсутствовать). */
+  payer_address?: string;
+  /** С v1.1.0: возвраты по платежу. */
+  refunds?: PaymentRefundEntry[];
+  /** С v1.1.0: агрегированный статус возвратов. */
+  refund_status?: 'none' | 'partial' | 'full';
+}
+
+/** Запись возврата в `Payment.refunds` (v1.1.0). */
+export interface PaymentRefundEntry {
+  uuid?: string;
+  amount?: string;
+  currency?: string;
+  network?: string;
+  address?: string;
+  status?: string;
+  created_at?: string;
+  [key: string]: unknown;
 }
 
 /** Параметры создания платежа (`POST /v1/payment`). */
@@ -56,6 +74,11 @@ export interface CreatePaymentParams {
   theme?: 'dark' | 'light';
   is_payment_multiple?: boolean;
   is_refresh?: boolean;
+  /**
+   * Свой ключ идемпотентности (v1.1.0). Уходит HTTP-заголовком `Idempotency-Key`, НЕ в тело.
+   * Если не задан, SDK генерирует UUID один раз на вызов (стабилен между внутренними повторами).
+   */
+  idempotency_key?: string;
 }
 
 /** Ссылка на объект по uuid или order_id (нужен хотя бы один). */
@@ -164,6 +187,11 @@ export interface CreatePayoutParams {
   url_callback?: string;
   from_currency?: string;
   source?: 'api' | 'manual';
+  /**
+   * Свой ключ идемпотентности (v1.1.0). Уходит HTTP-заголовком `Idempotency-Key`, НЕ в тело.
+   * Если не задан, SDK генерирует UUID один раз на вызов (стабилен между внутренними повторами).
+   */
+  idempotency_key?: string;
 }
 
 export interface MassPayoutItem {
@@ -193,11 +221,20 @@ export interface PayoutCalculation {
 }
 
 export interface RefundParams {
-  address: string;
+  /**
+   * Адрес возврата. С v1.1.0 не обязателен — по умолчанию средства вернутся на адрес плательщика
+   * (`payer_address`). Для Bitcoin/UTXO-сетей адрес плательщика неизвестен — там `address` нужен.
+   */
+  address?: string;
   uuid?: string;
   order_id?: string;
   network?: string;
   amount?: string;
+  /**
+   * Свой ключ идемпотентности (v1.1.0). Уходит HTTP-заголовком `Idempotency-Key`, НЕ в тело.
+   * Если не задан, SDK генерирует UUID один раз на вызов.
+   */
+  idempotency_key?: string;
 }
 
 // ─────────────────────────────── Курсы ───────────────────────────────
@@ -285,4 +322,327 @@ export interface AutoWithdrawRule {
   address: string;
   /** Порог в minor-единицах ("0" = без порога). */
   min_minor: string;
+}
+
+// ─────────────────────────────── Батчи (v1.1.0) ───────────────────────────────
+
+/** Поведение батча при ошибке элемента: продолжать (по умолчанию) или остановиться на первой. */
+export type BatchOnError = 'continue' | 'stop';
+
+/** Опции создающих batch-методов. */
+export interface BatchOptions {
+  /** `continue` (по умолчанию) — плохой элемент фейлит только себя; `stop` — остановиться на первой ошибке. */
+  onError?: BatchOnError;
+  /** Свой ключ идемпотентности. Уходит заголовком `Idempotency-Key`; если не задан — SDK генерирует UUID. */
+  idempotency_key?: string;
+}
+
+/** Ответ постановки батча (`/v1/payment/batch`, `/v1/refund/batch`, `/v1/payout/batch`). */
+export interface BatchSubmitResult {
+  batch_id: string;
+  kind: string;
+  count: number;
+  status: BatchStatus;
+}
+
+export type BatchStatus = 'pending' | 'processing' | 'completed';
+
+/** Элемент возврата в `payments.refundBatch`. `reference` и `uuid`/`order_id` инвойса обязательны. */
+export interface RefundBatchItem {
+  /** Per-item ключ дедупликации возврата (обязателен в батче; скоуп — инвойс). */
+  reference: string;
+  uuid?: string;
+  order_id?: string;
+  /** С v1.1.0 не обязателен — по умолчанию адрес плательщика (кроме Bitcoin/UTXO). */
+  address?: string;
+  network?: string;
+  amount?: string;
+}
+
+/** Результат одного элемента батча в `batches.info`. */
+export interface BatchItem {
+  idx: number;
+  status: string;
+  order_id?: string;
+  /** Байт-в-байт сохранённый result соответствующего единичного эндпоинта. */
+  result?: unknown;
+  error?: string;
+}
+
+/** Ответ `POST /v1/batch/info`. */
+export interface BatchInfo {
+  batch_id: string;
+  kind: string;
+  status: BatchStatus;
+  on_error: BatchOnError;
+  total: number;
+  succeeded: number;
+  failed: number;
+  created_at: string;
+  updated_at: string;
+  items: BatchItem[];
+}
+
+// ─────────────────────────── Платёжные ссылки (v1.1.0) ───────────────────────────
+
+/** Режим суммы платёжной ссылки: фиксированная, свободная или диапазон. */
+export type PaymentLinkAmountMode = 'fixed' | 'open' | 'range';
+
+/** Параметры создания платёжной ссылки (`POST /v1/payment/link`). */
+export interface CreatePaymentLinkParams {
+  amount_mode: PaymentLinkAmountMode;
+  /** Валюта ЦЕНЫ (фиат или монета — как в `payments.create`). */
+  currency: string;
+  title?: string;
+  description?: string;
+  /** Обязательна при `amount_mode: 'fixed'`. */
+  amount_fixed?: string;
+  /** Нижняя граница при `amount_mode: 'range'`. */
+  amount_min?: string;
+  /** Верхняя граница при `amount_mode: 'range'`. */
+  amount_max?: string;
+  /** Закрепить валюту расчёта (иначе выберет плательщик). */
+  pinned_currency?: string;
+  /** Закрепить сеть расчёта. */
+  pinned_network?: string;
+  /** Срок жизни в СЕКУНДАХ. 0 или отсутствие — бессрочная ссылка. */
+  expires_in?: number;
+}
+
+/** Ответ создания платёжной ссылки. */
+export interface PaymentLinkCreated {
+  link_id: string;
+  url: string;
+}
+
+/** Платёжная ссылка в list/info. */
+export interface PaymentLink {
+  link_id: string;
+  title?: string;
+  description?: string;
+  amount_mode: PaymentLinkAmountMode;
+  currency: string;
+  active: boolean;
+  url: string;
+  created_at: string;
+  amount_fixed?: string;
+  amount_min?: string;
+  amount_max?: string;
+  pinned_currency?: string;
+  pinned_network?: string;
+  expires_at?: string;
+}
+
+/** Ответ `links.info`: ссылка + платежи по ней. */
+export interface PaymentLinkInfo extends PaymentLink {
+  payments: Array<{
+    uuid: string;
+    status: string;
+    amount: string;
+    currency: string;
+    created_at: string;
+    order_id?: string;
+  }>;
+}
+
+/** Параметры публичного чекаута по ссылке (`POST /v1/link/{id}/checkout`). */
+export interface LinkCheckoutParams {
+  /** Обязательна при `amount_mode: 'open' | 'range'`; у `fixed` игнорируется. */
+  amount?: string;
+  /** Валюта расчёта (если не закреплена в ссылке). */
+  currency?: string;
+  /** Сеть расчёта (если не закреплена в ссылке). */
+  network?: string;
+  payer_email?: string;
+}
+
+// ─────────────────────────────── Сплиты (v1.1.0) ───────────────────────────────
+
+/**
+ * Параметры правила сплита: ЛИБО внешний адрес (`address`+`network`, необратимо),
+ * ЛИБО аккаунт на платформе (`merchant_id`, обратимо при возврате). Ровно одно из двух.
+ */
+export interface CreateSplitRuleParams {
+  address?: string;
+  network?: string;
+  merchant_id?: string;
+  /** Доля в процентах, шаг 0.01 (0 < percent ≤ 100; сумма активных правил тоже ≤ 100). */
+  percent: number;
+  note?: string;
+}
+
+/** Правило сплита в `splits.listRules`. */
+export interface SplitRule {
+  rule_id: string;
+  percent: number;
+  active: boolean;
+  note?: string;
+  address?: string;
+  network?: string;
+  merchant_id?: string;
+  /** `false` — доля ушла на внешний адрес (необратимо); `true` — партнёру на платформе (отзовётся при возврате). */
+  reversible: boolean;
+}
+
+/** Настройки сплитов: окно удержания исходящей маршрутизации после settle. */
+export interface SplitConfig {
+  refund_hold_hours: number;
+}
+
+// ──────────────────────── Счёт на e-mail и resolve (v1.1.0) ────────────────────────
+
+/** Параметры `payments.sendEmail` (`POST /v1/payment/send-email`). */
+export interface SendEmailParams {
+  uuid?: string;
+  order_id?: string;
+  /** Получатель. Если не задан — берётся `payer_email` платежа (иначе `email.no_recipient`). */
+  email?: string;
+}
+
+export interface SendEmailResult {
+  sent: boolean;
+  email: string;
+  uuid: string;
+}
+
+/** Параметры `payments.resolve` (`POST /v1/payment/resolve`) — судьба недоплаченного платежа. */
+export interface ResolveParams {
+  uuid?: string;
+  order_id?: string;
+  /** `accept` — оставить частичную оплату (глушит авто-возврат); `refund` — вернуть плательщику. */
+  action: 'accept' | 'refund';
+  /** Только refund: адрес возврата; по умолчанию `payer_address` инвойса (для UTXO обязателен). */
+  address?: string;
+  /** Только refund: сеть; по умолчанию сеть инвойса. */
+  network?: string;
+  /** Только refund: per-refund ключ дедупликации (уйдёт в reference рефанд-выплаты). */
+  reference?: string;
+  /** Свой ключ идемпотентности. Уходит заголовком `Idempotency-Key`; если не задан — SDK генерирует UUID. */
+  idempotency_key?: string;
+}
+
+/** Результат `payments.resolve`. Набор полей зависит от `resolution`. */
+export interface ResolveResult {
+  payment_uuid: string;
+  order_id: string;
+  resolution: 'accepted' | 'refunded';
+  currency: string;
+  /** accept: сколько оставлено мерчанту. */
+  amount_kept?: string;
+  /** refund: uuid рефанд-выплаты. */
+  uuid?: string;
+  /** refund: сумма возврата. */
+  amount?: string;
+  /** refund: адрес возврата. */
+  address?: string;
+  /** refund: статус рефанд-выплаты (`check`/`process`/`paid`/`fail`/`cancel`). */
+  status?: string;
+  /** refund: терминальность статуса. */
+  is_final?: boolean;
+}
+
+// ─────────────────────── Payout links — крипто-чеки (v1.1.0) ───────────────────────
+
+/**
+ * Статус payout-ссылки:
+ * - `funded` — создана, резерв удержан, ждёт claim;
+ * - `claiming` — claim в процессе (адрес зафиксирован, выплата порождается);
+ * - `claimed` — выплата порождена (терминальный);
+ * - `expired` — срок вышел без claim, резерв возвращён (терминальный);
+ * - `cancelled` — отменена мерчантом до claim, резерв возвращён (терминальный).
+ */
+export type PayoutLinkStatus = 'funded' | 'claiming' | 'claimed' | 'expired' | 'cancelled';
+
+/** Параметры создания payout-ссылки (`POST /v1/payout/link`). */
+export interface CreatePayoutLinkParams {
+  /** Крипто-актив выплаты (uppercase), например `USDT`. */
+  currency: string;
+  /** Сеть выплаты получателю, например `tron`. */
+  network: string;
+  /** Сумма (строкой) в `currency`. */
+  amount: string;
+  /**
+   * Per-link ключ дедупликации (уникален в рамках мерчанта). Именно он защищает от дублей —
+   * заголовок `Idempotency-Key` на этом эндпоинте не действует.
+   */
+  reference?: string;
+  /** Лейбл, виден получателю. */
+  title?: string;
+  /** Заметка, видна получателю (и в письме). */
+  note?: string;
+  /** E-mail получателя — придёт письмо с кнопкой claim (best-effort). */
+  email?: string;
+  /**
+   * Окно claim в ЧАСАХ, клампится в [1, 720]. РЕКОМЕНДУЕТСЯ задавать явно:
+   * при 0/отсутствии бэкенд клампит к 1 часу (НЕ к 720).
+   */
+  expires_in_hours?: number;
+}
+
+/** Payout-ссылка в list/info/cancel (без claim-токена). */
+export interface PayoutLink {
+  link_id: string;
+  status: PayoutLinkStatus;
+  amount: string;
+  currency: string;
+  network: string;
+  title?: string;
+  note?: string;
+  expires_at: string;
+  created_at: string;
+  reference?: string;
+  email?: string;
+  /** UUID порождённой выплаты (после claim). */
+  payout_id?: string;
+  /** Адрес получателя (после claim). */
+  claim_address?: string;
+  /** Общий id батча (для ссылок из `createBatch`). */
+  batch_id?: string;
+}
+
+/**
+ * Ответ создания payout-ссылки. `claim_token`/`claim_url` возвращаются ТОЛЬКО здесь
+ * (хранится лишь хеш токена) — сохраните их сразу.
+ */
+export interface PayoutLinkCreated extends PayoutLink {
+  claim_token: string;
+  claim_url: string;
+}
+
+/** Элемент ответа `payoutLinks.createBatch` (index-aligned с запросом). */
+export interface PayoutLinkBatchItem {
+  ok: boolean;
+  link?: PayoutLinkCreated;
+  error?: string;
+  message?: string;
+}
+
+/** Ответ `POST /v1/payout/link/batch`. */
+export interface PayoutLinkBatchResult {
+  created: number;
+  total: number;
+  results: PayoutLinkBatchItem[];
+}
+
+/** Публичные детали ссылки для страницы claim (`GET /v1/claim/{token}`). */
+export interface PayoutLinkClaimInfo {
+  status: PayoutLinkStatus;
+  amount: string;
+  currency: string;
+  network: string;
+  title?: string;
+  note?: string;
+  expires_at: string;
+  /** Можно ли забрать прямо сейчас (`funded` и срок не вышел). */
+  claimable: boolean;
+}
+
+/** Результат успешного claim (`POST /v1/claim/{token}`). */
+export interface PayoutLinkClaimResult {
+  status: 'claimed';
+  payout_id: string;
+  amount: string;
+  currency: string;
+  network: string;
+  address: string;
 }

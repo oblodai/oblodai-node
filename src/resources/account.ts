@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto';
 import { BaseResource } from './base.js';
-import { needsIdempotencyKey } from './idempotency.js';
+import { idempotencyKeyFor } from './idempotency.js';
 import type { Balance, ReferralInfo } from '../models.js';
 
 /** Баланс, рефералы, перевод на личный кошелёк, VRCS. */
@@ -18,24 +17,27 @@ export class Account extends BaseResource {
   /**
    * Перевод средств на личный кошелёк владельца. `POST /v1/transfer/to-personal`
    *
-   * Если `order_id` не задан (или пуст/из одних пробелов), SDK подставляет стабильный
-   * ключ идемпотентности (`idem-<uuid>`) ДО отправки — чтобы автоматический повтор не
-   * создал повторный перевод. Ключ инъектируется в КОПИЮ — объект вызывающего не мутируется.
+   * Идемпотентность (v1.1.0): SDK генерирует ключ один раз до цикла ретраев и шлёт заголовком
+   * `Idempotency-Key` — автоматический повтор не создаёт повторный перевод. Свой ключ —
+   * `params.idempotency_key` (в заголовок, не в тело). ЛОМАЮЩЕЕ изменение против v1.0.x:
+   * автоматический `order_id` (`idem-<uuid>`) больше НЕ подставляется — `order_id` уходит как есть.
    */
   transferToPersonal(params: {
     amount: string;
     currency: string;
     order_id?: string;
+    /** Свой ключ идемпотентности — уйдёт заголовком `Idempotency-Key`, не в тело. */
+    idempotency_key?: string;
   }): Promise<{
     currency: string;
     amount: string;
     direction: string;
     personal_balance: string;
   }> {
-    const body = needsIdempotencyKey(params)
-      ? { ...params, order_id: `idem-${randomUUID()}` }
-      : params;
-    return this.http.request('/v1/transfer/to-personal', body);
+    const { idempotency_key, ...body } = params;
+    return this.http.request('/v1/transfer/to-personal', body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key),
+    });
   }
 
   /** Включить/выключить VRCS. Без enabled — чтение. `POST /v1/vrcs` */

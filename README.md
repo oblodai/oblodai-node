@@ -1,8 +1,8 @@
 # Oblodai SDK
 
 Официальный TypeScript / Node.js SDK для платёжного шлюза **Oblodai**: приём платежей, выплаты,
-статические кошельки, вебхуки. Подпись запросов, разбор ответов, типизированные ошибки и повторы — из
-коробки.
+массовые операции, платёжные и payout-ссылки, сплиты, статические кошельки, вебхуки. Подпись запросов,
+разбор ответов, типизированные ошибки и повторы — из коробки.
 
 > **Базовый URL.** По умолчанию — `https://api.oblodai.com`. При необходимости переопределите `baseUrl` и свои ключи при инициализации.
 
@@ -144,25 +144,108 @@ const client = new OblodaiClient({
 });
 ```
 
-> **Важно про таймаут.** Таймаут не означает, что операция не прошла. Благодаря идемпотентности по
-> `order_id` повтор безопасен: если операция уже создана — вернётся она же, дубля не будет.
-> Для выплат `order_id` задаёте вы. Для платежей (`payments.create`) и переводов на личный кошелёк
-> (`account.transferToPersonal`) SDK **сам** подставляет стабильный `order_id` (`idem-<uuid>`), если вы
-> его не задали (или передали пустую строку/пробелы), — поэтому автоматический повтор не создаёт дубль
-> счёта/перевода. Ключ инъектируется в копию параметров: ваш объект не мутируется, поэтому его можно
-> безопасно переиспользовать между вызовами.
+> **Важно про таймаут.** Таймаут не означает, что операция не прошла — и повтор всё равно безопасен.
+> С v1.1.0 каждый создающий вызов уходит с HTTP-заголовком **`Idempotency-Key`**: SDK генерирует UUID
+> **один раз до цикла ретраев**, поэтому все внутренние повторы несут один и тот же ключ, и бэкенд
+> возвращает результат первой попытки вместо дубля. Свой ключ можно передать параметром
+> `idempotency_key` (уйдёт в заголовок, не в тело).
+>
+> ⚠ **Ломающее изменение против v1.0.x:** SDK больше **не подставляет** автоматический `order_id`
+> (`idem-<uuid>`) в `payments.create` и `account.transferToPersonal` — `order_id` уходит ровно так,
+> как передали вы. `order_id` — ваш бизнес-идентификатор для поиска через `payments.info`, ключом
+> идемпотентности он быть перестал. Для выплат `order_id` обязателен всегда.
+>
+> Заголовок действует на создающих эндпоинтах (`/v1/payment`, `/v1/payment/refund`,
+> `/v1/payment/resolve`, `/v1/payment/batch`, `/v1/refund/batch`, `/v1/payout`, `/v1/payout/mass`,
+> `/v1/payout/batch`, `/v1/transfer/to-personal`). У payout-ссылок (`payoutLinks.*`) он не действует —
+> там дедупликация через per-link `reference`.
+
+## Новое в v1.1.0
+
+Требует обновлённого шлюза (заголовок `Idempotency-Key` и новые эндпоинты).
+
+### Массовые операции — до 5000 элементов одним запросом
+
+Одна отметка rate-limit вместо тысячи; обработка в фоне, прогресс — через `batches.info`:
+
+```ts
+const sub = await client.payments.createBatch(
+  [
+    { amount: '10', currency: 'USD', order_id: 'a-1', to_currency: 'USDT', network: 'tron' },
+    { amount: '20', currency: 'EUR', order_id: 'a-2', to_currency: 'USDT', network: 'tron' },
+  ],
+  { onError: 'continue' }, // 'continue' (по умолчанию) или 'stop'
+);
+const info = await client.batches.info(sub.batch_id, { limit: 100 });
+// info.status: pending → processing → completed; info.items[i].result / .error — по элементам
+```
+
+Аналогично: `payments.refundBatch([...])` (обязательны `reference` и `uuid|order_id` на элементе)
+и `payouts.createBatch([...])` (обязателен `order_id` на элементе).
+
+### Платёжные ссылки (донаты) — платят многие, каждый платёж свой инвойс
+
+```ts
+const link = await client.links.create({ amount_mode: 'open', currency: 'USD' }); // { link_id, url }
+await client.links.toggle(link.link_id, false); // выключить
+// Публичные (без подписи) — для страницы плательщика:
+await client.links.publicGet(link.link_id);
+await client.links.checkout(link.link_id, { amount: '5', payer_email: 'a@b.c' }); // → обычный платёж
+```
+
+### Сплит-платежи — доля каждого платежа уходит партнёру
+
+```ts
+await client.splits.splitToAddress('T...', 'tron', 10, 'партнёр А'); // внешний адрес, необратимо
+await client.splits.splitToMerchant('m-42', 5);                      // аккаунт платформы, обратимо
+await client.splits.setConfig(24); // окно удержания refund_hold_hours (защита возвратов)
+```
+
+### Счёт на e-mail и resolve недоплаты
+
+```ts
+await client.payments.sendEmail({ uuid: payment.uuid, email: 'buyer@example.com' });
+
+// Недоплата (payment_status === 'wrong_amount'): оставить себе или вернуть (нужен payout-ключ)
+await client.payments.resolve({ uuid: payment.uuid, action: 'accept' });
+await client.payments.resolve({ uuid: payment.uuid, action: 'refund' }); // по умолчанию на адрес плательщика
+```
+
+### Payout-ссылки — «крипто-чеки»: выплата без знания кошелька получателя
+
+```ts
+const check = await client.payoutLinks.create({
+  currency: 'USDT', network: 'tron', amount: '50',
+  title: 'Бонус', email: 'user@example.com',
+  expires_in_hours: 168, // задавайте явно: при 0/отсутствии окно клампится к 1 часу
+});
+// check.claim_url / check.claim_token — ТОЛЬКО в этом ответе, сохраните сразу.
+
+// Получатель (публично, без подписи):
+const details = await client.payoutLinks.claimInfo(token);          // { claimable, amount, ... }
+await client.payoutLinks.claim(token, { address: 'T...' });         // → { status: 'claimed', payout_id }
+
+// Мерчант: createBatch (до 500), list, info, cancel (funded-ссылка вернёт резерв).
+```
+
+Статусы payout-ссылки: `funded → claiming → claimed | expired | cancelled`. Дедупликация create —
+per-link `reference` (заголовок `Idempotency-Key` на этих эндпоинтах не действует).
 
 ## Обзор методов
 
 ```ts
 // Платежи
 client.payments.create(params)
+client.payments.createBatch([...], { onError })   // v1.1.0
+client.payments.refundBatch([...], { onError })   // v1.1.0
+client.payments.sendEmail({ uuid, email })        // v1.1.0
+client.payments.resolve({ uuid, action })         // v1.1.0
 client.payments.info({ order_id })
 client.payments.history({ limit, offset, status })
 client.payments.services()
 client.payments.qr({ order_id })
 client.payments.resend({ order_id })
-client.payments.refund({ order_id, address, amount })
+client.payments.refund({ order_id, amount })      // address с v1.1.0 не обязателен
 client.payments.setAccepted([...]) / listAccepted()
 client.payments.setDiscount({...}) / listDiscounts()
 client.payments.setAccuracy({...}) / getAccuracy()
@@ -171,6 +254,7 @@ client.payments.setAutorefund({...}) / getAutorefund()
 // Выплаты
 client.payouts.create(params)
 client.payouts.createMass([...])
+client.payouts.createBatch([...], { onError })    // v1.1.0
 client.payouts.info({ order_id })
 client.payouts.history({...})
 client.payouts.services()
@@ -179,6 +263,26 @@ client.payouts.approve(uuid)
 client.payouts.refund({...})
 client.payouts.getFeeConfig() / setFeeConfig(bool)
 client.payouts.getRefundFeeConfig() / setRefundFeeConfig(bool)
+
+// Батчи (v1.1.0)
+client.batches.info(batchId, { limit, offset })
+
+// Платёжные ссылки (v1.1.0; client.paymentLinks — синоним)
+client.links.create({ amount_mode, currency, ... })
+client.links.list({ limit, offset }) / info(linkId) / toggle(linkId, active)
+client.links.publicGet(linkId) / checkout(linkId, { amount })   // публичные, без подписи
+
+// Сплиты (v1.1.0)
+client.splits.splitToAddress(address, network, percent, note?)
+client.splits.splitToMerchant(merchantId, percent, note?)
+client.splits.createRule({...}) / listRules() / deleteRule(ruleId)
+client.splits.getConfig() / setConfig(refundHoldHours)
+
+// Payout-ссылки — крипто-чеки (v1.1.0)
+client.payoutLinks.create({ currency, network, amount, expires_in_hours })
+client.payoutLinks.createBatch([...])  // до 500
+client.payoutLinks.list({ limit, offset }) / info(linkId) / cancel(linkId)
+client.payoutLinks.claimInfo(token) / claim(token, { address })  // публичные, без подписи
 
 // Кошельки
 client.wallets.create({ currency, network, order_id })
@@ -221,10 +325,13 @@ interface OblodaiConfig {
 ## Замечания
 
 - **Суммы — строки** в единицах валюты (`"25.00"`), не числа. Так сохраняется точность.
-- **`order_id`/`reference` — ключ идемпотентности.** Для выплат задавайте его всегда. Для платежей и
-  переводов на личный кошелёк SDK подставит стабильный `order_id` автоматически, если вы его не задали
-  (можно и нужно передавать свой, чтобы связать счёт с заказом в вашей системе).
+- **Идемпотентность — заголовком `Idempotency-Key`** (с v1.1.0): SDK шлёт его сам на всех создающих
+  вызовах, свой ключ — параметр `idempotency_key`. `order_id` — ваш бизнес-идентификатор (SDK его
+  больше не подставляет); для выплат он обязателен всегда. У payout-ссылок дедупликация —
+  per-link `reference`.
 - **Секрет — только на сервере.** SDK серверный; не встраивайте ключ в браузер/мобильное приложение.
+  Исключение — публичные методы (`rates.*`, `links.publicGet/checkout`, `payoutLinks.claimInfo/claim`):
+  они не требуют ключа вовсе.
 
 ## Лицензия
 

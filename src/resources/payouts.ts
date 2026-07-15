@@ -1,4 +1,5 @@
 import { BaseResource } from './base.js';
+import { idempotencyKeyFor } from './idempotency.js';
 import type {
   Payout,
   CreatePayoutParams,
@@ -9,24 +10,57 @@ import type {
   CalculatePayoutParams,
   PayoutCalculation,
   RefundParams,
+  BatchOptions,
+  BatchSubmitResult,
 } from '../models.js';
 import type { Paginate } from '../types.js';
 
 /** Методы выплат и возвратов. */
 export class Payouts extends BaseResource {
-  /** Создать выплату на внешний адрес. `POST /v1/payout` */
+  /**
+   * Создать выплату на внешний адрес. `POST /v1/payout`
+   *
+   * `order_id` обязателен всегда (`payout.order_id_required`) — это ВАШ бизнес-идентификатор.
+   * Идемпотентность повторов (v1.1.0) — заголовком `Idempotency-Key`: SDK генерирует UUID
+   * один раз до цикла ретраев; свой ключ — `params.idempotency_key` (в заголовок, не в тело).
+   */
   create(params: CreatePayoutParams): Promise<Payout> {
-    return this.http.request<Payout>('/v1/payout', params);
+    const { idempotency_key, ...body } = params;
+    return this.http.request<Payout>('/v1/payout', body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key),
+    });
   }
 
-  /** Массовая выплата (до 100). `POST /v1/payout/mass` */
+  /**
+   * Массовая выплата (до 100, синхронная). `POST /v1/payout/mass`
+   * Идемпотентность вызова — заголовком `Idempotency-Key` (генерируется SDK или
+   * `opts.idempotency_key`). Для тысяч выплат используйте {@link createBatch}.
+   */
   createMass(
     payouts: CreatePayoutParams[],
     source?: string,
+    opts: { idempotency_key?: string } = {},
   ): Promise<{ items: MassPayoutItem[] }> {
     const body: Record<string, unknown> = { payouts };
     if (source !== undefined) body.source = source;
-    return this.http.request('/v1/payout/mass', body);
+    return this.http.request('/v1/payout/mass', body, {
+      idempotencyKey: idempotencyKeyFor(opts.idempotency_key),
+    });
+  }
+
+  /**
+   * Массовое создание выплат — до 5000 одним подписанным запросом, обработка в фоне.
+   * `POST /v1/payout/batch`. Результат по элементам — `client.batches.info(batch_id)`.
+   *
+   * На каждом элементе ОБЯЗАТЕЛЕН `order_id` (`batch.order_id_required`); дубликат внутри
+   * батча → `batch.duplicate_order_id`. Идемпотентность вызова — заголовком `Idempotency-Key`.
+   */
+  createBatch(payouts: CreatePayoutParams[], opts: BatchOptions = {}): Promise<BatchSubmitResult> {
+    const body: Record<string, unknown> = { payouts };
+    if (opts.onError) body.on_error = opts.onError;
+    return this.http.request<BatchSubmitResult>('/v1/payout/batch', body, {
+      idempotencyKey: idempotencyKeyFor(opts.idempotency_key),
+    });
   }
 
   /** Информация о выплате по uuid или order_id. `POST /v1/payout/info` */
@@ -54,9 +88,16 @@ export class Payouts extends BaseResource {
     return this.http.request('/v1/payout/approve', { uuid });
   }
 
-  /** Возврат средств платежа (движок выплат). `POST /v1/payment/refund` */
+  /**
+   * Возврат средств платежа (движок выплат). `POST /v1/payment/refund`
+   * С v1.1.0 `address` не обязателен (по умолчанию — адрес плательщика; для Bitcoin/UTXO нужен).
+   * Идемпотентность — заголовком `Idempotency-Key` (SDK генерирует сам).
+   */
   refund(params: RefundParams): Promise<unknown> {
-    return this.http.request('/v1/payment/refund', params);
+    const { idempotency_key, ...body } = params;
+    return this.http.request('/v1/payment/refund', body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key),
+    });
   }
 
   // ── Конфигурация комиссий ──

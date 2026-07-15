@@ -1,11 +1,16 @@
+import { randomUUID } from 'node:crypto';
+
 /**
- * Нужно ли SDK подставить собственный ключ идемпотентности `order_id`.
+ * Ключ идемпотентности для создающего вызова: явный ключ пользователя (если это непустая
+ * строка после `.trim()`) или новый UUID.
  *
- * Возвращает `true` (инъектировать), пока `order_id` не является непустой строкой
- * после `.trim()`. То есть `undefined`, `null`, `''` и строки из одних пробелов
- * считаются отсутствующими и требуют автоключа.
+ * Вызывается ОДИН раз до цикла ретраев — все внутренние повторы (таймаут/5xx/сеть) уходят с тем же
+ * заголовком `Idempotency-Key`, поэтому повтор не создаёт дубль операции: бэкенд вернёт
+ * закешированный результат первой успешной попытки (`Idempotent-Replayed: true`).
+ *
+ * С v1.1.0 SDK больше НЕ подставляет автоматический `order_id` (`idem-<uuid>`) —
+ * `order_id` уходит на бэкенд ровно так, как его передал вызывающий.
  */
-export function needsIdempotencyKey(params: { order_id?: string | null }): boolean {
-  const orderId = params.order_id;
-  return typeof orderId !== 'string' || orderId.trim() === '';
+export function idempotencyKeyFor(explicit?: string | null): string {
+  return typeof explicit === 'string' && explicit.trim() !== '' ? explicit : randomUUID();
 }

@@ -30,7 +30,6 @@ var OblodaiApiError = class extends OblodaiError {
   get isRetriable() {
     if (this.status >= 500) return true;
     if (this.status === 429) return true;
-    if (this.code === "payout.funds_maturing") return true;
     return false;
   }
 };
@@ -48,8 +47,41 @@ var OblodaiTimeoutError = class extends OblodaiConnectionError {
 var OblodaiSignatureError = class extends OblodaiError {
 };
 
+// src/logger.ts
+var LEVEL_ORDER = {
+  debug: 10,
+  info: 20,
+  warn: 30,
+  error: 40
+};
+var NOOP = () => {
+};
+function isLogLevel(value) {
+  return value === "debug" || value === "info" || value === "warn" || value === "error";
+}
+function consoleLogger(min) {
+  const threshold = LEVEL_ORDER[min];
+  return (level, message, fields) => {
+    if (LEVEL_ORDER[level] < threshold) return;
+    const method = level === "debug" ? console.debug : level === "info" ? console.info : level === "warn" ? console.warn : console.error;
+    if (fields && Object.keys(fields).length > 0) {
+      method(message, fields);
+    } else {
+      method(message);
+    }
+  };
+}
+function resolveLogger(logger) {
+  if (logger) return logger;
+  if (typeof process !== "undefined" && process.env) {
+    const env = process.env.OBLODAI_LOG;
+    if (isLogLevel(env)) return consoleLogger(env);
+  }
+  return NOOP;
+}
+
 // src/http.ts
-var DEFAULT_BASE_URL = "https://api.oblodai.example";
+var DEFAULT_BASE_URL = "https://api.oblodai.com";
 function parseRetryAfterMs(header) {
   if (!header) return void 0;
   const seconds = Number(header.trim());
@@ -57,6 +89,7 @@ function parseRetryAfterMs(header) {
   return seconds * 1e3;
 }
 var DEFAULT_TIMEOUT_MS = 3e4;
+var MAX_RETRY_AFTER_MS = 3e5;
 var DEFAULT_RETRY = {
   maxAttempts: 4,
   initialDelayMs: 500,
@@ -78,36 +111,50 @@ var HttpClient = class {
       );
     }
     this.fetchImpl = f;
+    this.log = resolveLogger(config.logger);
   }
   /**
    * Выполняет подписанный POST-запрос к `path` с телом `payload`. Возвращает поле `result` из
    * конверта. Публичные (неподписанные) вызовы используют {@link requestPublic}.
    */
-  async request(path, payload = {}) {
-    return this.execute(path, payload, true);
+  async request(path, payload = {}, opts = {}) {
+    return this.execute(path, payload, true, "POST", opts);
   }
   /** Выполняет запрос БЕЗ подписи (для публичных эндпоинтов). */
   async requestPublic(path, payload = {}, method = "POST") {
     return this.execute(path, payload, false, method);
   }
-  async execute(path, payload, signed, method = "POST") {
+  async execute(path, payload, signed, method = "POST", opts = {}) {
     const attempts = this.retry?.maxAttempts ?? 1;
     let lastErr;
     for (let attempt = 1; attempt <= attempts; attempt++) {
+      this.log("debug", "oblodai: request", { method, path, attempt, attempts });
       try {
-        return await this.once(path, payload, signed, method);
+        return await this.once(path, payload, signed, method, opts);
       } catch (err) {
         lastErr = err;
         const retriable = this.isRetriable(err);
-        if (!retriable || attempt === attempts) throw err;
+        if (!retriable || attempt === attempts) {
+          const status = err instanceof OblodaiApiError ? err.status : void 0;
+          const code = err instanceof OblodaiApiError ? err.code : void 0;
+          this.log("warn", "oblodai: request failed", { status, code, method, path });
+          throw err;
+        }
         const suggested = err instanceof OblodaiApiError && err.retryAfterMs != null ? err.retryAfterMs : void 0;
-        const delay = suggested != null ? Math.min(suggested, this.retry.maxDelayMs) : this.backoffDelay(attempt);
+        const delay = suggested != null ? Math.min(suggested, MAX_RETRY_AFTER_MS) : this.backoffDelay(attempt);
+        this.log("warn", "oblodai: retrying", {
+          method,
+          path,
+          delayMs: delay,
+          reason: this.retryReason(err),
+          nextAttempt: attempt + 1
+        });
         await this.sleep(delay);
       }
     }
     throw lastErr;
   }
-  async once(path, payload, signed, method) {
+  async once(path, payload, signed, method, opts = {}) {
     const url = this.baseUrl + path;
     const body = method === "GET" ? void 0 : JSON.stringify(payload ?? {});
     const headers = { "Content-Type": "application/json" };
@@ -117,8 +164,10 @@ var HttpClient = class {
       headers["X-Timestamp"] = s.timestamp;
       headers["X-Signature"] = s.signature;
     }
+    if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const start = Date.now();
     let res;
     try {
       res = await this.fetchImpl(url, {
@@ -135,6 +184,12 @@ var HttpClient = class {
     } finally {
       clearTimeout(timer);
     }
+    this.log("debug", "oblodai: response", {
+      status: res.status,
+      method,
+      path,
+      ms: Date.now() - start
+    });
     const text = await res.text();
     let parsed;
     try {
@@ -171,6 +226,14 @@ var HttpClient = class {
     }
     return parsed;
   }
+  /** Человекочитаемая причина повтора для логов (без секретов и тел). */
+  retryReason(err) {
+    if (err instanceof OblodaiApiError) {
+      if (err.status === 429) return "429 rate limit";
+      if (err.status >= 500) return "5xx";
+    }
+    return "network";
+  }
   isRetriable(err) {
     if (err instanceof OblodaiApiError) return err.isRetriable;
     if (err instanceof OblodaiConnectionError) return true;
@@ -194,11 +257,87 @@ var BaseResource = class {
   }
 };
 
+// src/resources/idempotency.ts
+import { randomUUID } from "crypto";
+function idempotencyKeyFor(explicit) {
+  return typeof explicit === "string" && explicit.trim() !== "" ? explicit : randomUUID();
+}
+
 // src/resources/payments.ts
 var Payments = class extends BaseResource {
-  /** Создать платёжный счёт (инвойс). `POST /v1/payment` */
+  /**
+   * Создать платёжный счёт (инвойс). `POST /v1/payment`
+   *
+   * Идемпотентность (v1.1.0): SDK генерирует ключ ОДИН раз до цикла ретраев и шлёт его
+   * HTTP-заголовком `Idempotency-Key` (в подпись не входит) — автоматический повтор
+   * (таймаут/5xx/сеть) не создаёт дубль счёта. Свой ключ — через `params.idempotency_key`
+   * (уйдёт в заголовок, НЕ в тело).
+   *
+   * ЛОМАЮЩЕЕ изменение против v1.0.x: SDK больше НЕ подставляет автоматический
+   * `order_id` (`idem-<uuid>`) — `order_id` уходит ровно так, как передали вы
+   * (не задали — в платеже его не будет). Задавайте свой `order_id`, чтобы потом
+   * находить платёж через `payments.info`.
+   */
   create(params) {
-    return this.http.request("/v1/payment", params);
+    const { idempotency_key, ...body } = params;
+    return this.http.request("/v1/payment", body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key)
+    });
+  }
+  /**
+   * Массовое создание платежей — до 5000 одним подписанным запросом (одна отметка rate-limit).
+   * `POST /v1/payment/batch`. Обработка в фоне: результат по элементам — через
+   * `client.batches.info(batch_id)`.
+   *
+   * На каждом элементе ОБЯЗАТЕЛЕН `order_id` (`batch.order_id_required`); дубликат внутри
+   * батча → `batch.duplicate_order_id`. Идемпотентность вызова — заголовком `Idempotency-Key`
+   * (генерируется SDK или `opts.idempotency_key`).
+   */
+  createBatch(payments, opts = {}) {
+    const body = { payments };
+    if (opts.onError) body.on_error = opts.onError;
+    return this.http.request("/v1/payment/batch", body, {
+      idempotencyKey: idempotencyKeyFor(opts.idempotency_key)
+    });
+  }
+  /**
+   * Массовый возврат — до 5000 одним запросом. `POST /v1/refund/batch`.
+   * На каждом элементе обязательны `reference` (per-item ключ дедупликации) и
+   * `uuid`/`order_id` инвойса. Идемпотентность вызова — заголовком `Idempotency-Key`.
+   * Результат по элементам — `client.batches.info(batch_id)`.
+   */
+  refundBatch(refunds, opts = {}) {
+    const body = { refunds };
+    if (opts.onError) body.on_error = opts.onError;
+    return this.http.request("/v1/refund/batch", body, {
+      idempotencyKey: idempotencyKeyFor(opts.idempotency_key)
+    });
+  }
+  /**
+   * Отправить покупателю счёт на e-mail (письмо с кнопкой «Оплатить»). `POST /v1/payment/send-email`
+   *
+   * Получатель — `email` или `payer_email` платежа. Лимит: 10 писем/час на адрес получателя
+   * (`email.rate_limited`). Заголовок `Idempotency-Key` на этом эндпоинте не действует
+   * (эндпоинт им не обёрнут) — повтор вызова отправит письмо ещё раз.
+   */
+  sendEmail(params) {
+    return this.http.request("/v1/payment/send-email", params);
+  }
+  /**
+   * Решить судьбу НЕДОПЛАЧЕННОГО платежа (`payment_status === 'wrong_amount'`).
+   * `POST /v1/payment/resolve` (нужен payout-ключ — операция может двигать деньги наружу).
+   *
+   * `action: 'accept'` — оставить частичную оплату себе (глушит авто-возврат);
+   * `action: 'refund'` — вернуть плательщику (по умолчанию на `payer_address`; для UTXO
+   * передайте `address`). Идемпотентно и заголовком `Idempotency-Key` (SDK генерирует сам),
+   * и доменно: повторный accept — no-op, повторный refund — реплей той же выплаты.
+   * Платёж в другом статусе → `resolution.not_underpaid` (409).
+   */
+  resolve(params) {
+    const { idempotency_key, ...body } = params;
+    return this.http.request("/v1/payment/resolve", body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key)
+    });
   }
   /** Информация о счёте по uuid или order_id. `POST /v1/payment/info` */
   info(lookup) {
@@ -220,9 +359,18 @@ var Payments = class extends BaseResource {
   resend(lookup) {
     return this.http.request("/v1/payment/resend", lookup);
   }
-  /** Возврат средств платежа. `POST /v1/payment/refund` (см. также client.payouts.refund) */
+  /**
+   * Возврат средств платежа. `POST /v1/payment/refund` (см. также client.payouts.refund)
+   *
+   * С v1.1.0 `address` не обязателен — по умолчанию вернём на адрес плательщика
+   * (для Bitcoin/UTXO он неизвестен — там `address` нужен). Идемпотентность — заголовком
+   * `Idempotency-Key` (SDK генерирует сам; свой — `params.idempotency_key`).
+   */
   refund(params) {
-    return this.http.request("/v1/payment/refund", params);
+    const { idempotency_key, ...body } = params;
+    return this.http.request("/v1/payment/refund", body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key)
+    });
   }
   // ── Настройки приёма ──
   /** Список принимаемых валют для агностичных счетов. `POST /v1/payment/accepted/list` */
@@ -261,15 +409,44 @@ var Payments = class extends BaseResource {
 
 // src/resources/payouts.ts
 var Payouts = class extends BaseResource {
-  /** Создать выплату на внешний адрес. `POST /v1/payout` */
+  /**
+   * Создать выплату на внешний адрес. `POST /v1/payout`
+   *
+   * `order_id` обязателен всегда (`payout.order_id_required`) — это ВАШ бизнес-идентификатор.
+   * Идемпотентность повторов (v1.1.0) — заголовком `Idempotency-Key`: SDK генерирует UUID
+   * один раз до цикла ретраев; свой ключ — `params.idempotency_key` (в заголовок, не в тело).
+   */
   create(params) {
-    return this.http.request("/v1/payout", params);
+    const { idempotency_key, ...body } = params;
+    return this.http.request("/v1/payout", body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key)
+    });
   }
-  /** Массовая выплата (до 100). `POST /v1/payout/mass` */
-  createMass(payouts, source) {
+  /**
+   * Массовая выплата (до 100, синхронная). `POST /v1/payout/mass`
+   * Идемпотентность вызова — заголовком `Idempotency-Key` (генерируется SDK или
+   * `opts.idempotency_key`). Для тысяч выплат используйте {@link createBatch}.
+   */
+  createMass(payouts, source, opts = {}) {
     const body = { payouts };
     if (source !== void 0) body.source = source;
-    return this.http.request("/v1/payout/mass", body);
+    return this.http.request("/v1/payout/mass", body, {
+      idempotencyKey: idempotencyKeyFor(opts.idempotency_key)
+    });
+  }
+  /**
+   * Массовое создание выплат — до 5000 одним подписанным запросом, обработка в фоне.
+   * `POST /v1/payout/batch`. Результат по элементам — `client.batches.info(batch_id)`.
+   *
+   * На каждом элементе ОБЯЗАТЕЛЕН `order_id` (`batch.order_id_required`); дубликат внутри
+   * батча → `batch.duplicate_order_id`. Идемпотентность вызова — заголовком `Idempotency-Key`.
+   */
+  createBatch(payouts, opts = {}) {
+    const body = { payouts };
+    if (opts.onError) body.on_error = opts.onError;
+    return this.http.request("/v1/payout/batch", body, {
+      idempotencyKey: idempotencyKeyFor(opts.idempotency_key)
+    });
   }
   /** Информация о выплате по uuid или order_id. `POST /v1/payout/info` */
   info(lookup) {
@@ -291,9 +468,16 @@ var Payouts = class extends BaseResource {
   approve(uuid) {
     return this.http.request("/v1/payout/approve", { uuid });
   }
-  /** Возврат средств платежа (движок выплат). `POST /v1/payment/refund` */
+  /**
+   * Возврат средств платежа (движок выплат). `POST /v1/payment/refund`
+   * С v1.1.0 `address` не обязателен (по умолчанию — адрес плательщика; для Bitcoin/UTXO нужен).
+   * Идемпотентность — заголовком `Idempotency-Key` (SDK генерирует сам).
+   */
   refund(params) {
-    return this.http.request("/v1/payment/refund", params);
+    const { idempotency_key, ...body } = params;
+    return this.http.request("/v1/payment/refund", body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key)
+    });
   }
   // ── Конфигурация комиссий ──
   /** Кто платит сетевую комиссию выплаты — чтение. `POST /v1/payout/fee-config/get` */
@@ -345,9 +529,19 @@ var Account = class extends BaseResource {
   referral() {
     return this.http.request("/v1/referral/info", {});
   }
-  /** Перевод средств на личный кошелёк владельца. `POST /v1/transfer/to-personal` */
+  /**
+   * Перевод средств на личный кошелёк владельца. `POST /v1/transfer/to-personal`
+   *
+   * Идемпотентность (v1.1.0): SDK генерирует ключ один раз до цикла ретраев и шлёт заголовком
+   * `Idempotency-Key` — автоматический повтор не создаёт повторный перевод. Свой ключ —
+   * `params.idempotency_key` (в заголовок, не в тело). ЛОМАЮЩЕЕ изменение против v1.0.x:
+   * автоматический `order_id` (`idem-<uuid>`) больше НЕ подставляется — `order_id` уходит как есть.
+   */
   transferToPersonal(params) {
-    return this.http.request("/v1/transfer/to-personal", params);
+    const { idempotency_key, ...body } = params;
+    return this.http.request("/v1/transfer/to-personal", body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key)
+    });
   }
   /** Включить/выключить VRCS. Без enabled — чтение. `POST /v1/vrcs` */
   vrcs(enabled) {
@@ -439,6 +633,177 @@ var Rates = class extends BaseResource {
   }
 };
 
+// src/resources/batches.ts
+var Batches = class extends BaseResource {
+  /**
+   * Прогресс и результаты батча. `POST /v1/batch/info` (read-only, идемпотентен сам по себе).
+   * `limit` вне (0, 500] заменяется бэкендом на 100. `items[].result` — байт-в-байт result
+   * соответствующего единичного эндпоинта.
+   */
+  info(batchId, params = {}) {
+    return this.http.request("/v1/batch/info", { batch_id: batchId, ...params });
+  }
+};
+
+// src/resources/links.ts
+var Links = class extends BaseResource {
+  /**
+   * Создать платёжную ссылку. `POST /v1/payment/link`
+   * `expires_in` — в СЕКУНДАХ; 0/отсутствие = бессрочная. Ответ: `{ link_id, url }`.
+   */
+  create(params) {
+    return this.http.request("/v1/payment/link", params);
+  }
+  /** Список ссылок мерчанта. `POST /v1/payment/link/list` */
+  async list(params = {}) {
+    const res = await this.http.request("/v1/payment/link/list", params);
+    return res.items;
+  }
+  /** Ссылка + платежи по ней. `POST /v1/payment/link/info` */
+  info(linkId) {
+    return this.http.request("/v1/payment/link/info", { link_id: linkId });
+  }
+  /** Включить/выключить ссылку. `POST /v1/payment/link/toggle` */
+  toggle(linkId, active) {
+    return this.http.request("/v1/payment/link/toggle", { link_id: linkId, active });
+  }
+  /**
+   * Публичные детали ссылки. `GET /v1/link/{id}` — БЕЗ подписи (можно дергать со страницы
+   * плательщика). Неактивная/истёкшая ссылка → `paylink.not_found` (404).
+   */
+  publicGet(linkId) {
+    return this.http.requestPublic(
+      `/v1/link/${encodeURIComponent(linkId)}`,
+      {},
+      "GET"
+    );
+  }
+  /**
+   * Публичный чекаут по ссылке: порождает обычный инвойс. `POST /v1/link/{id}/checkout` —
+   * БЕЗ подписи. Закреплённые в ссылке валюта/сеть побеждают переданные. Лимит: 30 инвойсов/мин
+   * на ссылку (`paylink.rate_limited`). Ответ — обычный объект платежа (`uuid` + `url`).
+   */
+  checkout(linkId, params = {}) {
+    return this.http.requestPublic(
+      `/v1/link/${encodeURIComponent(linkId)}/checkout`,
+      params
+    );
+  }
+};
+
+// src/resources/splits.ts
+var Splits = class extends BaseResource {
+  /**
+   * Создать правило сплита. `POST /v1/split/rule`
+   * Ровно одно из двух: `address`+`network` (внешний адрес, необратимо) ИЛИ `merchant_id`
+   * (партнёр на платформе, обратимо). `percent` — 0 < x ≤ 100, шаг 0.01; сумма активных
+   * правил тоже ≤ 100. Удобные обёртки: {@link splitToAddress}, {@link splitToMerchant}.
+   */
+  createRule(params) {
+    return this.http.request("/v1/split/rule", params);
+  }
+  /** Доля на внешний адрес (необратимо при возврате). Обёртка над {@link createRule}. */
+  splitToAddress(address, network, percent, note) {
+    return this.createRule({ address, network, percent, ...note !== void 0 ? { note } : {} });
+  }
+  /** Доля аккаунту на платформе (возврат отзовёт долю). Обёртка над {@link createRule}. */
+  splitToMerchant(merchantId, percent, note) {
+    return this.createRule({
+      merchant_id: merchantId,
+      percent,
+      ...note !== void 0 ? { note } : {}
+    });
+  }
+  /** Список правил сплита. `POST /v1/split/rule/list` */
+  async listRules() {
+    const res = await this.http.request("/v1/split/rule/list", {});
+    return res.items;
+  }
+  /** Удалить правило. `POST /v1/split/rule/delete` */
+  deleteRule(ruleId) {
+    return this.http.request("/v1/split/rule/delete", { rule_id: ruleId });
+  }
+  /** Настройки сплитов (окно удержания перед отправкой долей). `POST /v1/split/config/get` */
+  getConfig() {
+    return this.http.request("/v1/split/config/get", {});
+  }
+  /**
+   * Задать окно удержания `refund_hold_hours` — отсрочка исходящей маршрутизации
+   * (сплиты/авто-вывод/авто-конверсия) после settle. `POST /v1/split/config/set`
+   */
+  setConfig(refundHoldHours) {
+    return this.http.request("/v1/split/config/set", {
+      refund_hold_hours: refundHoldHours
+    });
+  }
+};
+
+// src/resources/payoutlinks.ts
+var PayoutLinks = class extends BaseResource {
+  /**
+   * Создать payout-ссылку (средства резервируются сразу: available → payout_held).
+   * `POST /v1/payout/link`
+   *
+   * РЕКОМЕНДУЕТСЯ задавать `expires_in_hours` явно: при 0/отсутствии бэкенд клампит окно
+   * claim к 1 часу (НЕ к максимуму); допустимый диапазон [1, 720] часов.
+   * `claim_token`/`claim_url` возвращаются ТОЛЬКО в этом ответе (хранится лишь хеш) —
+   * сохраните их сразу. При `email` получателю уйдёт письмо с кнопкой claim (best-effort).
+   */
+  create(params) {
+    return this.http.request("/v1/payout/link", params);
+  }
+  /**
+   * Создать до 500 ссылок одним запросом. `POST /v1/payout/link/batch`
+   * Каждый элемент резервируется в своей транзакции (плохой фейлит только себя); ответ
+   * index-aligned (`results[i]` ↔ `links[i]`), все созданные ссылки получают общий `batch_id`.
+   * Больше 500 → `payoutlink.batch_too_large`. Дедуп — per-item `reference` (см. create).
+   */
+  createBatch(links) {
+    return this.http.request("/v1/payout/link/batch", { links });
+  }
+  /** Список ссылок (created_at DESC; limit вне (0,200] → 50). `POST /v1/payout/link/list` */
+  async list(params = {}) {
+    const res = await this.http.request("/v1/payout/link/list", params);
+    return res.links;
+  }
+  /** Информация о ссылке (после claim содержит `payout_id`, `claim_address`). `POST /v1/payout/link/info` */
+  info(linkId) {
+    return this.http.request("/v1/payout/link/info", { link_id: linkId });
+  }
+  /**
+   * Отменить непорученную (`funded`) ссылку — резерв вернётся на available.
+   * `POST /v1/payout/link/cancel`. Уже забранная → `payoutlink.not_funded` (409);
+   * гонка с claim разрешается в пользу claim (вернётся `status: 'claimed'` + `payout_id`).
+   */
+  cancel(linkId) {
+    return this.http.request("/v1/payout/link/cancel", { link_id: linkId });
+  }
+  /**
+   * ПУБЛИЧНО (без подписи): детали ссылки для страницы claim. `GET /v1/claim/{token}`
+   * Ничего мерчант-приватного не возвращает. `claimable === true` — можно забирать.
+   */
+  claimInfo(token) {
+    return this.http.requestPublic(
+      `/v1/claim/${encodeURIComponent(token)}`,
+      {},
+      "GET"
+    );
+  }
+  /**
+   * ПУБЛИЧНО (без подписи): забрать средства на адрес получателя. `POST /v1/claim/{token}`
+   * `memo` — dest tag/comment для сетей вроде TON. Идемпотентно: повторный claim уже
+   * забранной ссылки возвращает ту же выплату; claim с ДРУГИМ адресом на взятой ссылке →
+   * `payoutlink.claim_in_progress` (409). Истёкшая/отменённая → `payoutlink.expired` /
+   * `payoutlink.cancelled` (409).
+   */
+  claim(token, params) {
+    return this.http.requestPublic(
+      `/v1/claim/${encodeURIComponent(token)}`,
+      params
+    );
+  }
+};
+
 // src/client.ts
 var OblodaiClient = class _OblodaiClient {
   constructor(config) {
@@ -450,6 +815,11 @@ var OblodaiClient = class _OblodaiClient {
     this.webhooks = new Webhooks(this.http);
     this.settings = new Settings(this.http);
     this.rates = new Rates(this.http);
+    this.batches = new Batches(this.http);
+    this.links = new Links(this.http);
+    this.paymentLinks = this.links;
+    this.splits = new Splits(this.http);
+    this.payoutLinks = new PayoutLinks(this.http);
   }
   /**
    * Создаёт клиента из переменных окружения:
@@ -480,7 +850,9 @@ var OblodaiClient = class _OblodaiClient {
 import crypto2 from "crypto";
 function verifyWebhook(secret, rawBody, headers, options = {}) {
   const { timestamp, signature } = headers;
+  const log = resolveLogger(options.logger);
   if (!timestamp || !signature) {
+    log("warn", "oblodai: webhook verify failed", { reason: "missing headers" });
     throw new OblodaiSignatureError("\u041E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 timestamp \u0438\u043B\u0438 signature \u0432\u0435\u0431\u0445\u0443\u043A\u0430");
   }
   const raw = typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : rawBody;
@@ -489,6 +861,7 @@ function verifyWebhook(secret, rawBody, headers, options = {}) {
   const expectedBuf = Buffer.from(expected, "utf8");
   const actualBuf = Buffer.from(signature, "utf8");
   if (expectedBuf.length !== actualBuf.length || !crypto2.timingSafeEqual(expectedBuf, actualBuf)) {
+    log("warn", "oblodai: webhook verify failed", { reason: "signature mismatch" });
     throw new OblodaiSignatureError("\u041F\u043E\u0434\u043F\u0438\u0441\u044C \u0432\u0435\u0431\u0445\u0443\u043A\u0430 \u043D\u0435 \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u0435\u0442");
   }
   const maxAge = options.maxAgeSeconds ?? 300;
@@ -496,15 +869,18 @@ function verifyWebhook(secret, rawBody, headers, options = {}) {
     const now = options.now ?? Date.now();
     const ts = Number(timestamp);
     if (!Number.isFinite(ts)) {
+      log("warn", "oblodai: webhook verify failed", { reason: "invalid timestamp" });
       throw new OblodaiSignatureError("\u041D\u0435\u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u044B\u0439 timestamp \u0432\u0435\u0431\u0445\u0443\u043A\u0430");
     }
     const ageSeconds = Math.abs(now / 1e3 - ts);
     if (ageSeconds > maxAge) {
+      log("warn", "oblodai: webhook verify failed", { reason: "stale" });
       throw new OblodaiSignatureError(
         `\u0412\u0435\u0431\u0445\u0443\u043A \u0441\u043B\u0438\u0448\u043A\u043E\u043C \u0441\u0442\u0430\u0440\u044B\u0439: \u0432\u043E\u0437\u0440\u0430\u0441\u0442 ${Math.round(ageSeconds)}\u0441 > ${maxAge}\u0441`
       );
     }
   }
+  log("debug", "oblodai: webhook signature ok");
   return true;
 }
 function constructWebhookEvent(secret, rawBody, headers, options) {

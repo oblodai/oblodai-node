@@ -7,6 +7,10 @@ import { Account } from './resources/account.js';
 import { Webhooks } from './resources/webhooks.js';
 import { Settings } from './resources/settings.js';
 import { Rates } from './resources/rates.js';
+import { Batches } from './resources/batches.js';
+import { Links } from './resources/links.js';
+import { Splits } from './resources/splits.js';
+import { PayoutLinks } from './resources/payoutlinks.js';
 
 /**
  * Клиент Oblodai API.
@@ -39,6 +43,16 @@ export class OblodaiClient {
   readonly settings: Settings;
   /** Публичные курсы валют. */
   readonly rates: Rates;
+  /** Статус массовых операций (v1.1.0). */
+  readonly batches: Batches;
+  /** Платёжные ссылки (v1.1.0). */
+  readonly links: Links;
+  /** Синоним {@link links} — платёжные ссылки (не путать с {@link payoutLinks}). */
+  readonly paymentLinks: Links;
+  /** Сплит-платежи (v1.1.0). */
+  readonly splits: Splits;
+  /** Payout-ссылки — «крипто-чеки» (v1.1.0). */
+  readonly payoutLinks: PayoutLinks;
 
   private readonly http: HttpClient;
 
@@ -51,6 +65,11 @@ export class OblodaiClient {
     this.webhooks = new Webhooks(this.http);
     this.settings = new Settings(this.http);
     this.rates = new Rates(this.http);
+    this.batches = new Batches(this.http);
+    this.links = new Links(this.http);
+    this.paymentLinks = this.links;
+    this.splits = new Splits(this.http);
+    this.payoutLinks = new PayoutLinks(this.http);
   }
 
   /**
