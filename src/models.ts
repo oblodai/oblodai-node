@@ -646,3 +646,74 @@ export interface PayoutLinkClaimResult {
   network: string;
   address: string;
 }
+
+// ---------------------------------------------------------------------------
+// v1.2.0: песочница разработчика (sandbox) — ТОЛЬКО для тестовых ключей
+// ---------------------------------------------------------------------------
+
+/** Параметры симуляции он-чейн депозита в инвойс (`POST /v1/sandbox/deposit`). */
+export interface SandboxDepositParams {
+  /** UUID инвойса, который «оплачивает» виртуальный покупатель. */
+  invoice_id: string;
+  /**
+   * Сумма депозита. Не задана/пустая строка — заплатить ровно сумму к оплате;
+   * меньшее/большее значение симулирует недоплату/переплату.
+   */
+  amount?: string;
+  /**
+   * Число подтверждений. Не задано/0 — депозит сразу полностью подтверждён; небольшое число —
+   * транзакция приходит ещё pending (дозреет через ~10 минут или при повторе того же `txid`
+   * с бОльшим числом подтверждений).
+   */
+  confirmations?: number;
+  /**
+   * Идентификатор транзакции. Не задан — сгенерируется новый; повтор того же `txid` позволяет
+   * тестировать идемпотентность и «углубление» подтверждений.
+   */
+  txid?: string;
+}
+
+/** Результат симуляции депозита. */
+export interface SandboxDeposit {
+  invoice_id: string;
+  txid: string;
+  amount: string;
+  confirmations: number;
+}
+
+/** Параметры пополнения тестового баланса (`POST /v1/sandbox/faucet`). */
+export interface SandboxFaucetParams {
+  /** Актив, например `USDT`. */
+  asset: string;
+  /** Сумма (строка), максимум 1000000 за вызов. */
+  amount: string;
+  /** Опциональный ключ идемпотентности (в теле запроса — так требует контракт эндпоинта). */
+  idempotency_key?: string;
+}
+
+/** Результат faucet-пополнения. */
+export interface SandboxFaucetResult {
+  asset: string;
+  amount: string;
+  journal_id: string;
+}
+
+/** Результат сброса песочницы (`POST /v1/sandbox/reset`). */
+export interface SandboxResetResult {
+  /** Сколько открытых инвойсов отменено. */
+  invoices_cancelled: number;
+  /** Сколько балансов обнулено (компенсирующей проводкой — история сохраняется). */
+  balances_zeroed: number;
+}
+
+/** Доставка вебхука в журнале песочницы (`GET /v1/sandbox/webhooks`) — {@link Delivery} + сырой payload. */
+export interface SandboxDelivery extends Delivery {
+  /** Сырое тело вебхука (JSON-объект как есть). */
+  payload: Record<string, unknown>;
+}
+
+/** Результат перепостановки доставки (`POST /v1/sandbox/webhooks/replay`). */
+export interface SandboxReplayResult {
+  delivery_id: string;
+  requeued: boolean;
+}

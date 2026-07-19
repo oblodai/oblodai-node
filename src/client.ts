@@ -11,6 +11,7 @@ import { Batches } from './resources/batches.js';
 import { Links } from './resources/links.js';
 import { Splits } from './resources/splits.js';
 import { PayoutLinks } from './resources/payoutlinks.js';
+import { Sandbox } from './resources/sandbox.js';
 
 /**
  * Клиент Oblodai API.
@@ -53,6 +54,8 @@ export class OblodaiClient {
   readonly splits: Splits;
   /** Payout-ссылки — «крипто-чеки» (v1.1.0). */
   readonly payoutLinks: PayoutLinks;
+  /** Песочница разработчика (v1.2.0) — только тестовые ключи, только тестовый код. */
+  readonly sandbox: Sandbox;
 
   private readonly http: HttpClient;
 
@@ -70,6 +73,7 @@ export class OblodaiClient {
     this.paymentLinks = this.links;
     this.splits = new Splits(this.http);
     this.payoutLinks = new PayoutLinks(this.http);
+    this.sandbox = new Sandbox(this.http);
   }
 
   /**

@@ -120,6 +120,14 @@ var HttpClient = class {
   async request(path, payload = {}, opts = {}) {
     return this.execute(path, payload, true, "POST", opts);
   }
+  /**
+   * Выполняет подписанный GET-запрос БЕЗ тела (используется тестовыми эндпоинтами песочницы,
+   * например `GET /v1/sandbox/webhooks`). Каноническая строка подписи — та же, что и всегда:
+   * `{timestamp}\nGET\n{path}\n` (тело — пустая строка).
+   */
+  async requestGet(path) {
+    return this.execute(path, void 0, true, "GET");
+  }
   /** Выполняет запрос БЕЗ подписи (для публичных эндпоинтов). */
   async requestPublic(path, payload = {}, method = "POST") {
     return this.execute(path, payload, false, method);
@@ -158,8 +166,8 @@ var HttpClient = class {
     const url = this.baseUrl + path;
     const body = method === "GET" ? void 0 : JSON.stringify(payload ?? {});
     const headers = { "Content-Type": "application/json" };
-    if (signed && body !== void 0) {
-      const s = signRequest(this.secret, method, path, body);
+    if (signed) {
+      const s = signRequest(this.secret, method, path, body ?? "");
       headers["X-Public-Id"] = this.publicId;
       headers["X-Timestamp"] = s.timestamp;
       headers["X-Signature"] = s.signature;
@@ -804,6 +812,51 @@ var PayoutLinks = class extends BaseResource {
   }
 };
 
+// src/resources/sandbox.ts
+function isTestKey(publicId) {
+  return publicId.startsWith("test_");
+}
+var Sandbox = class extends BaseResource {
+  /**
+   * Симулировать он-чейн депозит в инвойс. `POST /v1/sandbox/deposit`
+   *
+   * Без `amount` платится ровно сумма к оплате; без `confirmations` (или 0) депозит сразу
+   * полностью подтверждён. Мелкое `confirmations` даёт pending-депозит — он дозреет через
+   * ~10 минут или при повторе того же `txid` с бОльшим числом подтверждений.
+   */
+  simulateDeposit(params) {
+    return this.http.request("/v1/sandbox/deposit", params);
+  }
+  /**
+   * Начислить тестовый баланс, чтобы гонять выплаты/возвраты. `POST /v1/sandbox/faucet`
+   * Максимум 1000000 за вызов; `idempotency_key` (в теле) защищает от дублей при повторе.
+   */
+  faucet(params) {
+    return this.http.request("/v1/sandbox/faucet", params);
+  }
+  /**
+   * Сбросить песочницу: отменить открытые инвойсы и обнулить балансы. `POST /v1/sandbox/reset`
+   * Обнуление — компенсирующей проводкой в леджере, история операций сохраняется.
+   */
+  reset() {
+    return this.http.request("/v1/sandbox/reset", {});
+  }
+  /**
+   * Журнал последних доставок вебхуков (до 50, новые первыми). `GET /v1/sandbox/webhooks`
+   * Подписанный GET без тела (подписывается пустая строка).
+   */
+  async listWebhooks() {
+    const res = await this.http.requestGet("/v1/sandbox/webhooks");
+    return res.deliveries;
+  }
+  /** Перепоставить одну доставку в очередь. `POST /v1/sandbox/webhooks/replay` */
+  replayWebhook(deliveryId) {
+    return this.http.request("/v1/sandbox/webhooks/replay", {
+      delivery_id: deliveryId
+    });
+  }
+};
+
 // src/client.ts
 var OblodaiClient = class _OblodaiClient {
   constructor(config) {
@@ -820,6 +873,7 @@ var OblodaiClient = class _OblodaiClient {
     this.paymentLinks = this.links;
     this.splits = new Splits(this.http);
     this.payoutLinks = new PayoutLinks(this.http);
+    this.sandbox = new Sandbox(this.http);
   }
   /**
    * Создаёт клиента из переменных окружения:
@@ -896,6 +950,7 @@ export {
   OblodaiSignatureError,
   OblodaiTimeoutError,
   constructWebhookEvent,
+  isTestKey,
   signRequest,
   verifyWebhook
 };

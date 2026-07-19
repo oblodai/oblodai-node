@@ -99,6 +99,12 @@ declare class HttpClient {
      * конверта. Публичные (неподписанные) вызовы используют {@link requestPublic}.
      */
     request<T>(path: string, payload?: unknown, opts?: RequestOpts): Promise<T>;
+    /**
+     * Выполняет подписанный GET-запрос БЕЗ тела (используется тестовыми эндпоинтами песочницы,
+     * например `GET /v1/sandbox/webhooks`). Каноническая строка подписи — та же, что и всегда:
+     * `{timestamp}\nGET\n{path}\n` (тело — пустая строка).
+     */
+    requestGet<T>(path: string): Promise<T>;
     /** Выполняет запрос БЕЗ подписи (для публичных эндпоинтов). */
     requestPublic<T>(path: string, payload?: unknown, method?: 'GET' | 'POST'): Promise<T>;
     private execute;
@@ -698,6 +704,66 @@ interface PayoutLinkClaimResult {
     network: string;
     address: string;
 }
+/** Параметры симуляции он-чейн депозита в инвойс (`POST /v1/sandbox/deposit`). */
+interface SandboxDepositParams {
+    /** UUID инвойса, который «оплачивает» виртуальный покупатель. */
+    invoice_id: string;
+    /**
+     * Сумма депозита. Не задана/пустая строка — заплатить ровно сумму к оплате;
+     * меньшее/большее значение симулирует недоплату/переплату.
+     */
+    amount?: string;
+    /**
+     * Число подтверждений. Не задано/0 — депозит сразу полностью подтверждён; небольшое число —
+     * транзакция приходит ещё pending (дозреет через ~10 минут или при повторе того же `txid`
+     * с бОльшим числом подтверждений).
+     */
+    confirmations?: number;
+    /**
+     * Идентификатор транзакции. Не задан — сгенерируется новый; повтор того же `txid` позволяет
+     * тестировать идемпотентность и «углубление» подтверждений.
+     */
+    txid?: string;
+}
+/** Результат симуляции депозита. */
+interface SandboxDeposit {
+    invoice_id: string;
+    txid: string;
+    amount: string;
+    confirmations: number;
+}
+/** Параметры пополнения тестового баланса (`POST /v1/sandbox/faucet`). */
+interface SandboxFaucetParams {
+    /** Актив, например `USDT`. */
+    asset: string;
+    /** Сумма (строка), максимум 1000000 за вызов. */
+    amount: string;
+    /** Опциональный ключ идемпотентности (в теле запроса — так требует контракт эндпоинта). */
+    idempotency_key?: string;
+}
+/** Результат faucet-пополнения. */
+interface SandboxFaucetResult {
+    asset: string;
+    amount: string;
+    journal_id: string;
+}
+/** Результат сброса песочницы (`POST /v1/sandbox/reset`). */
+interface SandboxResetResult {
+    /** Сколько открытых инвойсов отменено. */
+    invoices_cancelled: number;
+    /** Сколько балансов обнулено (компенсирующей проводкой — история сохраняется). */
+    balances_zeroed: number;
+}
+/** Доставка вебхука в журнале песочницы (`GET /v1/sandbox/webhooks`) — {@link Delivery} + сырой payload. */
+interface SandboxDelivery extends Delivery {
+    /** Сырое тело вебхука (JSON-объект как есть). */
+    payload: Record<string, unknown>;
+}
+/** Результат перепостановки доставки (`POST /v1/sandbox/webhooks/replay`). */
+interface SandboxReplayResult {
+    delivery_id: string;
+    requeued: boolean;
+}
 
 /** Методы приёма платежей. */
 declare class Payments extends BaseResource {
@@ -1194,6 +1260,48 @@ declare class PayoutLinks extends BaseResource {
 }
 
 /**
+ * `true`, если ключ тестовый: `public_id` тестового ключа начинается с `test_`
+ * (секрет — с `oblodai_test_`). Бизнес-эндпоинты с тестовым ключом работают точь-в-точь
+ * как с боевым — меняется только ключ; тестовые же (`/v1/sandbox/*`) доступны ТОЛЬКО ему.
+ */
+declare function isTestKey(publicId: string): boolean;
+/**
+ * Песочница разработчика (v1.2.0) — ТОЛЬКО для тестовых ключей (`test_...` / `oblodai_test_...`).
+ *
+ * Эти пять методов заменяют то, что в бою делает внешний мир (покупатель платит он-чейн и т.п.),
+ * поэтому им место в ТЕСТОВОМ коде, а не в интеграции: боевой ключ на любом `/v1/sandbox/*`
+ * получает `403 sandbox.live_key`. Все остальные методы SDK с тестовым ключом работают без
+ * изменений — интеграционный код между тестом и боем не меняется, меняется только ключ.
+ */
+declare class Sandbox extends BaseResource {
+    /**
+     * Симулировать он-чейн депозит в инвойс. `POST /v1/sandbox/deposit`
+     *
+     * Без `amount` платится ровно сумма к оплате; без `confirmations` (или 0) депозит сразу
+     * полностью подтверждён. Мелкое `confirmations` даёт pending-депозит — он дозреет через
+     * ~10 минут или при повторе того же `txid` с бОльшим числом подтверждений.
+     */
+    simulateDeposit(params: SandboxDepositParams): Promise<SandboxDeposit>;
+    /**
+     * Начислить тестовый баланс, чтобы гонять выплаты/возвраты. `POST /v1/sandbox/faucet`
+     * Максимум 1000000 за вызов; `idempotency_key` (в теле) защищает от дублей при повторе.
+     */
+    faucet(params: SandboxFaucetParams): Promise<SandboxFaucetResult>;
+    /**
+     * Сбросить песочницу: отменить открытые инвойсы и обнулить балансы. `POST /v1/sandbox/reset`
+     * Обнуление — компенсирующей проводкой в леджере, история операций сохраняется.
+     */
+    reset(): Promise<SandboxResetResult>;
+    /**
+     * Журнал последних доставок вебхуков (до 50, новые первыми). `GET /v1/sandbox/webhooks`
+     * Подписанный GET без тела (подписывается пустая строка).
+     */
+    listWebhooks(): Promise<SandboxDelivery[]>;
+    /** Перепоставить одну доставку в очередь. `POST /v1/sandbox/webhooks/replay` */
+    replayWebhook(deliveryId: string): Promise<SandboxReplayResult>;
+}
+
+/**
  * Клиент Oblodai API.
  *
  * ```ts
@@ -1234,6 +1342,8 @@ declare class OblodaiClient {
     readonly splits: Splits;
     /** Payout-ссылки — «крипто-чеки» (v1.1.0). */
     readonly payoutLinks: PayoutLinks;
+    /** Песочница разработчика (v1.2.0) — только тестовые ключи, только тестовый код. */
+    readonly sandbox: Sandbox;
     private readonly http;
     constructor(config: OblodaiConfig);
     /**
@@ -1369,4 +1479,4 @@ declare class OblodaiTimeoutError extends OblodaiConnectionError {
 declare class OblodaiSignatureError extends OblodaiError {
 }
 
-export { type AcceptedMethod, type AutoWithdrawRule, type Balance, type BatchInfo, type BatchItem, type BatchOnError, type BatchOptions, type BatchStatus, type BatchSubmitResult, type BlockWalletParams, type BlockedRefundParams, type CalculatePayoutParams, type CreatePaymentLinkParams, type CreatePaymentParams, type CreatePayoutLinkParams, type CreatePayoutParams, type CreateSplitRuleParams, type CreateWalletParams, type Currency, type CurrencyNetwork, type Delivery, type Envelope, type ErrorEnvelope, type ExchangeRate, type HistoryParams, type LinkCheckoutParams, type Lookup, type MassPayoutItem, type Network, OblodaiApiError, OblodaiClient, type OblodaiConfig, OblodaiConnectionError, OblodaiError, type OblodaiLogger, OblodaiSignatureError, OblodaiTimeoutError, type Paginate, type Payment, type PaymentLink, type PaymentLinkAmountMode, type PaymentLinkCreated, type PaymentLinkInfo, type PaymentList, type PaymentRefundEntry, type PaymentStatus, type Payout, type PayoutCalculation, type PayoutLink, type PayoutLinkBatchItem, type PayoutLinkBatchResult, type PayoutLinkClaimInfo, type PayoutLinkClaimResult, type PayoutLinkCreated, type PayoutLinkStatus, type PayoutStatus, type ReferralInfo, type RefundBatchItem, type RefundParams, type ResolveParams, type ResolveResult, type RetryOptions, type SendEmailParams, type SendEmailResult, type ServiceMethod, type SignedRequest, type SplitConfig, type SplitRule, type VerifyWebhookOptions, type Wallet, type WebhookEvent, type WebhookHeaders, type WebhookRegistration, constructWebhookEvent, signRequest, verifyWebhook };
+export { type AcceptedMethod, type AutoWithdrawRule, type Balance, type BatchInfo, type BatchItem, type BatchOnError, type BatchOptions, type BatchStatus, type BatchSubmitResult, type BlockWalletParams, type BlockedRefundParams, type CalculatePayoutParams, type CreatePaymentLinkParams, type CreatePaymentParams, type CreatePayoutLinkParams, type CreatePayoutParams, type CreateSplitRuleParams, type CreateWalletParams, type Currency, type CurrencyNetwork, type Delivery, type Envelope, type ErrorEnvelope, type ExchangeRate, type HistoryParams, type LinkCheckoutParams, type Lookup, type MassPayoutItem, type Network, OblodaiApiError, OblodaiClient, type OblodaiConfig, OblodaiConnectionError, OblodaiError, type OblodaiLogger, OblodaiSignatureError, OblodaiTimeoutError, type Paginate, type Payment, type PaymentLink, type PaymentLinkAmountMode, type PaymentLinkCreated, type PaymentLinkInfo, type PaymentList, type PaymentRefundEntry, type PaymentStatus, type Payout, type PayoutCalculation, type PayoutLink, type PayoutLinkBatchItem, type PayoutLinkBatchResult, type PayoutLinkClaimInfo, type PayoutLinkClaimResult, type PayoutLinkCreated, type PayoutLinkStatus, type PayoutStatus, type ReferralInfo, type RefundBatchItem, type RefundParams, type ResolveParams, type ResolveResult, type RetryOptions, type SandboxDelivery, type SandboxDeposit, type SandboxDepositParams, type SandboxFaucetParams, type SandboxFaucetResult, type SandboxReplayResult, type SandboxResetResult, type SendEmailParams, type SendEmailResult, type ServiceMethod, type SignedRequest, type SplitConfig, type SplitRule, type VerifyWebhookOptions, type Wallet, type WebhookEvent, type WebhookHeaders, type WebhookRegistration, constructWebhookEvent, isTestKey, signRequest, verifyWebhook };

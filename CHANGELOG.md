@@ -3,6 +3,33 @@
 Значимые изменения этого пакета. Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версии — [SemVer](https://semver.org/lang/ru/).
 
+## [1.2.0] — 2026-07-19
+
+### Добавлено
+
+- **Песочница разработчика** — новый ресурс `client.sandbox` (ТОЛЬКО для тестовых ключей
+  `test_...` / `oblodai_test_...`; боевой ключ на этих эндпоинтах получает `403 sandbox.live_key`).
+  Бизнес-эндпоинты с тестовым ключом работают без изменений — между тестом и боем меняется
+  только ключ. Методы:
+  - `sandbox.simulateDeposit({ invoice_id, amount?, confirmations?, txid? })` — симуляция
+    он-чейн депозита (`POST /v1/sandbox/deposit`). Без `amount` — ровно сумма к оплате;
+    малое `confirmations` — pending-депозит (дозревает ~10 минут или повтором того же `txid`
+    с бОльшим числом подтверждений); повтор `txid` — тест идемпотентности.
+  - `sandbox.faucet({ asset, amount, idempotency_key? })` — тестовый баланс, до 1000000 за
+    вызов (`POST /v1/sandbox/faucet`).
+  - `sandbox.reset()` — отмена открытых счетов и обнуление балансов компенсирующей проводкой,
+    история сохраняется (`POST /v1/sandbox/reset`).
+  - `sandbox.listWebhooks()` — журнал доставок вебхуков с сырым `payload`, до 50, новые первыми
+    (`GET /v1/sandbox/webhooks`).
+  - `sandbox.replayWebhook(deliveryId)` — перепоставить доставку в очередь
+    (`POST /v1/sandbox/webhooks/replay`).
+- **Подписанный GET** в транспорте (`HttpClient.requestGet`): та же каноническая строка
+  `{timestamp}\nGET\n{path}\n` с ПУСТЫМ телом (нужен для `GET /v1/sandbox/webhooks`).
+- Хелпер `isTestKey(publicId)` — `true` для тестового `public_id` (префикс `test_`);
+  экспортируется из корня пакета.
+- Типы `SandboxDepositParams`, `SandboxDeposit`, `SandboxFaucetParams`, `SandboxFaucetResult`,
+  `SandboxResetResult`, `SandboxDelivery`, `SandboxReplayResult` экспортируются из корня пакета.
+
 ## [1.1.0] — 2026-07-15
 
 ### ⚠ ЛОМАЮЩЕЕ ИЗМЕНЕНИЕ: новая семантика идемпотентности

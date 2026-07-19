@@ -18,6 +18,9 @@ export {
 // Низкоуровневая подпись (на случай кастомного транспорта)
 export { signRequest, type SignedRequest } from './signing.js';
 
+// Песочница: проверка «тестовости» ключа (префикс public_id `test_`)
+export { isTestKey } from './resources/sandbox.js';
+
 // Ошибки
 export {
   OblodaiError,
@@ -102,4 +105,12 @@ export type {
   PayoutLinkBatchResult,
   PayoutLinkClaimInfo,
   PayoutLinkClaimResult,
+  // v1.2.0: песочница разработчика
+  SandboxDepositParams,
+  SandboxDeposit,
+  SandboxFaucetParams,
+  SandboxFaucetResult,
+  SandboxResetResult,
+  SandboxDelivery,
+  SandboxReplayResult,
 } from './models.js';

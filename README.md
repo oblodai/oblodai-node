@@ -231,6 +231,65 @@ await client.payoutLinks.claim(token, { address: 'T...' });         // → { sta
 Статусы payout-ссылки: `funded → claiming → claimed | expired | cancelled`. Дедупликация create —
 per-link `reference` (заголовок `Idempotency-Key` на этих эндпоинтах не действует).
 
+## Песочница / тестирование (v1.2.0)
+
+У шлюза есть песочница разработчика. **Те же эндпоинты, тот же код** — интеграция между тестом и
+боем не меняется вообще, меняется только ключ: тестовый `public_id` начинается с `test_...`,
+тестовый секрет — с `oblodai_test_...`. Все бизнес-методы SDK с тестовым ключом работают
+точь-в-точь как с боевым.
+
+Новое — пять **тестовых** методов `client.sandbox.*` (`/v1/sandbox/*`). У них нет боевого
+аналога: они заменяют то, что в бою делает внешний мир (покупатель платит он-чейн и т.п.),
+поэтому им место **только в тестовом коде**, не в интеграции. Боевой ключ на любом из них
+получает `403 sandbox.live_key` — удобная страховка, что sandbox-вызов не утёк в прод.
+Проверить ключ можно хелпером `isTestKey(publicId)` (экспортируется из корня пакета).
+
+```ts
+import { OblodaiClient } from '@oblodai-npm/sdk';
+
+const client = new OblodaiClient({
+  publicId: process.env.OBLODAI_TEST_PUBLIC_ID!, // test_...
+  secret: process.env.OBLODAI_TEST_SECRET!,      // oblodai_test_...
+});
+
+// 1. Обычный код интеграции — создать счёт (ничего «тестового» в нём нет)
+const payment = await client.payments.create({
+  amount: '10', currency: 'USD', order_id: 'order-1',
+  to_currency: 'USDT', network: 'tron',
+});
+
+// 2. Тестовый код — «покупатель заплатил он-чейн»
+await client.sandbox.simulateDeposit({ invoice_id: payment.uuid });
+// без amount — ровно сумма к оплате; amount меньше/больше — недо-/переплата
+// confirmations: 2 — депозит придёт ещё pending (см. каверзы ниже)
+
+// 3. Обычный код — дождаться статуса (или принять вебхук)
+const info = await client.payments.info({ uuid: payment.uuid }); // → 'paid'
+
+// 4. Начислить тестовый баланс (до 1000000 за вызов) и погонять выплату
+await client.sandbox.faucet({ asset: 'USDT', amount: '1000' });
+await client.payouts.create({
+  amount: '25', currency: 'USDT', network: 'tron',
+  address: 'T...', order_id: 'payout-1',
+});
+
+// Журнал вебхуков и повторная доставка:
+const deliveries = await client.sandbox.listWebhooks(); // до 50, новые первыми
+await client.sandbox.replayWebhook(deliveries[0]!.id);
+
+// Начать с чистого листа: отменить открытые счета и обнулить балансы
+await client.sandbox.reset(); // история операций сохраняется
+```
+
+Каверзы, о которых стоит знать:
+
+- **Неглубокие подтверждения.** Депозит с малым `confirmations` приходит pending
+  (`confirm_check`) и дозревает **через ~10 минут** — либо сразу: повторите `simulateDeposit`
+  с **тем же `txid`** и бОльшим `confirmations`. Повтор того же `txid` — это же способ
+  проверить идемпотентность вашей обработки.
+- **UTXO-сети (Bitcoin и т.п.)** — как и в бою: **нет** авто-возврата переплаты и **нет** адреса
+  плательщика, возврат требует явного `address`.
+
 ## Обзор методов
 
 ```ts
@@ -307,6 +366,13 @@ client.settings.listAllowlist() / addAllowlist(cidr) / removeAllowlist(cidr) / e
 
 // Курсы (публично, без ключа)
 client.rates.list('ETH')
+
+// Песочница (v1.2.0; ТОЛЬКО тестовый ключ, только тестовый код)
+client.sandbox.simulateDeposit({ invoice_id, amount?, confirmations?, txid? })
+client.sandbox.faucet({ asset, amount, idempotency_key? })
+client.sandbox.reset()
+client.sandbox.listWebhooks()          // подписанный GET
+client.sandbox.replayWebhook(deliveryId)
 ```
 
 ## Конфигурация

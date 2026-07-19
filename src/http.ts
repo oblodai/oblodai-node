@@ -83,6 +83,15 @@ export class HttpClient {
     return this.execute<T>(path, payload, true, 'POST', opts);
   }
 
+  /**
+   * Выполняет подписанный GET-запрос БЕЗ тела (используется тестовыми эндпоинтами песочницы,
+   * например `GET /v1/sandbox/webhooks`). Каноническая строка подписи — та же, что и всегда:
+   * `{timestamp}\nGET\n{path}\n` (тело — пустая строка).
+   */
+  async requestGet<T>(path: string): Promise<T> {
+    return this.execute<T>(path, undefined, true, 'GET');
+  }
+
   /** Выполняет запрос БЕЗ подписи (для публичных эндпоинтов). */
   async requestPublic<T>(
     path: string,
@@ -148,8 +157,9 @@ export class HttpClient {
     const body = method === 'GET' ? undefined : JSON.stringify(payload ?? {});
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
-    if (signed && body !== undefined) {
-      const s = signRequest(this.secret, method, path, body);
+    if (signed) {
+      // Для GET тело отсутствует — подписывается пустая строка (та же каноническая форма).
+      const s = signRequest(this.secret, method, path, body ?? '');
       headers['X-Public-Id'] = this.publicId;
       headers['X-Timestamp'] = s.timestamp;
       headers['X-Signature'] = s.signature;
