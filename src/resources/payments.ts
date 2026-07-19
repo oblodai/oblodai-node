@@ -16,6 +16,8 @@ import type {
   SendEmailResult,
   ResolveParams,
   ResolveResult,
+  PublicPayment,
+  PaySelectParams,
 } from '../models.js';
 
 /** Методы приёма платежей. */
@@ -136,6 +138,42 @@ export class Payments extends BaseResource {
     return this.http.request('/v1/payment/refund', body, {
       idempotencyKey: idempotencyKeyFor(idempotency_key),
     });
+  }
+
+  // ── Публичный чекаут (v1.2.0; без подписи) ──
+
+  /**
+   * ПУБЛИЧНО (без подписи): состояние счёта для КАСТОМНОЙ страницы оплаты. `GET /v1/pay/{id}`
+   *
+   * То, чем живёт hosted-страница оплаты: сумма, адрес (после выбора валюты), QR, статус,
+   * срок — можно дергать из браузера плательщика и поллить статус без секрета мерчанта.
+   * Мерчант-приватные поля (`additional_data`, `payer_email`, `payer_address`) не возвращаются.
+   * У валюто-агностичного счёта до выбора валюты `payment_status === 'select'`, а в `accepted` —
+   * методы, из которых плательщик может выбрать (см. {@link publicSelect}).
+   */
+  publicGet(uuid: string): Promise<PublicPayment> {
+    return this.http.requestPublic<PublicPayment>(
+      `/v1/pay/${encodeURIComponent(uuid)}`,
+      {},
+      'GET',
+    );
+  }
+
+  /**
+   * ПУБЛИЧНО (без подписи): плательщик выбирает валюту и сеть валюто-агностичного счёта.
+   * `POST /v1/pay/{id}/select`
+   *
+   * Фиксирует курс, выделяет депозит-адрес и переводит счёт из `select` в обычный жизненный
+   * цикл; ответ — финализированный счёт (та же форма, что у {@link publicGet}). Вместе с
+   * `publicGet` это позволяет собрать полностью СВОЙ чекаут вместо hosted-страницы.
+   * Пара должна входить в принимаемый набор мерчанта (`pay.method_not_accepted`);
+   * повторный select уже выбранного счёта → `pay.not_selectable` (409).
+   */
+  publicSelect(uuid: string, params: PaySelectParams): Promise<PublicPayment> {
+    return this.http.requestPublic<PublicPayment>(
+      `/v1/pay/${encodeURIComponent(uuid)}/select`,
+      params,
+    );
   }
 
   // ── Настройки приёма ──

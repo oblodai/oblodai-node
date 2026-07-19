@@ -30,13 +30,13 @@ import { Sandbox } from './resources/sandbox.js';
  * ```
  */
 export class OblodaiClient {
-  /** Приём платежей и настройки приёма. */
+  /** Приём платежей, настройки приёма, публичный чекаут `/v1/pay` (v1.2.0). */
   readonly payments: Payments;
   /** Выплаты и возвраты. */
   readonly payouts: Payouts;
   /** Статические кошельки. */
   readonly wallets: Wallets;
-  /** Баланс, рефералы, перевод на личный кошелёк, VRCS. */
+  /** Баланс, рефералы, переводы на личный кошелёк и пользователям платформы (v1.2.0), VRCS. */
   readonly account: Account;
   /** Управление вебхуками и тестовые события. */
   readonly webhooks: Webhooks;

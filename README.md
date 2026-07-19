@@ -157,7 +157,8 @@ const client = new OblodaiClient({
 >
 > Заголовок действует на создающих эндпоинтах (`/v1/payment`, `/v1/payment/refund`,
 > `/v1/payment/resolve`, `/v1/payment/batch`, `/v1/refund/batch`, `/v1/payout`, `/v1/payout/mass`,
-> `/v1/payout/batch`, `/v1/transfer/to-personal`). У payout-ссылок (`payoutLinks.*`) он не действует —
+> `/v1/payout/batch`, `/v1/transfer/to-personal`, а с v1.2.0 — `/v1/transfer/to-user` и
+> `/v1/transfer/batch`). У payout-ссылок (`payoutLinks.*`) он не действует —
 > там дедупликация через per-link `reference`.
 
 ## Новое в v1.1.0
@@ -290,6 +291,52 @@ await client.sandbox.reset(); // история операций сохраня�
 - **UTXO-сети (Bitcoin и т.п.)** — как и в бою: **нет** авто-возврата переплаты и **нет** адреса
   плательщика, возврат требует явного `address`.
 
+## Переводы пользователям платформы (v1.2.0)
+
+Внутренний перевод **без комиссии** с баланса мерчанта на личный кошелёк пользователя платформы
+(payout-ключ, та же подпись, что у выплат). `to_user_id` — **UUID пользователя, не username**
+(не-UUID бэкенд отклоняет); username → user_id резолвится публичным профилем кабинета.
+
+```ts
+await client.account.transferToUser({
+  to_user_id: '5c3f1c7e-9a44-4a5f-8d1a-2f6b7c8d9e0f', // UUID пользователя платформы
+  amount: '25', currency: 'USDT', order_id: 'bonus-1',
+}); // → { currency, amount, to_user_id, recipient_balance }
+
+// «Зарплатная» пачка — обработка в фоне, прогресс через СУЩЕСТВУЮЩИЙ batches.info:
+const sub = await client.account.transferBatch(
+  [
+    { to_user_id: '...', amount: '100', currency: 'USDT', order_id: 'salary-1' },
+    { to_user_id: '...', amount: '150', currency: 'USDT', order_id: 'salary-2' },
+  ],
+  { onError: 'continue' },
+);
+const info = await client.batches.info(sub.batch_id); // items[i].result — как у /v1/transfer/to-user
+```
+
+Идемпотентность — как у остальных денежных вызовов: заголовок `Idempotency-Key` (SDK генерирует
+сам, свой — параметр `idempotency_key`); на бэкенде лестница «заголовок → `order_id` → подпись».
+
+## Кастомный чекаут: публичные `/v1/pay` (v1.2.0)
+
+Пара публичных (без подписи) методов, из которых собирается **полностью свой чекаут** вместо
+hosted-страницы оплаты: страница плательщика рендерит и поллит счёт без секрета мерчанта, а на
+валюто-агностичном счёте плательщик сам выбирает валюту — `publicSelect` фиксирует курс и
+выделяет депозит-адрес.
+
+```ts
+// Страница плательщика (секрет не нужен):
+const view = await client.payments.publicGet(payment.uuid); // GET /v1/pay/{id}
+// view.payment_status === 'select' — счёт ждёт выбора валюты, view.accepted — доступные методы
+
+const inv = await client.payments.publicSelect(payment.uuid, {
+  currency: 'USDT', network: 'tron',
+}); // POST /v1/pay/{id}/select → финализированный счёт: address, payer_amount, QR
+```
+
+Мерчант-приватные поля (`additional_data`, `payer_email`, `payer_address`) в публичном
+представлении не возвращаются. Повторный select уже выбранного счёта → `pay.not_selectable`.
+
 ## Обзор методов
 
 ```ts
@@ -309,6 +356,7 @@ client.payments.setAccepted([...]) / listAccepted()
 client.payments.setDiscount({...}) / listDiscounts()
 client.payments.setAccuracy({...}) / getAccuracy()
 client.payments.setAutorefund({...}) / getAutorefund()
+client.payments.publicGet(uuid) / publicSelect(uuid, { currency, network }) // v1.2.0; публичные, без подписи
 
 // Выплаты
 client.payouts.create(params)
@@ -353,6 +401,8 @@ client.wallets.qr(address)
 client.account.balance()
 client.account.referral()
 client.account.transferToPersonal({ amount, currency })
+client.account.transferToUser({ to_user_id, amount, currency })   // v1.2.0; to_user_id — UUID
+client.account.transferBatch([...], { onError })                  // v1.2.0; поллинг — batches.info
 client.account.vrcs(enabled?)
 
 // Вебхуки
@@ -396,8 +446,8 @@ interface OblodaiConfig {
   больше не подставляет); для выплат он обязателен всегда. У payout-ссылок дедупликация —
   per-link `reference`.
 - **Секрет — только на сервере.** SDK серверный; не встраивайте ключ в браузер/мобильное приложение.
-  Исключение — публичные методы (`rates.*`, `links.publicGet/checkout`, `payoutLinks.claimInfo/claim`):
-  они не требуют ключа вовсе.
+  Исключение — публичные методы (`rates.*`, `links.publicGet/checkout`, `payoutLinks.claimInfo/claim`,
+  `payments.publicGet/publicSelect`): они не требуют ключа вовсе.
 
 ## Лицензия
 

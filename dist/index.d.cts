@@ -764,6 +764,63 @@ interface SandboxReplayResult {
     delivery_id: string;
     requeued: boolean;
 }
+/**
+ * Элемент перевода пользователю платформы: тело `POST /v1/transfer/to-user` и элементы
+ * `account.transferBatch` (`POST /v1/transfer/batch`).
+ */
+interface TransferToUserItem {
+    /**
+     * Идентификатор ПОЛЬЗОВАТЕЛЯ платформы — UUID, НЕ username (не-UUID бэкенд отклоняет:
+     * `transfer.bad_recipient`). Username резолвится в user_id на стороне кабинета
+     * (публичный профиль), ядро username'ов сознательно не знает.
+     */
+    to_user_id: string;
+    /** Сумма (строкой) в `currency`. */
+    amount: string;
+    /** Крипто-актив, например `USDT`. */
+    currency: string;
+    /** Ваш бизнес-идентификатор. Участвует в лестнице идемпотентности бэкенда (header → order_id → подпись). */
+    order_id?: string;
+}
+/** Параметры `account.transferToUser` (`POST /v1/transfer/to-user`). */
+interface TransferToUserParams extends TransferToUserItem {
+    /**
+     * Свой ключ идемпотентности. Уходит HTTP-заголовком `Idempotency-Key`, НЕ в тело.
+     * Если не задан, SDK генерирует UUID один раз на вызов (стабилен между внутренними повторами).
+     */
+    idempotency_key?: string;
+}
+/** Результат `POST /v1/transfer/to-user`. */
+interface TransferToUserResult {
+    currency: string;
+    amount: string;
+    /** Канонизированный UUID получателя. */
+    to_user_id: string;
+    /** Новый баланс личного кошелька получателя в `currency`. */
+    recipient_balance: string;
+}
+/**
+ * Публичное состояние счёта для кастомного чекаута (`GET /v1/pay/{id}`,
+ * `POST /v1/pay/{id}/select`) — {@link Payment} без мерчант-приватных полей
+ * (`additional_data`, `payer_email`, `payer_address`).
+ */
+interface PublicPayment extends Omit<Payment, 'payment_status' | 'additional_data' | 'payer_email' | 'payer_address'> {
+    /**
+     * Как `Payment.payment_status`, плюс `'select'` — валюто-агностичный счёт ещё ждёт,
+     * пока плательщик выберет валюту/сеть (адрес не выделен, курс не зафиксирован).
+     */
+    payment_status: PaymentStatus | 'select';
+    /** Только при `payment_status === 'select'`: методы, из которых плательщик может выбрать. */
+    accepted?: AcceptedMethod[];
+    [key: string]: unknown;
+}
+/** Параметры публичного выбора валюты плательщиком (`POST /v1/pay/{id}/select`). */
+interface PaySelectParams {
+    /** Крипто-актив расчёта, например `USDT`. */
+    currency: string;
+    /** Сеть расчёта, например `tron`. */
+    network: string;
+}
 
 /** Методы приёма платежей. */
 declare class Payments extends BaseResource {
@@ -839,6 +896,27 @@ declare class Payments extends BaseResource {
      * `Idempotency-Key` (SDK генерирует сам; свой — `params.idempotency_key`).
      */
     refund(params: RefundParams): Promise<unknown>;
+    /**
+     * ПУБЛИЧНО (без подписи): состояние счёта для КАСТОМНОЙ страницы оплаты. `GET /v1/pay/{id}`
+     *
+     * То, чем живёт hosted-страница оплаты: сумма, адрес (после выбора валюты), QR, статус,
+     * срок — можно дергать из браузера плательщика и поллить статус без секрета мерчанта.
+     * Мерчант-приватные поля (`additional_data`, `payer_email`, `payer_address`) не возвращаются.
+     * У валюто-агностичного счёта до выбора валюты `payment_status === 'select'`, а в `accepted` —
+     * методы, из которых плательщик может выбрать (см. {@link publicSelect}).
+     */
+    publicGet(uuid: string): Promise<PublicPayment>;
+    /**
+     * ПУБЛИЧНО (без подписи): плательщик выбирает валюту и сеть валюто-агностичного счёта.
+     * `POST /v1/pay/{id}/select`
+     *
+     * Фиксирует курс, выделяет депозит-адрес и переводит счёт из `select` в обычный жизненный
+     * цикл; ответ — финализированный счёт (та же форма, что у {@link publicGet}). Вместе с
+     * `publicGet` это позволяет собрать полностью СВОЙ чекаут вместо hosted-страницы.
+     * Пара должна входить в принимаемый набор мерчанта (`pay.method_not_accepted`);
+     * повторный select уже выбранного счёта → `pay.not_selectable` (409).
+     */
+    publicSelect(uuid: string, params: PaySelectParams): Promise<PublicPayment>;
     /** Список принимаемых валют для агностичных счетов. `POST /v1/payment/accepted/list` */
     listAccepted(): Promise<{
         accepted: AcceptedMethod[];
@@ -968,7 +1046,7 @@ declare class Wallets extends BaseResource {
     }>;
 }
 
-/** Баланс, рефералы, перевод на личный кошелёк, VRCS. */
+/** Баланс, рефералы, переводы на личный кошелёк и пользователям платформы, VRCS. */
 declare class Account extends BaseResource {
     /** Доступные балансы мерчанта. `POST /v1/balance` */
     balance(): Promise<Balance>;
@@ -994,6 +1072,28 @@ declare class Account extends BaseResource {
         direction: string;
         personal_balance: string;
     }>;
+    /**
+     * Перевод пользователю ПЛАТФОРМЫ (v1.2.0): внутренний перевод БЕЗ комиссии с баланса мерчанта
+     * на личный кошелёк другого пользователя платформы. `POST /v1/transfer/to-user` (payout-ключ,
+     * та же подпись, что у `/v1/payout`).
+     *
+     * `to_user_id` — UUID пользователя платформы, НЕ username (не-UUID бэкенд отклоняет:
+     * `transfer.bad_recipient`); username → user_id резолвится публичным профилем кабинета.
+     *
+     * Идемпотентность — как у `payouts.create`: SDK генерирует ключ один раз до цикла ретраев и
+     * шлёт заголовком `Idempotency-Key`; свой ключ — `params.idempotency_key` (в заголовок, не в
+     * тело). Лестница на бэкенде: заголовок → `order_id` → подпись запроса.
+     */
+    transferToUser(params: TransferToUserParams): Promise<TransferToUserResult>;
+    /**
+     * Массовый («зарплатный») перевод пользователям платформы (v1.2.0): пачка элементов формата
+     * `transferToUser`, обработка в фоне. `POST /v1/transfer/batch`.
+     *
+     * Прогресс и результаты по элементам — СУЩЕСТВУЮЩИМ методом `client.batches.info(batch_id)`
+     * (`items[].result` — байт-в-байт result единичного `/v1/transfer/to-user`). Идемпотентность
+     * вызова — заголовком `Idempotency-Key` (генерируется SDK или `opts.idempotency_key`).
+     */
+    transferBatch(transfers: TransferToUserItem[], opts?: BatchOptions): Promise<BatchSubmitResult>;
     /** Включить/выключить VRCS. Без enabled — чтение. `POST /v1/vrcs` */
     vrcs(enabled?: boolean): Promise<{
         enabled: boolean;
@@ -1318,13 +1418,13 @@ declare class Sandbox extends BaseResource {
  * ```
  */
 declare class OblodaiClient {
-    /** Приём платежей и настройки приёма. */
+    /** Приём платежей, настройки приёма, публичный чекаут `/v1/pay` (v1.2.0). */
     readonly payments: Payments;
     /** Выплаты и возвраты. */
     readonly payouts: Payouts;
     /** Статические кошельки. */
     readonly wallets: Wallets;
-    /** Баланс, рефералы, перевод на личный кошелёк, VRCS. */
+    /** Баланс, рефералы, переводы на личный кошелёк и пользователям платформы (v1.2.0), VRCS. */
     readonly account: Account;
     /** Управление вебхуками и тестовые события. */
     readonly webhooks: Webhooks;
@@ -1479,4 +1579,4 @@ declare class OblodaiTimeoutError extends OblodaiConnectionError {
 declare class OblodaiSignatureError extends OblodaiError {
 }
 
-export { type AcceptedMethod, type AutoWithdrawRule, type Balance, type BatchInfo, type BatchItem, type BatchOnError, type BatchOptions, type BatchStatus, type BatchSubmitResult, type BlockWalletParams, type BlockedRefundParams, type CalculatePayoutParams, type CreatePaymentLinkParams, type CreatePaymentParams, type CreatePayoutLinkParams, type CreatePayoutParams, type CreateSplitRuleParams, type CreateWalletParams, type Currency, type CurrencyNetwork, type Delivery, type Envelope, type ErrorEnvelope, type ExchangeRate, type HistoryParams, type LinkCheckoutParams, type Lookup, type MassPayoutItem, type Network, OblodaiApiError, OblodaiClient, type OblodaiConfig, OblodaiConnectionError, OblodaiError, type OblodaiLogger, OblodaiSignatureError, OblodaiTimeoutError, type Paginate, type Payment, type PaymentLink, type PaymentLinkAmountMode, type PaymentLinkCreated, type PaymentLinkInfo, type PaymentList, type PaymentRefundEntry, type PaymentStatus, type Payout, type PayoutCalculation, type PayoutLink, type PayoutLinkBatchItem, type PayoutLinkBatchResult, type PayoutLinkClaimInfo, type PayoutLinkClaimResult, type PayoutLinkCreated, type PayoutLinkStatus, type PayoutStatus, type ReferralInfo, type RefundBatchItem, type RefundParams, type ResolveParams, type ResolveResult, type RetryOptions, type SandboxDelivery, type SandboxDeposit, type SandboxDepositParams, type SandboxFaucetParams, type SandboxFaucetResult, type SandboxReplayResult, type SandboxResetResult, type SendEmailParams, type SendEmailResult, type ServiceMethod, type SignedRequest, type SplitConfig, type SplitRule, type VerifyWebhookOptions, type Wallet, type WebhookEvent, type WebhookHeaders, type WebhookRegistration, constructWebhookEvent, isTestKey, signRequest, verifyWebhook };
+export { type AcceptedMethod, type AutoWithdrawRule, type Balance, type BatchInfo, type BatchItem, type BatchOnError, type BatchOptions, type BatchStatus, type BatchSubmitResult, type BlockWalletParams, type BlockedRefundParams, type CalculatePayoutParams, type CreatePaymentLinkParams, type CreatePaymentParams, type CreatePayoutLinkParams, type CreatePayoutParams, type CreateSplitRuleParams, type CreateWalletParams, type Currency, type CurrencyNetwork, type Delivery, type Envelope, type ErrorEnvelope, type ExchangeRate, type HistoryParams, type LinkCheckoutParams, type Lookup, type MassPayoutItem, type Network, OblodaiApiError, OblodaiClient, type OblodaiConfig, OblodaiConnectionError, OblodaiError, type OblodaiLogger, OblodaiSignatureError, OblodaiTimeoutError, type Paginate, type PaySelectParams, type Payment, type PaymentLink, type PaymentLinkAmountMode, type PaymentLinkCreated, type PaymentLinkInfo, type PaymentList, type PaymentRefundEntry, type PaymentStatus, type Payout, type PayoutCalculation, type PayoutLink, type PayoutLinkBatchItem, type PayoutLinkBatchResult, type PayoutLinkClaimInfo, type PayoutLinkClaimResult, type PayoutLinkCreated, type PayoutLinkStatus, type PayoutStatus, type PublicPayment, type ReferralInfo, type RefundBatchItem, type RefundParams, type ResolveParams, type ResolveResult, type RetryOptions, type SandboxDelivery, type SandboxDeposit, type SandboxDepositParams, type SandboxFaucetParams, type SandboxFaucetResult, type SandboxReplayResult, type SandboxResetResult, type SendEmailParams, type SendEmailResult, type ServiceMethod, type SignedRequest, type SplitConfig, type SplitRule, type TransferToUserItem, type TransferToUserParams, type TransferToUserResult, type VerifyWebhookOptions, type Wallet, type WebhookEvent, type WebhookHeaders, type WebhookRegistration, constructWebhookEvent, isTestKey, signRequest, verifyWebhook };

@@ -25,10 +25,29 @@
     (`POST /v1/sandbox/webhooks/replay`).
 - **Подписанный GET** в транспорте (`HttpClient.requestGet`): та же каноническая строка
   `{timestamp}\nGET\n{path}\n` с ПУСТЫМ телом (нужен для `GET /v1/sandbox/webhooks`).
+- **Переводы пользователям платформы** — `account.transferToUser({ to_user_id, amount, currency, order_id? })`
+  (`POST /v1/transfer/to-user`): внутренний перевод БЕЗ комиссии с баланса мерчанта на личный
+  кошелёк пользователя платформы (payout-ключ, та же подпись, что у `/v1/payout`).
+  `to_user_id` — UUID пользователя, НЕ username (не-UUID бэкенд отклоняет —
+  `transfer.bad_recipient`). Идемпотентность — как у остальных денежных вызовов: заголовок
+  `Idempotency-Key` (SDK генерирует сам; свой — `idempotency_key`), на бэкенде лестница
+  «заголовок → `order_id` → подпись». Ответ: `{ currency, amount, to_user_id, recipient_balance }`.
+- **«Зарплатная» пачка переводов** — `account.transferBatch([...], { onError?, idempotency_key? })`
+  (`POST /v1/transfer/batch`): массовый перевод пользователям платформы (элементы — как у
+  `transferToUser`), обработка в фоне; прогресс и результаты по элементам — СУЩЕСТВУЮЩИМ
+  методом `batches.info(batch_id)`.
+- **Публичный чекаут `/v1/pay`** — публичные (БЕЗ подписи) методы для полностью СВОЕГО чекаута
+  вместо hosted-страницы: `payments.publicGet(uuid)` (`GET /v1/pay/{id}` — публичное состояние
+  счёта: сумма, адрес после выбора, статус, у агностичного счёта `payment_status: 'select'` +
+  `accepted` с доступными методами) и `payments.publicSelect(uuid, { currency, network })`
+  (`POST /v1/pay/{id}/select` — плательщик выбирает валюту валюто-агностичного счёта; фиксирует
+  курс, выделяет адрес, отдаёт финализированный счёт).
 - Хелпер `isTestKey(publicId)` — `true` для тестового `public_id` (префикс `test_`);
   экспортируется из корня пакета.
 - Типы `SandboxDepositParams`, `SandboxDeposit`, `SandboxFaucetParams`, `SandboxFaucetResult`,
-  `SandboxResetResult`, `SandboxDelivery`, `SandboxReplayResult` экспортируются из корня пакета.
+  `SandboxResetResult`, `SandboxDelivery`, `SandboxReplayResult`, а также `TransferToUserItem`,
+  `TransferToUserParams`, `TransferToUserResult`, `PublicPayment`, `PaySelectParams`
+  экспортируются из корня пакета.
 
 ## [1.1.0] — 2026-07-15
 

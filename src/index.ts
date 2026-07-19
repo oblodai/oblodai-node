@@ -113,4 +113,10 @@ export type {
   SandboxResetResult,
   SandboxDelivery,
   SandboxReplayResult,
+  // v1.2.0: переводы пользователям платформы и публичный чекаут
+  TransferToUserItem,
+  TransferToUserParams,
+  TransferToUserResult,
+  PublicPayment,
+  PaySelectParams,
 } from './models.js';

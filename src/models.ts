@@ -717,3 +717,70 @@ export interface SandboxReplayResult {
   delivery_id: string;
   requeued: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// v1.2.0: переводы пользователям платформы и публичный чекаут /v1/pay
+// ---------------------------------------------------------------------------
+
+/**
+ * Элемент перевода пользователю платформы: тело `POST /v1/transfer/to-user` и элементы
+ * `account.transferBatch` (`POST /v1/transfer/batch`).
+ */
+export interface TransferToUserItem {
+  /**
+   * Идентификатор ПОЛЬЗОВАТЕЛЯ платформы — UUID, НЕ username (не-UUID бэкенд отклоняет:
+   * `transfer.bad_recipient`). Username резолвится в user_id на стороне кабинета
+   * (публичный профиль), ядро username'ов сознательно не знает.
+   */
+  to_user_id: string;
+  /** Сумма (строкой) в `currency`. */
+  amount: string;
+  /** Крипто-актив, например `USDT`. */
+  currency: string;
+  /** Ваш бизнес-идентификатор. Участвует в лестнице идемпотентности бэкенда (header → order_id → подпись). */
+  order_id?: string;
+}
+
+/** Параметры `account.transferToUser` (`POST /v1/transfer/to-user`). */
+export interface TransferToUserParams extends TransferToUserItem {
+  /**
+   * Свой ключ идемпотентности. Уходит HTTP-заголовком `Idempotency-Key`, НЕ в тело.
+   * Если не задан, SDK генерирует UUID один раз на вызов (стабилен между внутренними повторами).
+   */
+  idempotency_key?: string;
+}
+
+/** Результат `POST /v1/transfer/to-user`. */
+export interface TransferToUserResult {
+  currency: string;
+  amount: string;
+  /** Канонизированный UUID получателя. */
+  to_user_id: string;
+  /** Новый баланс личного кошелька получателя в `currency`. */
+  recipient_balance: string;
+}
+
+/**
+ * Публичное состояние счёта для кастомного чекаута (`GET /v1/pay/{id}`,
+ * `POST /v1/pay/{id}/select`) — {@link Payment} без мерчант-приватных полей
+ * (`additional_data`, `payer_email`, `payer_address`).
+ */
+export interface PublicPayment
+  extends Omit<Payment, 'payment_status' | 'additional_data' | 'payer_email' | 'payer_address'> {
+  /**
+   * Как `Payment.payment_status`, плюс `'select'` — валюто-агностичный счёт ещё ждёт,
+   * пока плательщик выберет валюту/сеть (адрес не выделен, курс не зафиксирован).
+   */
+  payment_status: PaymentStatus | 'select';
+  /** Только при `payment_status === 'select'`: методы, из которых плательщик может выбрать. */
+  accepted?: AcceptedMethod[];
+  [key: string]: unknown;
+}
+
+/** Параметры публичного выбора валюты плательщиком (`POST /v1/pay/{id}/select`). */
+export interface PaySelectParams {
+  /** Крипто-актив расчёта, например `USDT`. */
+  currency: string;
+  /** Сеть расчёта, например `tron`. */
+  network: string;
+}

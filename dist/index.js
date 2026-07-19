@@ -380,6 +380,39 @@ var Payments = class extends BaseResource {
       idempotencyKey: idempotencyKeyFor(idempotency_key)
     });
   }
+  // ── Публичный чекаут (v1.2.0; без подписи) ──
+  /**
+   * ПУБЛИЧНО (без подписи): состояние счёта для КАСТОМНОЙ страницы оплаты. `GET /v1/pay/{id}`
+   *
+   * То, чем живёт hosted-страница оплаты: сумма, адрес (после выбора валюты), QR, статус,
+   * срок — можно дергать из браузера плательщика и поллить статус без секрета мерчанта.
+   * Мерчант-приватные поля (`additional_data`, `payer_email`, `payer_address`) не возвращаются.
+   * У валюто-агностичного счёта до выбора валюты `payment_status === 'select'`, а в `accepted` —
+   * методы, из которых плательщик может выбрать (см. {@link publicSelect}).
+   */
+  publicGet(uuid) {
+    return this.http.requestPublic(
+      `/v1/pay/${encodeURIComponent(uuid)}`,
+      {},
+      "GET"
+    );
+  }
+  /**
+   * ПУБЛИЧНО (без подписи): плательщик выбирает валюту и сеть валюто-агностичного счёта.
+   * `POST /v1/pay/{id}/select`
+   *
+   * Фиксирует курс, выделяет депозит-адрес и переводит счёт из `select` в обычный жизненный
+   * цикл; ответ — финализированный счёт (та же форма, что у {@link publicGet}). Вместе с
+   * `publicGet` это позволяет собрать полностью СВОЙ чекаут вместо hosted-страницы.
+   * Пара должна входить в принимаемый набор мерчанта (`pay.method_not_accepted`);
+   * повторный select уже выбранного счёта → `pay.not_selectable` (409).
+   */
+  publicSelect(uuid, params) {
+    return this.http.requestPublic(
+      `/v1/pay/${encodeURIComponent(uuid)}/select`,
+      params
+    );
+  }
   // ── Настройки приёма ──
   /** Список принимаемых валют для агностичных счетов. `POST /v1/payment/accepted/list` */
   listAccepted() {
@@ -549,6 +582,39 @@ var Account = class extends BaseResource {
     const { idempotency_key, ...body } = params;
     return this.http.request("/v1/transfer/to-personal", body, {
       idempotencyKey: idempotencyKeyFor(idempotency_key)
+    });
+  }
+  /**
+   * Перевод пользователю ПЛАТФОРМЫ (v1.2.0): внутренний перевод БЕЗ комиссии с баланса мерчанта
+   * на личный кошелёк другого пользователя платформы. `POST /v1/transfer/to-user` (payout-ключ,
+   * та же подпись, что у `/v1/payout`).
+   *
+   * `to_user_id` — UUID пользователя платформы, НЕ username (не-UUID бэкенд отклоняет:
+   * `transfer.bad_recipient`); username → user_id резолвится публичным профилем кабинета.
+   *
+   * Идемпотентность — как у `payouts.create`: SDK генерирует ключ один раз до цикла ретраев и
+   * шлёт заголовком `Idempotency-Key`; свой ключ — `params.idempotency_key` (в заголовок, не в
+   * тело). Лестница на бэкенде: заголовок → `order_id` → подпись запроса.
+   */
+  transferToUser(params) {
+    const { idempotency_key, ...body } = params;
+    return this.http.request("/v1/transfer/to-user", body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key)
+    });
+  }
+  /**
+   * Массовый («зарплатный») перевод пользователям платформы (v1.2.0): пачка элементов формата
+   * `transferToUser`, обработка в фоне. `POST /v1/transfer/batch`.
+   *
+   * Прогресс и результаты по элементам — СУЩЕСТВУЮЩИМ методом `client.batches.info(batch_id)`
+   * (`items[].result` — байт-в-байт result единичного `/v1/transfer/to-user`). Идемпотентность
+   * вызова — заголовком `Idempotency-Key` (генерируется SDK или `opts.idempotency_key`).
+   */
+  transferBatch(transfers, opts = {}) {
+    const body = { transfers };
+    if (opts.onError) body.on_error = opts.onError;
+    return this.http.request("/v1/transfer/batch", body, {
+      idempotencyKey: idempotencyKeyFor(opts.idempotency_key)
     });
   }
   /** Включить/выключить VRCS. Без enabled — чтение. `POST /v1/vrcs` */
