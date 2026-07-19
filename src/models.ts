@@ -21,10 +21,18 @@ export interface Payment {
   network: string;
   address: string;
   address_qr_code: string;
+  /** Статус счёта; словарь и терминальность — см. {@link PaymentStatus}. */
   payment_status: PaymentStatus;
   is_multi: boolean;
+  /**
+   * Hosted-страница оплаты. Собирается ШЛЮЗОМ как `<публичный базовый URL>/pay/<uuid>`.
+   * В проде шлюз без этого URL не стартует, а вот на ЛОКАЛЬНОМ стенде без
+   * `GATEWAY_PUBLIC_BASE_URL` поле приходит ПУСТОЙ СТРОКОЙ — это не ошибка SDK.
+   * В таком случае собирайте ссылку сами из `uuid`.
+   */
   url: string;
   expired_at: number;
+  /** `true` — статус терминальный (`paid`/`paid_over`/`wrong_amount`/`cancel`), больше не изменится. */
   is_final: boolean;
   created_at: string;
   updated_at: string;
@@ -300,9 +308,20 @@ export interface WebhookEvent {
 // ─────────────────────────────── Вебхуки/настройки ───────────────────────────────
 
 export interface WebhookRegistration {
+  /**
+   * Идентификатор эндпоинта. На проект он ОДИН: повторный `register()` с другим URL отдаёт
+   * ТОТ ЖЕ `endpoint_id` (эндпоинт не добавляется, а перенаправляется) — см. `client.webhooks.register`.
+   */
   endpoint_id: string;
   url: string;
-  /** Секрет для проверки подписи вебхуков. Показывается один раз. */
+  /**
+   * СЕКРЕТ ЭНДПОИНТА — им и только им проверяется подпись входящих вебхуков
+   * (`verifyWebhook` / `constructWebhookEvent`).
+   *
+   * ⚠ Это ОТДЕЛЬНЫЙ секрет: он НЕ равен секрету API-ключа (`OBLODAI_SECRET`), которым
+   * подписываются исходящие запросы. Подставите ключ API — не пройдёт НИ ОДИН вебхук.
+   * Сохраните это значение (обычно в `OBLODAI_WEBHOOK_SECRET`).
+   */
   secret: string;
 }
 
@@ -418,6 +437,11 @@ export interface CreatePaymentLinkParams {
 /** Ответ создания платёжной ссылки. */
 export interface PaymentLinkCreated {
   link_id: string;
+  /**
+   * Публичная страница ссылки. Собирается ШЛЮЗОМ как `<публичный базовый URL>/link/<link_id>`.
+   * На локальном стенде без `GATEWAY_PUBLIC_BASE_URL` приходит ПУСТОЙ СТРОКОЙ (в проде шлюз без
+   * этого URL не стартует) — собирайте ссылку сами из `link_id`.
+   */
   url: string;
 }
 
@@ -622,6 +646,11 @@ export interface PayoutLink {
  */
 export interface PayoutLinkCreated extends PayoutLink {
   claim_token: string;
+  /**
+   * Ссылка на страницу claim. Собирается ШЛЮЗОМ как `<публичный базовый URL>/claim/<claim_token>`.
+   * На ЛОКАЛЬНОМ стенде без `GATEWAY_PUBLIC_BASE_URL` приходит ПУСТОЙ СТРОКОЙ (в проде шлюз без
+   * этого URL не стартует) — тогда собирайте ссылку сами из `claim_token`.
+   */
   claim_url: string;
 }
 
@@ -784,10 +813,10 @@ export interface TransferToUserResult {
 export interface PublicPayment
   extends Omit<Payment, 'payment_status' | 'additional_data' | 'payer_email' | 'payer_address'> {
   /**
-   * Как `Payment.payment_status`, плюс `'select'` — валюто-агностичный счёт ещё ждёт,
-   * пока плательщик выберет валюту/сеть (адрес не выделен, курс не зафиксирован).
+   * Тот же словарь, что у `Payment.payment_status`. У валюто-агностичного счёта до выбора
+   * это `'select'` — адрес не выделен, курс не зафиксирован (см. {@link PaymentStatus}).
    */
-  payment_status: PaymentStatus | 'select';
+  payment_status: PaymentStatus;
   /** Только при `payment_status === 'select'`: методы, из которых плательщик может выбрать. */
   accepted?: AcceptedMethod[];
   [key: string]: unknown;

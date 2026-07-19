@@ -92,7 +92,12 @@ export class Payments extends BaseResource {
    * `action: 'refund'` — вернуть плательщику (по умолчанию на `payer_address`; для UTXO
    * передайте `address`). Идемпотентно и заголовком `Idempotency-Key` (SDK генерирует сам),
    * и доменно: повторный accept — no-op, повторный refund — реплей той же выплаты.
-   * Платёж в другом статусе → `resolution.not_underpaid` (409).
+   *
+   * ⚠ Резолвится ТОЛЬКО закрытый недоплаченный счёт — `wrong_amount`. Пока счёт ещё живой и
+   * ждёт доплату, его статус — `wrong_amount_waiting`, и resolve на нём отвечает
+   * `409 resolution.not_underpaid` (как и на любом другом статусе): недоплату ещё могут
+   * догнать переводом. Дождитесь `wrong_amount` — и только тогда решайте судьбу денег.
+   * Тот же 409 прилетит, если поздняя доплата закрыла счёт уже в момент вашего вызова.
    */
   resolve(params: ResolveParams): Promise<ResolveResult> {
     const { idempotency_key, ...body } = params;
@@ -166,8 +171,13 @@ export class Payments extends BaseResource {
    * Фиксирует курс, выделяет депозит-адрес и переводит счёт из `select` в обычный жизненный
    * цикл; ответ — финализированный счёт (та же форма, что у {@link publicGet}). Вместе с
    * `publicGet` это позволяет собрать полностью СВОЙ чекаут вместо hosted-страницы.
-   * Пара должна входить в принимаемый набор мерчанта (`pay.method_not_accepted`);
-   * повторный select уже выбранного счёта → `pay.not_selectable` (409).
+   * Повторный select уже выбранного счёта → `pay.not_selectable` (409).
+   *
+   * ⚠ `pay.method_not_accepted` на свежем мерчанте — норма, а не баг интеграции: пара
+   * (currency, network) должна входить в принимаемый набор (`payments.setAccepted`), а когда
+   * набор ПУСТ, набор по умолчанию — каталог методов с ЖИВЫМ наблюдателем депозитов, и на
+   * локальном стенде без подключённых RPC он может оказаться пустым целиком. Не хардкодьте
+   * пары в чекауте: берите их из `accepted` в ответе {@link publicGet}.
    */
   publicSelect(uuid: string, params: PaySelectParams): Promise<PublicPayment> {
     return this.http.requestPublic<PublicPayment>(

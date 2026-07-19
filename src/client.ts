@@ -46,10 +46,20 @@ export class OblodaiClient {
   readonly rates: Rates;
   /** Статус массовых операций (v1.1.0). */
   readonly batches: Batches;
-  /** Платёжные ссылки (v1.1.0). */
-  readonly links: Links;
-  /** Синоним {@link links} — платёжные ссылки (не путать с {@link payoutLinks}). */
+  /**
+   * Платёжные ссылки (v1.1.0) — КАНОНИЧЕСКОЕ имя ресурса.
+   *
+   * Во всех SDK Oblodai ресурс называется `payment_links` в идиоматике своего языка
+   * (`paymentLinks` в JS/TS и PHP, `payment_links` в Python и Rust, `PaymentLinks` в Go),
+   * чтобы код переносился между языками без переименований.
+   * Не путать с {@link payoutLinks} — это payout-ссылки, обратное направление денег.
+   */
   readonly paymentLinks: Links;
+  /**
+   * Документированный синоним {@link paymentLinks} — ТОТ ЖЕ объект
+   * (`client.links === client.paymentLinks`). Оставлен навсегда ради совместимости.
+   */
+  readonly links: Links;
   /** Сплит-платежи (v1.1.0). */
   readonly splits: Splits;
   /** Payout-ссылки — «крипто-чеки» (v1.1.0). */
@@ -69,8 +79,8 @@ export class OblodaiClient {
     this.settings = new Settings(this.http);
     this.rates = new Rates(this.http);
     this.batches = new Batches(this.http);
-    this.links = new Links(this.http);
-    this.paymentLinks = this.links;
+    this.paymentLinks = new Links(this.http);
+    this.links = this.paymentLinks; // синоним: ровно тот же объект
     this.splits = new Splits(this.http);
     this.payoutLinks = new PayoutLinks(this.http);
     this.sandbox = new Sandbox(this.http);

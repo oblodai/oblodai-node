@@ -10,6 +10,48 @@ import { resolveLogger } from './logger.js';
 const DEFAULT_BASE_URL = 'https://api.oblodai.com';
 
 /**
+ * `true`, если хост — петля (loopback): по нему ходит локальный стенд, и там открытый HTTP
+ * безопасен, потому что трафик не покидает машину.
+ *
+ * Считаем петлёй `localhost` (и любой поддомен `*.localhost` — он резолвится в петлю по RFC 6761),
+ * весь диапазон `127.0.0.0/8` и IPv6 `::1`. В `URL.hostname` IPv6-хост приходит в скобках
+ * (`[::1]`), поэтому скобки снимаем.
+ */
+function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host === '::1' || host === '0:0:0:0:0:0:0:1') return true;
+  return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
+}
+
+/**
+ * Требует HTTPS у базового URL. Подпись запроса (`X-Signature`) и `public_id` уходят в заголовках,
+ * и по открытому HTTP их видит любой посредник — поэтому не-HTTPS адрес отвергается СРАЗУ при
+ * создании клиента, а не молча принимается.
+ *
+ * ЕДИНСТВЕННОЕ исключение — loopback (`localhost`, `127.0.0.1`, `::1`): на нём работают локальные
+ * стенды, включая `http://localhost:8095`, и трафик не покидает машину.
+ */
+function assertSecureBaseUrl(baseUrl: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new Error(
+      `oblodai: baseUrl «${baseUrl}» не является корректным URL. Ожидается адрес вида ` +
+        `https://api.oblodai.com`,
+    );
+  }
+  if (parsed.protocol === 'https:') return;
+  if (parsed.protocol === 'http:' && isLoopbackHost(parsed.hostname)) return;
+  throw new Error(
+    `oblodai: baseUrl должен использовать https:// — получено «${baseUrl}». ` +
+      `По открытому каналу подпись запроса (X-Signature) и public_id видны посредникам. ` +
+      `Исключение только для локального стенда на петле: http://localhost, http://127.0.0.1, http://[::1].`,
+  );
+}
+
+/**
  * Разбирает заголовок `Retry-After` в миллисекунды. Поддерживает форму «секунды» (как отдаёт шлюз
  * на 429: `Retry-After: 60`). HTTP-date форму игнорируем (шлюз её не использует). Возвращает
  * `undefined`, если заголовка нет или он не число.
@@ -61,6 +103,7 @@ export class HttpClient {
     this.publicId = config.publicId;
     this.secret = config.secret;
     this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    assertSecureBaseUrl(this.baseUrl);
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.retry =
       config.retry === false ? null : { ...DEFAULT_RETRY, ...(config.retry ?? {}) };

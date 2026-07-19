@@ -17,8 +17,23 @@ interface ErrorEnvelope {
         message: string;
     };
 }
-/** Статусы платежа (`payment_status`). */
-type PaymentStatus = 'check' | 'confirm_check' | 'wrong_amount_waiting' | 'paid' | 'paid_over' | 'wrong_amount' | 'cancel';
+/**
+ * Статусы платежа (`payment_status`).
+ *
+ * ТЕРМИНАЛЬНЫЕ (`is_final: true`, статус больше не изменится): `paid`, `paid_over`,
+ * `wrong_amount`, `cancel`. Остальные — промежуточные.
+ *
+ * ⚠ Не путайте `wrong_amount_waiting` и `wrong_amount` — это РАЗНЫЕ вещи:
+ * первый означает «увидели часть суммы, счёт ещё живой, ждём доплату» и НЕ терминален
+ * (`payments.resolve` на нём отвечает `409 resolution.not_underpaid`); второй — «счёт
+ * закрылся недоплаченным», и вот тогда `resolve` (accept/refund) возможен.
+ *
+ * `wrong_amount_waiting` — производный статус: шлюз выводит его из суммы уже полученного
+ * (`amount_paid` меньше `payer_amount` при незакрытом счёте). Он приходит в ответах
+ * `/v1/payment/info` и `/v1/payment/history`, но в ВЕБХУКАХ его нет — там такой счёт
+ * приходит как `confirm_check`.
+ */
+type PaymentStatus = 'check' | 'confirm_check' | 'wrong_amount_waiting' | 'paid' | 'paid_over' | 'wrong_amount' | 'cancel' | 'select';
 /** Укрупнённый (Heleket-совместимый) статус выплаты в ответах API. */
 type PayoutStatus = 'check' | 'process' | 'paid' | 'fail' | 'cancel';
 /** Коды сетей, поддерживаемые каталогом. */
@@ -38,7 +53,12 @@ interface OblodaiConfig {
     /** `secret` — секрет для подписи запросов. Только на сервере. */
     secret: string;
     /**
-     * Базовый URL API. По умолчанию `https://api.oblodai.com` (боевой; переопределяется полем `baseUrl`).
+     * Базовый URL API. По умолчанию `https://api.oblodai.com` (боевой).
+     *
+     * ⚠ Схема обязана быть `https://` — иначе конструктор бросает `Error`. Подпись (`X-Signature`)
+     * и `public_id` уходят в заголовках, и по открытому HTTP их читает любой посредник.
+     * ЕДИНСТВЕННОЕ исключение — loopback для локальных стендов: `http://localhost:8095`,
+     * `http://127.0.0.1:...`, `http://[::1]:...`.
      */
     baseUrl?: string;
     /** Таймаут запроса в миллисекундах. По умолчанию 30000. */
@@ -149,10 +169,18 @@ interface Payment {
     network: string;
     address: string;
     address_qr_code: string;
+    /** Статус счёта; словарь и терминальность — см. {@link PaymentStatus}. */
     payment_status: PaymentStatus;
     is_multi: boolean;
+    /**
+     * Hosted-страница оплаты. Собирается ШЛЮЗОМ как `<публичный базовый URL>/pay/<uuid>`.
+     * В проде шлюз без этого URL не стартует, а вот на ЛОКАЛЬНОМ стенде без
+     * `GATEWAY_PUBLIC_BASE_URL` поле приходит ПУСТОЙ СТРОКОЙ — это не ошибка SDK.
+     * В таком случае собирайте ссылку сами из `uuid`.
+     */
     url: string;
     expired_at: number;
+    /** `true` — статус терминальный (`paid`/`paid_over`/`wrong_amount`/`cancel`), больше не изменится. */
     is_final: boolean;
     created_at: string;
     updated_at: string;
@@ -406,9 +434,20 @@ interface WebhookEvent {
     [key: string]: unknown;
 }
 interface WebhookRegistration {
+    /**
+     * Идентификатор эндпоинта. На проект он ОДИН: повторный `register()` с другим URL отдаёт
+     * ТОТ ЖЕ `endpoint_id` (эндпоинт не добавляется, а перенаправляется) — см. `client.webhooks.register`.
+     */
     endpoint_id: string;
     url: string;
-    /** Секрет для проверки подписи вебхуков. Показывается один раз. */
+    /**
+     * СЕКРЕТ ЭНДПОИНТА — им и только им проверяется подпись входящих вебхуков
+     * (`verifyWebhook` / `constructWebhookEvent`).
+     *
+     * ⚠ Это ОТДЕЛЬНЫЙ секрет: он НЕ равен секрету API-ключа (`OBLODAI_SECRET`), которым
+     * подписываются исходящие запросы. Подставите ключ API — не пройдёт НИ ОДИН вебхук.
+     * Сохраните это значение (обычно в `OBLODAI_WEBHOOK_SECRET`).
+     */
     secret: string;
 }
 interface Delivery {
@@ -507,6 +546,11 @@ interface CreatePaymentLinkParams {
 /** Ответ создания платёжной ссылки. */
 interface PaymentLinkCreated {
     link_id: string;
+    /**
+     * Публичная страница ссылки. Собирается ШЛЮЗОМ как `<публичный базовый URL>/link/<link_id>`.
+     * На локальном стенде без `GATEWAY_PUBLIC_BASE_URL` приходит ПУСТОЙ СТРОКОЙ (в проде шлюз без
+     * этого URL не стартует) — собирайте ссылку сами из `link_id`.
+     */
     url: string;
 }
 /** Платёжная ссылка в list/info. */
@@ -691,6 +735,11 @@ interface PayoutLink {
  */
 interface PayoutLinkCreated extends PayoutLink {
     claim_token: string;
+    /**
+     * Ссылка на страницу claim. Собирается ШЛЮЗОМ как `<публичный базовый URL>/claim/<claim_token>`.
+     * На ЛОКАЛЬНОМ стенде без `GATEWAY_PUBLIC_BASE_URL` приходит ПУСТОЙ СТРОКОЙ (в проде шлюз без
+     * этого URL не стартует) — тогда собирайте ссылку сами из `claim_token`.
+     */
     claim_url: string;
 }
 /** Элемент ответа `payoutLinks.createBatch` (index-aligned с запросом). */
@@ -829,10 +878,10 @@ interface TransferToUserResult {
  */
 interface PublicPayment extends Omit<Payment, 'payment_status' | 'additional_data' | 'payer_email' | 'payer_address'> {
     /**
-     * Как `Payment.payment_status`, плюс `'select'` — валюто-агностичный счёт ещё ждёт,
-     * пока плательщик выберет валюту/сеть (адрес не выделен, курс не зафиксирован).
+     * Тот же словарь, что у `Payment.payment_status`. У валюто-агностичного счёта до выбора
+     * это `'select'` — адрес не выделен, курс не зафиксирован (см. {@link PaymentStatus}).
      */
-    payment_status: PaymentStatus | 'select';
+    payment_status: PaymentStatus;
     /** Только при `payment_status === 'select'`: методы, из которых плательщик может выбрать. */
     accepted?: AcceptedMethod[];
     [key: string]: unknown;
@@ -894,7 +943,12 @@ declare class Payments extends BaseResource {
      * `action: 'refund'` — вернуть плательщику (по умолчанию на `payer_address`; для UTXO
      * передайте `address`). Идемпотентно и заголовком `Idempotency-Key` (SDK генерирует сам),
      * и доменно: повторный accept — no-op, повторный refund — реплей той же выплаты.
-     * Платёж в другом статусе → `resolution.not_underpaid` (409).
+     *
+     * ⚠ Резолвится ТОЛЬКО закрытый недоплаченный счёт — `wrong_amount`. Пока счёт ещё живой и
+     * ждёт доплату, его статус — `wrong_amount_waiting`, и resolve на нём отвечает
+     * `409 resolution.not_underpaid` (как и на любом другом статусе): недоплату ещё могут
+     * догнать переводом. Дождитесь `wrong_amount` — и только тогда решайте судьбу денег.
+     * Тот же 409 прилетит, если поздняя доплата закрыла счёт уже в момент вашего вызова.
      */
     resolve(params: ResolveParams): Promise<ResolveResult>;
     /** Информация о счёте по uuid или order_id. `POST /v1/payment/info` */
@@ -936,8 +990,13 @@ declare class Payments extends BaseResource {
      * Фиксирует курс, выделяет депозит-адрес и переводит счёт из `select` в обычный жизненный
      * цикл; ответ — финализированный счёт (та же форма, что у {@link publicGet}). Вместе с
      * `publicGet` это позволяет собрать полностью СВОЙ чекаут вместо hosted-страницы.
-     * Пара должна входить в принимаемый набор мерчанта (`pay.method_not_accepted`);
-     * повторный select уже выбранного счёта → `pay.not_selectable` (409).
+     * Повторный select уже выбранного счёта → `pay.not_selectable` (409).
+     *
+     * ⚠ `pay.method_not_accepted` на свежем мерчанте — норма, а не баг интеграции: пара
+     * (currency, network) должна входить в принимаемый набор (`payments.setAccepted`), а когда
+     * набор ПУСТ, набор по умолчанию — каталог методов с ЖИВЫМ наблюдателем депозитов, и на
+     * локальном стенде без подключённых RPC он может оказаться пустым целиком. Не хардкодьте
+     * пары в чекауте: берите их из `accepted` в ответе {@link publicGet}.
      */
     publicSelect(uuid: string, params: PaySelectParams): Promise<PublicPayment>;
     /** Список принимаемых валют для агностичных счетов. `POST /v1/payment/accepted/list` */
@@ -1152,14 +1211,35 @@ declare class Account extends BaseResource {
  */
 declare class Webhooks extends BaseResource {
     /**
-     * Зарегистрировать (заменить) URL для вебхуков и получить секрет. `POST /v1/webhooks`
-     * Внимание: возвращает объект БЕЗ конверта state/result; повторный вызов выдаёт новый секрет.
+     * Задать URL для вебхуков и получить секрет эндпоинта. `POST /v1/webhooks`
+     *
+     * ⚠ ЭТО UPSERT ЕДИНСТВЕННОГО ЭНДПОИНТА НА ПРОЕКТ, а не «добавить ещё один».
+     * У проекта может быть ровно ОДИН вебхук-эндпоинт (в БД уникальность по `project_id`),
+     * поэтому повторный `register()` с ДРУГИМ URL не создаёт второй эндпоинт, а
+     * ПЕРЕНАПРАВЛЯЕТ доставки: возвращается ТОТ ЖЕ `endpoint_id`, а старый URL молча
+     * перестаёт что-либо получать. Веерная рассылка на несколько URL средствами API
+     * невозможна — разводите события у себя.
+     *
+     * Секрет при смене URL СОХРАНЯЕТСЯ (это не побочный эффект, а требование
+     * корректности: доставки снимают секрет в момент постановки в очередь, и новый секрет
+     * осиротил бы всё уже поставленное в очередь). На ПЕРВОЙ регистрации секрет
+     * генерируется; отзыв скомпрометированного секрета — отдельное действие (ротация),
+     * а не повторный `register()`.
+     *
+     * ⚠ Возвращаемый `secret` — СЕКРЕТ ЭНДПОИНТА, отдельный от секрета API-ключа. Именно
+     * его передавайте в `verifyWebhook` / `constructWebhookEvent`; секрет API-ключа там не
+     * подойдёт и отвергнет 100% вебхуков.
+     *
+     * Технически: ответ приходит БЕЗ конверта `state`/`result`.
      */
     register(url: string): Promise<WebhookRegistration>;
-    /** Журнал последних доставок (до 50). `POST /v1/webhooks/deliveries` */
-    deliveries(): Promise<{
-        deliveries: Delivery[];
-    }>;
+    /**
+     * Журнал последних доставок (до 50, новые первыми). `POST /v1/webhooks/deliveries`
+     *
+     * ⚠ ЛОМАЮЩЕЕ изменение в v1.2.0: метод отдаёт МАССИВ `Delivery[]`, а не `{ deliveries }` —
+     * конверт разворачивается, как в `sandbox.listWebhooks()` и `payoutLinks.list()`.
+     */
+    deliveries(): Promise<Delivery[]>;
     /** Пробный вебхук платежа. `POST /v1/test-webhook/payment` */
     testPayment(params: {
         url_callback: string;
@@ -1382,6 +1462,11 @@ declare class PayoutLinks extends BaseResource {
      * `claim_token`/`claim_url` возвращаются ТОЛЬКО в этом ответе (хранится лишь хеш) —
      * сохраните их сразу. При `email` получателю уйдёт письмо с кнопкой claim (best-effort).
      *
+     * ⚠ `claim_url` собирает ШЛЮЗ из своего публичного базового URL (`.../claim/<claim_token>`).
+     * На локальном стенде без `GATEWAY_PUBLIC_BASE_URL` он приходит ПУСТОЙ СТРОКОЙ — в проде шлюз
+     * без этого URL не стартует, так что это не баг: просто собирайте ссылку сами из `claim_token`.
+     * То же самое у `payment.url` (hosted-страница оплаты, `.../pay/<uuid>`).
+     *
      * Свой ключ идемпотентности — `params.idempotency_key` (уходит заголовком, не в тело); иначе
      * SDK сгенерирует UUID один раз до цикла ретраев. Маршрут обёрнут idempotency-middleware, так
      * что повтор с тем же ключом реплеит первый ответ и НЕ резервирует средства второй раз —
@@ -1472,8 +1557,18 @@ declare class Sandbox extends BaseResource {
      */
     faucet(params: SandboxFaucetParams): Promise<SandboxFaucetResult>;
     /**
-     * Сбросить песочницу: отменить открытые инвойсы и обнулить балансы. `POST /v1/sandbox/reset`
-     * Обнуление — компенсирующей проводкой в леджере, история операций сохраняется.
+     * Сбросить песочницу: обнулить балансы и отменить инвойсы, по которым ещё НЕ было оплаты.
+     * `POST /v1/sandbox/reset`
+     *
+     * ⚠ Это НЕ «чистый лист». Отменяются только инвойсы в статусах `check` (внутренне `created`)
+     * и `select`. Счёт, по которому депозит уже ВИДЕН (`confirm_check`, `wrong_amount_waiting`),
+     * reset СОЗНАТЕЛЬНО не трогает: отмена дала бы этому депозиту подтвердиться в отменённый счёт
+     * и зачислиться без события. Симулированный депозит для пайплайна — такой же настоящий, как
+     * он-чейновый, и песочница это правило не обходит. Нужен действительно чистый прогон —
+     * заводите новый инвойс, а не рассчитывайте на сброс уже оплачиваемого.
+     *
+     * Ничего не удаляется: обнуление баланса — компенсирующая проводка в append-only леджере,
+     * история ваших экспериментов остаётся читаемой.
      */
     reset(): Promise<SandboxResetResult>;
     /**
@@ -1518,10 +1613,20 @@ declare class OblodaiClient {
     readonly rates: Rates;
     /** Статус массовых операций (v1.1.0). */
     readonly batches: Batches;
-    /** Платёжные ссылки (v1.1.0). */
-    readonly links: Links;
-    /** Синоним {@link links} — платёжные ссылки (не путать с {@link payoutLinks}). */
+    /**
+     * Платёжные ссылки (v1.1.0) — КАНОНИЧЕСКОЕ имя ресурса.
+     *
+     * Во всех SDK Oblodai ресурс называется `payment_links` в идиоматике своего языка
+     * (`paymentLinks` в JS/TS и PHP, `payment_links` в Python и Rust, `PaymentLinks` в Go),
+     * чтобы код переносился между языками без переименований.
+     * Не путать с {@link payoutLinks} — это payout-ссылки, обратное направление денег.
+     */
     readonly paymentLinks: Links;
+    /**
+     * Документированный синоним {@link paymentLinks} — ТОТ ЖЕ объект
+     * (`client.links === client.paymentLinks`). Оставлен навсегда ради совместимости.
+     */
+    readonly links: Links;
     /** Сплит-платежи (v1.1.0). */
     readonly splits: Splits;
     /** Payout-ссылки — «крипто-чеки» (v1.1.0). */

@@ -244,3 +244,47 @@ describe('публичный чекаут /v1/pay (v1.2.0)', () => {
     expect(calls[0]!.url).toBe('https://api.test/v1/pay/a%2Fb%20c');
   });
 });
+
+describe('единая форма списков: webhooks.deliveries (v1.2.0, ломающее)', () => {
+  it('разворачивает конверт {deliveries} и отдаёт массив — как sandbox.listWebhooks / payoutLinks.list', async () => {
+    const { fn, calls } = mockFetch([
+      {
+        status: 200,
+        body: {
+          state: 0,
+          result: {
+            deliveries: [
+              {
+                id: 'd1',
+                url: 'https://shop.example/hook',
+                event_type: 'payment',
+                status: 'delivered',
+                attempts: 1,
+                last_error: '',
+                created_at: '2026-07-19T10:00:00Z',
+                updated_at: '2026-07-19T10:00:01Z',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+    const client = makeClient(fn);
+
+    const deliveries = await client.webhooks.deliveries();
+
+    expect(calls[0]!.url).toBe('https://api.test/v1/webhooks/deliveries');
+    expect(calls[0]!.init.method).toBe('POST');
+    expect(Array.isArray(deliveries)).toBe(true);
+    expect(deliveries.length).toBe(1);
+    expect(deliveries[0]!.id).toBe('d1');
+    expect(deliveries[0]!.status).toBe('delivered');
+  });
+
+  it('пустой журнал — пустой массив, а не undefined', async () => {
+    const { fn } = mockFetch([{ status: 200, body: { state: 0, result: {} } }]);
+    const client = makeClient(fn);
+
+    await expect(client.webhooks.deliveries()).resolves.toEqual([]);
+  });
+});

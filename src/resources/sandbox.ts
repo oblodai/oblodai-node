@@ -51,8 +51,18 @@ export class Sandbox extends BaseResource {
   }
 
   /**
-   * Сбросить песочницу: отменить открытые инвойсы и обнулить балансы. `POST /v1/sandbox/reset`
-   * Обнуление — компенсирующей проводкой в леджере, история операций сохраняется.
+   * Сбросить песочницу: обнулить балансы и отменить инвойсы, по которым ещё НЕ было оплаты.
+   * `POST /v1/sandbox/reset`
+   *
+   * ⚠ Это НЕ «чистый лист». Отменяются только инвойсы в статусах `check` (внутренне `created`)
+   * и `select`. Счёт, по которому депозит уже ВИДЕН (`confirm_check`, `wrong_amount_waiting`),
+   * reset СОЗНАТЕЛЬНО не трогает: отмена дала бы этому депозиту подтвердиться в отменённый счёт
+   * и зачислиться без события. Симулированный депозит для пайплайна — такой же настоящий, как
+   * он-чейновый, и песочница это правило не обходит. Нужен действительно чистый прогон —
+   * заводите новый инвойс, а не рассчитывайте на сброс уже оплачиваемого.
+   *
+   * Ничего не удаляется: обнуление баланса — компенсирующая проводка в append-only леджере,
+   * история ваших экспериментов остаётся читаемой.
    */
   reset(): Promise<SandboxResetResult> {
     return this.http.request<SandboxResetResult>('/v1/sandbox/reset', {});
@@ -64,7 +74,7 @@ export class Sandbox extends BaseResource {
    */
   async listWebhooks(): Promise<SandboxDelivery[]> {
     const res = await this.http.requestGet<{ deliveries: SandboxDelivery[] }>('/v1/sandbox/webhooks');
-    return res.deliveries;
+    return res.deliveries ?? [];
   }
 
   /** Перепоставить одну доставку в очередь. `POST /v1/sandbox/webhooks/replay` */

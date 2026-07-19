@@ -127,6 +127,27 @@ function resolveLogger(logger) {
 
 // src/http.ts
 var DEFAULT_BASE_URL = "https://api.oblodai.com";
+function isLoopbackHost(hostname) {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (host === "::1" || host === "0:0:0:0:0:0:0:1") return true;
+  return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
+}
+function assertSecureBaseUrl(baseUrl) {
+  let parsed;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new Error(
+      `oblodai: baseUrl \xAB${baseUrl}\xBB \u043D\u0435 \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u043A\u043E\u0440\u0440\u0435\u043A\u0442\u043D\u044B\u043C URL. \u041E\u0436\u0438\u0434\u0430\u0435\u0442\u0441\u044F \u0430\u0434\u0440\u0435\u0441 \u0432\u0438\u0434\u0430 https://api.oblodai.com`
+    );
+  }
+  if (parsed.protocol === "https:") return;
+  if (parsed.protocol === "http:" && isLoopbackHost(parsed.hostname)) return;
+  throw new Error(
+    `oblodai: baseUrl \u0434\u043E\u043B\u0436\u0435\u043D \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u044C https:// \u2014 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u043E \xAB${baseUrl}\xBB. \u041F\u043E \u043E\u0442\u043A\u0440\u044B\u0442\u043E\u043C\u0443 \u043A\u0430\u043D\u0430\u043B\u0443 \u043F\u043E\u0434\u043F\u0438\u0441\u044C \u0437\u0430\u043F\u0440\u043E\u0441\u0430 (X-Signature) \u0438 public_id \u0432\u0438\u0434\u043D\u044B \u043F\u043E\u0441\u0440\u0435\u0434\u043D\u0438\u043A\u0430\u043C. \u0418\u0441\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0442\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E\u0433\u043E \u0441\u0442\u0435\u043D\u0434\u0430 \u043D\u0430 \u043F\u0435\u0442\u043B\u0435: http://localhost, http://127.0.0.1, http://[::1].`
+  );
+}
 function parseRetryAfterMs(header) {
   if (!header) return void 0;
   const seconds = Number(header.trim());
@@ -147,6 +168,7 @@ var HttpClient = class {
     this.publicId = config.publicId;
     this.secret = config.secret;
     this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    assertSecureBaseUrl(this.baseUrl);
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.retry = config.retry === false ? null : { ...DEFAULT_RETRY, ...config.retry ?? {} };
     const f = config.fetch ?? globalThis.fetch;
@@ -391,7 +413,12 @@ var Payments = class extends BaseResource {
    * `action: 'refund'` — вернуть плательщику (по умолчанию на `payer_address`; для UTXO
    * передайте `address`). Идемпотентно и заголовком `Idempotency-Key` (SDK генерирует сам),
    * и доменно: повторный accept — no-op, повторный refund — реплей той же выплаты.
-   * Платёж в другом статусе → `resolution.not_underpaid` (409).
+   *
+   * ⚠ Резолвится ТОЛЬКО закрытый недоплаченный счёт — `wrong_amount`. Пока счёт ещё живой и
+   * ждёт доплату, его статус — `wrong_amount_waiting`, и resolve на нём отвечает
+   * `409 resolution.not_underpaid` (как и на любом другом статусе): недоплату ещё могут
+   * догнать переводом. Дождитесь `wrong_amount` — и только тогда решайте судьбу денег.
+   * Тот же 409 прилетит, если поздняя доплата закрыла счёт уже в момент вашего вызова.
    */
   resolve(params) {
     const { idempotency_key, ...body } = params;
@@ -456,8 +483,13 @@ var Payments = class extends BaseResource {
    * Фиксирует курс, выделяет депозит-адрес и переводит счёт из `select` в обычный жизненный
    * цикл; ответ — финализированный счёт (та же форма, что у {@link publicGet}). Вместе с
    * `publicGet` это позволяет собрать полностью СВОЙ чекаут вместо hosted-страницы.
-   * Пара должна входить в принимаемый набор мерчанта (`pay.method_not_accepted`);
-   * повторный select уже выбранного счёта → `pay.not_selectable` (409).
+   * Повторный select уже выбранного счёта → `pay.not_selectable` (409).
+   *
+   * ⚠ `pay.method_not_accepted` на свежем мерчанте — норма, а не баг интеграции: пара
+   * (currency, network) должна входить в принимаемый набор (`payments.setAccepted`), а когда
+   * набор ПУСТ, набор по умолчанию — каталог методов с ЖИВЫМ наблюдателем депозитов, и на
+   * локальном стенде без подключённых RPC он может оказаться пустым целиком. Не хардкодьте
+   * пары в чекауте: берите их из `accepted` в ответе {@link publicGet}.
    */
   publicSelect(uuid, params) {
     return this.http.requestPublic(
@@ -705,15 +737,39 @@ var Account = class extends BaseResource {
 // src/resources/webhooks.ts
 var Webhooks = class extends BaseResource {
   /**
-   * Зарегистрировать (заменить) URL для вебхуков и получить секрет. `POST /v1/webhooks`
-   * Внимание: возвращает объект БЕЗ конверта state/result; повторный вызов выдаёт новый секрет.
+   * Задать URL для вебхуков и получить секрет эндпоинта. `POST /v1/webhooks`
+   *
+   * ⚠ ЭТО UPSERT ЕДИНСТВЕННОГО ЭНДПОИНТА НА ПРОЕКТ, а не «добавить ещё один».
+   * У проекта может быть ровно ОДИН вебхук-эндпоинт (в БД уникальность по `project_id`),
+   * поэтому повторный `register()` с ДРУГИМ URL не создаёт второй эндпоинт, а
+   * ПЕРЕНАПРАВЛЯЕТ доставки: возвращается ТОТ ЖЕ `endpoint_id`, а старый URL молча
+   * перестаёт что-либо получать. Веерная рассылка на несколько URL средствами API
+   * невозможна — разводите события у себя.
+   *
+   * Секрет при смене URL СОХРАНЯЕТСЯ (это не побочный эффект, а требование
+   * корректности: доставки снимают секрет в момент постановки в очередь, и новый секрет
+   * осиротил бы всё уже поставленное в очередь). На ПЕРВОЙ регистрации секрет
+   * генерируется; отзыв скомпрометированного секрета — отдельное действие (ротация),
+   * а не повторный `register()`.
+   *
+   * ⚠ Возвращаемый `secret` — СЕКРЕТ ЭНДПОИНТА, отдельный от секрета API-ключа. Именно
+   * его передавайте в `verifyWebhook` / `constructWebhookEvent`; секрет API-ключа там не
+   * подойдёт и отвергнет 100% вебхуков.
+   *
+   * Технически: ответ приходит БЕЗ конверта `state`/`result`.
    */
   register(url) {
     return this.http.request("/v1/webhooks", { url });
   }
-  /** Журнал последних доставок (до 50). `POST /v1/webhooks/deliveries` */
-  deliveries() {
-    return this.http.request("/v1/webhooks/deliveries", {});
+  /**
+   * Журнал последних доставок (до 50, новые первыми). `POST /v1/webhooks/deliveries`
+   *
+   * ⚠ ЛОМАЮЩЕЕ изменение в v1.2.0: метод отдаёт МАССИВ `Delivery[]`, а не `{ deliveries }` —
+   * конверт разворачивается, как в `sandbox.listWebhooks()` и `payoutLinks.list()`.
+   */
+  async deliveries() {
+    const res = await this.http.request("/v1/webhooks/deliveries", {});
+    return res.deliveries ?? [];
   }
   /** Пробный вебхук платежа. `POST /v1/test-webhook/payment` */
   testPayment(params) {
@@ -901,6 +957,11 @@ var PayoutLinks = class extends BaseResource {
    * `claim_token`/`claim_url` возвращаются ТОЛЬКО в этом ответе (хранится лишь хеш) —
    * сохраните их сразу. При `email` получателю уйдёт письмо с кнопкой claim (best-effort).
    *
+   * ⚠ `claim_url` собирает ШЛЮЗ из своего публичного базового URL (`.../claim/<claim_token>`).
+   * На локальном стенде без `GATEWAY_PUBLIC_BASE_URL` он приходит ПУСТОЙ СТРОКОЙ — в проде шлюз
+   * без этого URL не стартует, так что это не баг: просто собирайте ссылку сами из `claim_token`.
+   * То же самое у `payment.url` (hosted-страница оплаты, `.../pay/<uuid>`).
+   *
    * Свой ключ идемпотентности — `params.idempotency_key` (уходит заголовком, не в тело); иначе
    * SDK сгенерирует UUID один раз до цикла ретраев. Маршрут обёрнут idempotency-middleware, так
    * что повтор с тем же ключом реплеит первый ответ и НЕ резервирует средства второй раз —
@@ -1009,8 +1070,18 @@ var Sandbox = class extends BaseResource {
     return this.http.request("/v1/sandbox/faucet", params);
   }
   /**
-   * Сбросить песочницу: отменить открытые инвойсы и обнулить балансы. `POST /v1/sandbox/reset`
-   * Обнуление — компенсирующей проводкой в леджере, история операций сохраняется.
+   * Сбросить песочницу: обнулить балансы и отменить инвойсы, по которым ещё НЕ было оплаты.
+   * `POST /v1/sandbox/reset`
+   *
+   * ⚠ Это НЕ «чистый лист». Отменяются только инвойсы в статусах `check` (внутренне `created`)
+   * и `select`. Счёт, по которому депозит уже ВИДЕН (`confirm_check`, `wrong_amount_waiting`),
+   * reset СОЗНАТЕЛЬНО не трогает: отмена дала бы этому депозиту подтвердиться в отменённый счёт
+   * и зачислиться без события. Симулированный депозит для пайплайна — такой же настоящий, как
+   * он-чейновый, и песочница это правило не обходит. Нужен действительно чистый прогон —
+   * заводите новый инвойс, а не рассчитывайте на сброс уже оплачиваемого.
+   *
+   * Ничего не удаляется: обнуление баланса — компенсирующая проводка в append-only леджере,
+   * история ваших экспериментов остаётся читаемой.
    */
   reset() {
     return this.http.request("/v1/sandbox/reset", {});
@@ -1021,7 +1092,7 @@ var Sandbox = class extends BaseResource {
    */
   async listWebhooks() {
     const res = await this.http.requestGet("/v1/sandbox/webhooks");
-    return res.deliveries;
+    return res.deliveries ?? [];
   }
   /** Перепоставить одну доставку в очередь. `POST /v1/sandbox/webhooks/replay` */
   replayWebhook(deliveryId) {
@@ -1043,8 +1114,8 @@ var OblodaiClient = class _OblodaiClient {
     this.settings = new Settings(this.http);
     this.rates = new Rates(this.http);
     this.batches = new Batches(this.http);
-    this.links = new Links(this.http);
-    this.paymentLinks = this.links;
+    this.paymentLinks = new Links(this.http);
+    this.links = this.paymentLinks;
     this.splits = new Splits(this.http);
     this.payoutLinks = new PayoutLinks(this.http);
     this.sandbox = new Sandbox(this.http);
