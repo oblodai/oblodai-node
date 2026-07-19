@@ -1,4 +1,5 @@
 import { BaseResource } from './base.js';
+import { idempotencyKeyFor } from './idempotency.js';
 import type {
   CreatePayoutLinkParams,
   PayoutLink,
@@ -17,10 +18,26 @@ import type {
  * Management-методы (create/createBatch/list/info/cancel) требуют PAYOUT-ключ.
  * `claimInfo`/`claim` — публичные, БЕЗ подписи (авторизация — сам 256-битный токен в URL).
  *
- * Идемпотентность: заголовок `Idempotency-Key` на `/v1/payout/link*` НЕ действует (эндпоинты
- * им не обёрнуты) — дедупликация здесь через опциональный per-link `reference` (уникален в
- * рамках мерчанта). ⚠ Повторный create с тем же `reference` сейчас отдаёт HTTP 500
- * (unique violation), а не реплей — не ретрайте его вслепую.
+ * Идемпотентность: `POST /v1/payout/link` и `POST /v1/payout/link/batch` ОБЁРНУТЫ на бэкенде в
+ * idempotency-middleware, поэтому заголовок `Idempotency-Key` здесь РАБОТАЕТ. SDK шлёт его на
+ * обоих создающих вызовах и держит НЕИЗМЕННЫМ на всех внутренних повторах, так что автоповтор
+ * при 5xx/таймауте/сетевой ошибке безопасен: шлюз реплеит первый ответ (та же ссылка, тот же
+ * `claim_token`, заголовок `Idempotent-Replayed: true`), а баланс дебетуется РОВНО ОДИН РАЗ.
+ *
+ * Коды, специфичные для повторов (все — терминальные, кроме 503):
+ * - `400 idempotency.key_reused` — тот же ключ с ДРУГИМ телом;
+ * - `400 idempotency.bad_key` — некорректный ключ (длиннее 255 символов);
+ * - `409 idempotency.in_progress` — параллельный повтор, пока первый ещё выполняется; повторите
+ *   чуть позже тем же ключом;
+ * - `503 idempotency.unavailable` — стор идемпотентности недоступен (fail-closed by design);
+ *   ретраибельна, SDK повторит сам.
+ *
+ * ⚠ БЕЗ заголовка поведение прежнее: два одинаковых вызова создадут ДВЕ ссылки с двумя резервами.
+ *
+ * Второй, durable слой защиты — опциональный per-link `reference` (уникален в рамках мерчанта):
+ * он работает даже без заголовка и даже когда ответ батча слишком велик для кэша. Повторный
+ * create с тем же `reference` отдаёт `409 payoutlink.duplicate_reference` (раньше был 500,
+ * который SDK ретраил вхолостую).
  */
 export class PayoutLinks extends BaseResource {
   /**
@@ -31,19 +48,48 @@ export class PayoutLinks extends BaseResource {
    * claim к 1 часу (НЕ к максимуму); допустимый диапазон [1, 720] часов.
    * `claim_token`/`claim_url` возвращаются ТОЛЬКО в этом ответе (хранится лишь хеш) —
    * сохраните их сразу. При `email` получателю уйдёт письмо с кнопкой claim (best-effort).
+   *
+   * Свой ключ идемпотентности — `params.idempotency_key` (уходит заголовком, не в тело); иначе
+   * SDK сгенерирует UUID один раз до цикла ретраев. Маршрут обёрнут idempotency-middleware, так
+   * что повтор с тем же ключом реплеит первый ответ и НЕ резервирует средства второй раз —
+   * см. описание класса.
    */
   create(params: CreatePayoutLinkParams): Promise<PayoutLinkCreated> {
-    return this.http.request<PayoutLinkCreated>('/v1/payout/link', params);
+    const { idempotency_key, ...body } = params;
+    return this.http.request<PayoutLinkCreated>('/v1/payout/link', body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key),
+    });
   }
 
   /**
    * Создать до 500 ссылок одним запросом. `POST /v1/payout/link/batch`
    * Каждый элемент резервируется в своей транзакции (плохой фейлит только себя); ответ
    * index-aligned (`results[i]` ↔ `links[i]`), все созданные ссылки получают общий `batch_id`.
-   * Больше 500 → `payoutlink.batch_too_large`. Дедуп — per-item `reference` (см. create).
+   * Больше 500 → `payoutlink.batch_too_large`.
+   *
+   * Ключ идемпотентности — на весь вызов (`opts.idempotency_key`, иначе UUID от SDK);
+   * per-item `idempotency_key` смысла не имеет и в тело не уходит. Маршрут обёрнут
+   * middleware'ом, повтор с тем же ключом реплеит ответ первой попытки.
+   *
+   * ⚠ Две особенности батча:
+   * - частично упавший батч реплеится КАК ЕСТЬ — упавшие элементы под тем же ключом НЕ
+   *   повторяются, их надо слать НОВЫМ ключом;
+   * - ответ больше 256 КБ шлюз НЕ кэширует, и тогда повтор выполнится заново. Поэтому на
+   *   батчах стоит проставлять per-item `reference` — второй, durable слой защиты
+   *   (`409 payoutlink.duplicate_reference` вместо дубля).
    */
-  createBatch(links: CreatePayoutLinkParams[]): Promise<PayoutLinkBatchResult> {
-    return this.http.request<PayoutLinkBatchResult>('/v1/payout/link/batch', { links });
+  createBatch(
+    links: CreatePayoutLinkParams[],
+    opts: { idempotency_key?: string } = {},
+  ): Promise<PayoutLinkBatchResult> {
+    const body = links.map(({ idempotency_key: _ignored, ...link }) => link);
+    return this.http.request<PayoutLinkBatchResult>(
+      '/v1/payout/link/batch',
+      { links: body },
+      {
+        idempotencyKey: idempotencyKeyFor(opts.idempotency_key),
+      },
+    );
   }
 
   /** Список ссылок (created_at DESC; limit вне (0,200] → 50). `POST /v1/payout/link/list` */

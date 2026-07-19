@@ -111,6 +111,13 @@ declare class HttpClient {
     private once;
     /** Человекочитаемая причина повтора для логов (без секретов и тел). */
     private retryReason;
+    /**
+     * Повторяем только транспортно-временное: 429, 5xx (включая `503 idempotency.unavailable`) и
+     * сетевые сбои. Все создающие денежные вызовы шлют неизменный `Idempotency-Key`, поэтому
+     * повтор дедуплицируется шлюзом, а не порождает второй объект. 4xx — терминальны
+     * (в т.ч. `400 idempotency.key_reused` и `409 idempotency.in_progress`: последний означает,
+     * что первая попытка ещё выполняется, и решение о повторе принимает вызывающий).
+     */
     private isRetriable;
     private backoffDelay;
     private sleep;
@@ -247,6 +254,12 @@ interface BlockWalletParams {
 interface BlockedRefundParams {
     uuid: string;
     address: string;
+    /**
+     * Свой ключ идемпотентности вызова — уходит заголовком `Idempotency-Key`, не в тело.
+     * Если не задан, SDK сгенерирует UUID один раз до цикла ретраев.
+     * ⚠ Бэкенд этот заголовок на `/v1/wallet/blocked-address-refund` пока не обрабатывает.
+     */
+    idempotency_key?: string;
 }
 interface Balance {
     balance: {
@@ -626,10 +639,20 @@ interface CreatePayoutLinkParams {
     /** Сумма (строкой) в `currency`. */
     amount: string;
     /**
-     * Per-link ключ дедупликации (уникален в рамках мерчанта). Именно он защищает от дублей —
-     * заголовок `Idempotency-Key` на этом эндпоинте не действует.
+     * Per-link ключ дедупликации (уникален в рамках мерчанта) — второй, durable слой защиты от
+     * дублей поверх `Idempotency-Key`: работает даже без заголовка и даже когда ответ батча
+     * слишком велик для кэша идемпотентности (>256 КБ). Повтор с тем же `reference` →
+     * `409 payoutlink.duplicate_reference`. Рекомендуется всегда задавать в батчах.
      */
     reference?: string;
+    /**
+     * Свой ключ идемпотентности вызова — уходит заголовком `Idempotency-Key`, не в тело.
+     * Если не задан, SDK сгенерирует UUID один раз до цикла ретраев.
+     * Бэкенд этот заголовок на `/v1/payout/link` УВАЖАЕТ: повтор с тем же ключом реплеит первый
+     * ответ (`Idempotent-Replayed: true`), баланс дебетуется ровно один раз. Тот же ключ с другим
+     * телом → `400 idempotency.key_reused`.
+     */
+    idempotency_key?: string;
     /** Лейбл, виден получателю. */
     title?: string;
     /** Заметка, видна получателю (и в письме). */
@@ -715,8 +738,8 @@ interface SandboxDepositParams {
     amount?: string;
     /**
      * Число подтверждений. Не задано/0 — депозит сразу полностью подтверждён; небольшое число —
-     * транзакция приходит ещё pending (дозреет через ~10 минут или при повторе того же `txid`
-     * с бОльшим числом подтверждений).
+     * транзакция приходит ещё pending и сама глубже НЕ станет. Единственный способ подтвердить её —
+     * повторить вызов с тем же `txid` и бОльшим `confirmations`.
      */
     confirmations?: number;
     /**
@@ -999,7 +1022,14 @@ declare class Payouts extends BaseResource {
     services(): Promise<ServiceMethod[]>;
     /** Предрасчёт комиссии и сумм без создания. `POST /v1/payout/calculate` */
     calculate(params: CalculatePayoutParams): Promise<PayoutCalculation>;
-    /** Подтвердить выплату в статусе pending (для API-ключа обычно не нужно). `POST /v1/payout/approve` */
+    /**
+     * Подтвердить выплату в статусе pending (для API-ключа обычно не нужно). `POST /v1/payout/approve`
+     *
+     * Ключ идемпотентности не нужен и не шлётся: это переход состояния, а не создание. Бэкенд
+     * принимает только `StatusPending` и отвечает `409 payout.not_pending` в любом другом случае,
+     * поэтому повторный approve физически не может одобрить или двинуть деньги дважды. Читайте
+     * этот 409 как «уже одобрено» и уточняйте фактический статус через {@link info}.
+     */
     approve(uuid: string): Promise<unknown>;
     /**
      * Возврат средств платежа (движок выплат). `POST /v1/payment/refund`
@@ -1038,7 +1068,23 @@ declare class Wallets extends BaseResource {
         address: string;
         blocked: boolean;
     }>;
-    /** Вернуть средства с (заблокированного) кошелька на адрес. `POST /v1/wallet/blocked-address-refund` */
+    /**
+     * Вернуть средства с (заблокированного) кошелька на адрес. `POST /v1/wallet/blocked-address-refund`
+     *
+     * Вызов СОЗДАЁТ выплату, но он once-only ПО САМОМУ КОШЕЛЬКУ и без всяких заголовков: бэкенд
+     * строит детерминированный reference `refund-wallet:<wallet_id>`, берёт advisory-lock и внутри
+     * лока сначала ищет уже существующую выплату по этому reference. Повтор (в том числе
+     * конкурентный — он подождёт на локе) возвращает ТУ ЖЕ выплату, вторая не создаётся. Поэтому
+     * автоповтор при 5xx/таймауте/сетевой ошибке безопасен и включён.
+     *
+     * Маршрут НАМЕРЕННО не обёрнут в idempotency-middleware: обёртка была бы регрессом —
+     * конкурентный повтор получал бы `409 idempotency.in_progress` вместо ожидания и успеха.
+     * `Idempotency-Key` SDK всё равно шлёт (свой — `params.idempotency_key`); на этом маршруте он
+     * безвреден и ни на что не влияет.
+     *
+     * ⚠ Косметика: адрес НЕ входит в reference, поэтому повтор с ДРУГИМ адресом вернёт первую
+     * выплату на ПЕРВЫЙ адрес.
+     */
     blockedAddressRefund(params: BlockedRefundParams): Promise<unknown>;
     /** QR-код произвольного адреса (data:-URI). `POST /v1/wallet/qr` */
     qr(address: string): Promise<{
@@ -1305,10 +1351,26 @@ declare class Splits extends BaseResource {
  * Management-методы (create/createBatch/list/info/cancel) требуют PAYOUT-ключ.
  * `claimInfo`/`claim` — публичные, БЕЗ подписи (авторизация — сам 256-битный токен в URL).
  *
- * Идемпотентность: заголовок `Idempotency-Key` на `/v1/payout/link*` НЕ действует (эндпоинты
- * им не обёрнуты) — дедупликация здесь через опциональный per-link `reference` (уникален в
- * рамках мерчанта). ⚠ Повторный create с тем же `reference` сейчас отдаёт HTTP 500
- * (unique violation), а не реплей — не ретрайте его вслепую.
+ * Идемпотентность: `POST /v1/payout/link` и `POST /v1/payout/link/batch` ОБЁРНУТЫ на бэкенде в
+ * idempotency-middleware, поэтому заголовок `Idempotency-Key` здесь РАБОТАЕТ. SDK шлёт его на
+ * обоих создающих вызовах и держит НЕИЗМЕННЫМ на всех внутренних повторах, так что автоповтор
+ * при 5xx/таймауте/сетевой ошибке безопасен: шлюз реплеит первый ответ (та же ссылка, тот же
+ * `claim_token`, заголовок `Idempotent-Replayed: true`), а баланс дебетуется РОВНО ОДИН РАЗ.
+ *
+ * Коды, специфичные для повторов (все — терминальные, кроме 503):
+ * - `400 idempotency.key_reused` — тот же ключ с ДРУГИМ телом;
+ * - `400 idempotency.bad_key` — некорректный ключ (длиннее 255 символов);
+ * - `409 idempotency.in_progress` — параллельный повтор, пока первый ещё выполняется; повторите
+ *   чуть позже тем же ключом;
+ * - `503 idempotency.unavailable` — стор идемпотентности недоступен (fail-closed by design);
+ *   ретраибельна, SDK повторит сам.
+ *
+ * ⚠ БЕЗ заголовка поведение прежнее: два одинаковых вызова создадут ДВЕ ссылки с двумя резервами.
+ *
+ * Второй, durable слой защиты — опциональный per-link `reference` (уникален в рамках мерчанта):
+ * он работает даже без заголовка и даже когда ответ батча слишком велик для кэша. Повторный
+ * create с тем же `reference` отдаёт `409 payoutlink.duplicate_reference` (раньше был 500,
+ * который SDK ретраил вхолостую).
  */
 declare class PayoutLinks extends BaseResource {
     /**
@@ -1319,15 +1381,33 @@ declare class PayoutLinks extends BaseResource {
      * claim к 1 часу (НЕ к максимуму); допустимый диапазон [1, 720] часов.
      * `claim_token`/`claim_url` возвращаются ТОЛЬКО в этом ответе (хранится лишь хеш) —
      * сохраните их сразу. При `email` получателю уйдёт письмо с кнопкой claim (best-effort).
+     *
+     * Свой ключ идемпотентности — `params.idempotency_key` (уходит заголовком, не в тело); иначе
+     * SDK сгенерирует UUID один раз до цикла ретраев. Маршрут обёрнут idempotency-middleware, так
+     * что повтор с тем же ключом реплеит первый ответ и НЕ резервирует средства второй раз —
+     * см. описание класса.
      */
     create(params: CreatePayoutLinkParams): Promise<PayoutLinkCreated>;
     /**
      * Создать до 500 ссылок одним запросом. `POST /v1/payout/link/batch`
      * Каждый элемент резервируется в своей транзакции (плохой фейлит только себя); ответ
      * index-aligned (`results[i]` ↔ `links[i]`), все созданные ссылки получают общий `batch_id`.
-     * Больше 500 → `payoutlink.batch_too_large`. Дедуп — per-item `reference` (см. create).
+     * Больше 500 → `payoutlink.batch_too_large`.
+     *
+     * Ключ идемпотентности — на весь вызов (`opts.idempotency_key`, иначе UUID от SDK);
+     * per-item `idempotency_key` смысла не имеет и в тело не уходит. Маршрут обёрнут
+     * middleware'ом, повтор с тем же ключом реплеит ответ первой попытки.
+     *
+     * ⚠ Две особенности батча:
+     * - частично упавший батч реплеится КАК ЕСТЬ — упавшие элементы под тем же ключом НЕ
+     *   повторяются, их надо слать НОВЫМ ключом;
+     * - ответ больше 256 КБ шлюз НЕ кэширует, и тогда повтор выполнится заново. Поэтому на
+     *   батчах стоит проставлять per-item `reference` — второй, durable слой защиты
+     *   (`409 payoutlink.duplicate_reference` вместо дубля).
      */
-    createBatch(links: CreatePayoutLinkParams[]): Promise<PayoutLinkBatchResult>;
+    createBatch(links: CreatePayoutLinkParams[], opts?: {
+        idempotency_key?: string;
+    }): Promise<PayoutLinkBatchResult>;
     /** Список ссылок (created_at DESC; limit вне (0,200] → 50). `POST /v1/payout/link/list` */
     list(params?: {
         limit?: number;
@@ -1378,8 +1458,12 @@ declare class Sandbox extends BaseResource {
      * Симулировать он-чейн депозит в инвойс. `POST /v1/sandbox/deposit`
      *
      * Без `amount` платится ровно сумма к оплате; без `confirmations` (или 0) депозит сразу
-     * полностью подтверждён. Мелкое `confirmations` даёт pending-депозит — он дозреет через
-     * ~10 минут или при повторе того же `txid` с бОльшим числом подтверждений.
+     * полностью подтверждён. Мелкое `confirmations` даёт pending-депозит, и сам он глубже НЕ
+     * станет: симулированную транзакцию никто не переэмитит. Чтобы довести инвойс до `paid`,
+     * повторите этот вызов с ТЕМ ЖЕ `txid` и бОльшим `confirmations`.
+     *
+     * ⚠ Не путайте с maturity-холдом на выплате (`payout.funds_maturing`): вот тот снимается сам
+     * по возрасту (в песочнице по умолчанию ~10 минут) и к подтверждениям инвойса не относится.
      */
     simulateDeposit(params: SandboxDepositParams): Promise<SandboxDeposit>;
     /**

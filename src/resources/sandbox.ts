@@ -31,8 +31,12 @@ export class Sandbox extends BaseResource {
    * Симулировать он-чейн депозит в инвойс. `POST /v1/sandbox/deposit`
    *
    * Без `amount` платится ровно сумма к оплате; без `confirmations` (или 0) депозит сразу
-   * полностью подтверждён. Мелкое `confirmations` даёт pending-депозит — он дозреет через
-   * ~10 минут или при повторе того же `txid` с бОльшим числом подтверждений.
+   * полностью подтверждён. Мелкое `confirmations` даёт pending-депозит, и сам он глубже НЕ
+   * станет: симулированную транзакцию никто не переэмитит. Чтобы довести инвойс до `paid`,
+   * повторите этот вызов с ТЕМ ЖЕ `txid` и бОльшим `confirmations`.
+   *
+   * ⚠ Не путайте с maturity-холдом на выплате (`payout.funds_maturing`): вот тот снимается сам
+   * по возрасту (в песочнице по умолчанию ~10 минут) и к подтверждениям инвойса не относится.
    */
   simulateDeposit(params: SandboxDepositParams): Promise<SandboxDeposit> {
     return this.http.request<SandboxDeposit>('/v1/sandbox/deposit', params);

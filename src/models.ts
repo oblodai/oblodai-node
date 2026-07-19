@@ -132,6 +132,12 @@ export interface BlockWalletParams {
 export interface BlockedRefundParams {
   uuid: string;
   address: string;
+  /**
+   * Свой ключ идемпотентности вызова — уходит заголовком `Idempotency-Key`, не в тело.
+   * Если не задан, SDK сгенерирует UUID один раз до цикла ретраев.
+   * ⚠ Бэкенд этот заголовок на `/v1/wallet/blocked-address-refund` пока не обрабатывает.
+   */
+  idempotency_key?: string;
 }
 
 export interface Balance {
@@ -562,10 +568,20 @@ export interface CreatePayoutLinkParams {
   /** Сумма (строкой) в `currency`. */
   amount: string;
   /**
-   * Per-link ключ дедупликации (уникален в рамках мерчанта). Именно он защищает от дублей —
-   * заголовок `Idempotency-Key` на этом эндпоинте не действует.
+   * Per-link ключ дедупликации (уникален в рамках мерчанта) — второй, durable слой защиты от
+   * дублей поверх `Idempotency-Key`: работает даже без заголовка и даже когда ответ батча
+   * слишком велик для кэша идемпотентности (>256 КБ). Повтор с тем же `reference` →
+   * `409 payoutlink.duplicate_reference`. Рекомендуется всегда задавать в батчах.
    */
   reference?: string;
+  /**
+   * Свой ключ идемпотентности вызова — уходит заголовком `Idempotency-Key`, не в тело.
+   * Если не задан, SDK сгенерирует UUID один раз до цикла ретраев.
+   * Бэкенд этот заголовок на `/v1/payout/link` УВАЖАЕТ: повтор с тем же ключом реплеит первый
+   * ответ (`Idempotent-Replayed: true`), баланс дебетуется ровно один раз. Тот же ключ с другим
+   * телом → `400 idempotency.key_reused`.
+   */
+  idempotency_key?: string;
   /** Лейбл, виден получателю. */
   title?: string;
   /** Заметка, видна получателю (и в письме). */
@@ -662,8 +678,8 @@ export interface SandboxDepositParams {
   amount?: string;
   /**
    * Число подтверждений. Не задано/0 — депозит сразу полностью подтверждён; небольшое число —
-   * транзакция приходит ещё pending (дозреет через ~10 минут или при повторе того же `txid`
-   * с бОльшим числом подтверждений).
+   * транзакция приходит ещё pending и сама глубже НЕ станет. Единственный способ подтвердить её —
+   * повторить вызов с тем же `txid` и бОльшим `confirmations`.
    */
   confirmations?: number;
   /**

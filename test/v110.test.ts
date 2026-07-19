@@ -337,7 +337,9 @@ describe('payout-ссылки — крипто-чеки (v1.1.0)', () => {
     expect(link.status).toBe('funded');
     expect(calls[0]!.url).toBe('https://api.test/v1/payout/link');
     expect(headers(calls[0]!.init)['X-Signature']).toBeDefined();
-    expect(headers(calls[0]!.init)['Idempotency-Key']).toBeUndefined(); // не обёрнут — дедуп по reference
+    // Маршрут обёрнут idempotency-middleware на бэкенде: ключ шлём, шлюз по нему дедуплицирует
+    // (второй, durable слой — per-link `reference`).
+    expect(headers(calls[0]!.init)['Idempotency-Key']).toBeDefined();
     expect(sentBody(calls[0]!.init).expires_in_hours).toBe(720);
   });
 

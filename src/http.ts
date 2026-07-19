@@ -254,6 +254,13 @@ export class HttpClient {
     return 'network';
   }
 
+  /**
+   * Повторяем только транспортно-временное: 429, 5xx (включая `503 idempotency.unavailable`) и
+   * сетевые сбои. Все создающие денежные вызовы шлют неизменный `Idempotency-Key`, поэтому
+   * повтор дедуплицируется шлюзом, а не порождает второй объект. 4xx — терминальны
+   * (в т.ч. `400 idempotency.key_reused` и `409 idempotency.in_progress`: последний означает,
+   * что первая попытка ещё выполняется, и решение о повторе принимает вызывающий).
+   */
   private isRetriable(err: unknown): boolean {
     if (err instanceof OblodaiApiError) return err.isRetriable;
     if (err instanceof OblodaiConnectionError) return true; // включая таймаут

@@ -1,4 +1,5 @@
 import { BaseResource } from './base.js';
+import { idempotencyKeyFor } from './idempotency.js';
 import type {
   Wallet,
   CreateWalletParams,
@@ -19,9 +20,28 @@ export class Wallets extends BaseResource {
     return this.http.request('/v1/wallet/block', params);
   }
 
-  /** Вернуть средства с (заблокированного) кошелька на адрес. `POST /v1/wallet/blocked-address-refund` */
+  /**
+   * Вернуть средства с (заблокированного) кошелька на адрес. `POST /v1/wallet/blocked-address-refund`
+   *
+   * Вызов СОЗДАЁТ выплату, но он once-only ПО САМОМУ КОШЕЛЬКУ и без всяких заголовков: бэкенд
+   * строит детерминированный reference `refund-wallet:<wallet_id>`, берёт advisory-lock и внутри
+   * лока сначала ищет уже существующую выплату по этому reference. Повтор (в том числе
+   * конкурентный — он подождёт на локе) возвращает ТУ ЖЕ выплату, вторая не создаётся. Поэтому
+   * автоповтор при 5xx/таймауте/сетевой ошибке безопасен и включён.
+   *
+   * Маршрут НАМЕРЕННО не обёрнут в idempotency-middleware: обёртка была бы регрессом —
+   * конкурентный повтор получал бы `409 idempotency.in_progress` вместо ожидания и успеха.
+   * `Idempotency-Key` SDK всё равно шлёт (свой — `params.idempotency_key`); на этом маршруте он
+   * безвреден и ни на что не влияет.
+   *
+   * ⚠ Косметика: адрес НЕ входит в reference, поэтому повтор с ДРУГИМ адресом вернёт первую
+   * выплату на ПЕРВЫЙ адрес.
+   */
   blockedAddressRefund(params: BlockedRefundParams): Promise<unknown> {
-    return this.http.request('/v1/wallet/blocked-address-refund', params);
+    const { idempotency_key, ...body } = params;
+    return this.http.request('/v1/wallet/blocked-address-refund', body, {
+      idempotencyKey: idempotencyKeyFor(idempotency_key),
+    });
   }
 
   /** QR-код произвольного адреса (data:-URI). `POST /v1/wallet/qr` */

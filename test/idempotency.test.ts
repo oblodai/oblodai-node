@@ -176,11 +176,12 @@ describe('идемпотентность v1.1.0: заголовок Idempotency-
     for (const call of calls) expect(idemHeader(call.init)).toMatch(UUID_RE);
   });
 
-  it('НЕобёрнутые эндпоинты заголовок НЕ шлют: payout-ссылки, платёжные ссылки, сплиты, send-email, info', async () => {
+  it('несоздающие/неденежные эндпоинты заголовок НЕ шлют: платёжные ссылки, сплиты, send-email, info', async () => {
     const { fn, calls } = mockFetch([{ status: 200, body: { state: 0, result: {} } }]);
     const client = makeClient(fn);
 
-    await client.payoutLinks.create({ currency: 'USDT', network: 'tron', amount: '5' });
+    // NB: payoutLinks.create сюда НЕ входит — он денежный, ключ шлёт, и бэкенд его на
+    // `/v1/payout/link*` уважает (см. moneyidem.test.ts).
     await client.links.create({ amount_mode: 'open', currency: 'USD' });
     await client.splits.splitToAddress('T...', 'tron', 10);
     await client.payments.sendEmail({ uuid: 'p1', email: 'a@b.c' });

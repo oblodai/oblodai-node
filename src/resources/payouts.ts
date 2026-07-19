@@ -83,7 +83,14 @@ export class Payouts extends BaseResource {
     return this.http.request<PayoutCalculation>('/v1/payout/calculate', params);
   }
 
-  /** Подтвердить выплату в статусе pending (для API-ключа обычно не нужно). `POST /v1/payout/approve` */
+  /**
+   * Подтвердить выплату в статусе pending (для API-ключа обычно не нужно). `POST /v1/payout/approve`
+   *
+   * Ключ идемпотентности не нужен и не шлётся: это переход состояния, а не создание. Бэкенд
+   * принимает только `StatusPending` и отвечает `409 payout.not_pending` в любом другом случае,
+   * поэтому повторный approve физически не может одобрить или двинуть деньги дважды. Читайте
+   * этот 409 как «уже одобрено» и уточняйте фактический статус через {@link info}.
+   */
   approve(uuid: string): Promise<unknown> {
     return this.http.request('/v1/payout/approve', { uuid });
   }

@@ -13,8 +13,8 @@
   только ключ. Методы:
   - `sandbox.simulateDeposit({ invoice_id, amount?, confirmations?, txid? })` — симуляция
     он-чейн депозита (`POST /v1/sandbox/deposit`). Без `amount` — ровно сумма к оплате;
-    малое `confirmations` — pending-депозит (дозревает ~10 минут или повтором того же `txid`
-    с бОльшим числом подтверждений); повтор `txid` — тест идемпотентности.
+    малое `confirmations` — pending-депозит, который сам глубже не станет: подтверждается только
+    повтором того же `txid` с бОльшим `confirmations`; повтор `txid` — тест идемпотентности.
   - `sandbox.faucet({ asset, amount, idempotency_key? })` — тестовый баланс, до 1000000 за
     вызов (`POST /v1/sandbox/faucet`).
   - `sandbox.reset()` — отмена открытых счетов и обнуление балансов компенсирующей проводкой,
@@ -49,7 +49,59 @@
   `TransferToUserParams`, `TransferToUserResult`, `PublicPayment`, `PaySelectParams`
   экспортируются из корня пакета.
 
-## [1.1.0] — 2026-07-15
+### Исправлено
+
+- **Идемпотентность payout-ссылок: шлюз теперь дедуплицирует их сам, автоповтор возвращён.**
+  `/v1/payout/link` и `/v1/payout/link/batch` обёрнуты на бэкенде в idempotency-middleware, так
+  что `Idempotency-Key` (SDK шлёт его сам; свой — параметр `idempotency_key`) **работает**:
+  повтор с тем же ключом реплеит первый ответ — та же ссылка, тот же `claim_token`, заголовок
+  `Idempotent-Replayed: true` — а баланс резервируется РОВНО ОДИН РАЗ. Поэтому снят флаг
+  `unreplayableWrite` с `payoutLinks.create`/`createBatch`: он отключал автоповтор на
+  5xx/таймауте/сети и после серверной правки стал чистой деградацией надёжности. Ключ, как и
+  прежде, генерируется ОДИН раз до цикла ретраев и на внутренних повторах не меняется.
+  ⚠ Без заголовка поведение прежнее: два одинаковых вызова создадут ДВЕ ссылки.
+- **Автоповтор возвращён и на `wallets.blockedAddressRefund`.** Маршрут намеренно не обёрнут
+  middleware'ом (обёртка была бы регрессом: конкурентный повтор получал бы
+  `409 idempotency.in_progress` вместо ожидания и успеха) — но он и не беззащитен: бэкенд
+  дедуплицирует по детерминированному reference `refund-wallet:<wallet_id>` под advisory-локом и
+  внутри лока возвращает СУЩЕСТВУЮЩУЮ выплату. Повтор, в том числе конкурентный, отдаёт ту же
+  выплату; вторая не создаётся безусловно, без всяких заголовков.
+- Внутреннее: опция транспорта `RequestOpts.unreplayableWrite` удалена — не осталось вызовов, для
+  которых повтор небезопасен.
+- `payoutLinks.createBatch` принимает второй аргумент `{ idempotency_key? }` — ключ на весь
+  вызов; per-item `idempotency_key` в тело запроса не просачивается.
+
+### Документация
+
+- **Убраны утверждения, что payout-ссылки и `blocked-address-refund` не защищены от дублей.**
+  README, doc-комментарии (`PayoutLinks`, `CreatePayoutLinkParams.reference` и
+  `.idempotency_key`, `Wallets.blockedAddressRefund`) и запись CHANGELOG утверждали, что маршруты
+  не обёрнуты в idempotency-middleware, заголовок игнорируется, а повтор
+  `blocked-address-refund` создал бы вторую выплату. Всё это больше не так — см. раздел
+  «Исправлено».
+- **Описаны коды ответов маршрутов с идемпотентностью**: `400 idempotency.key_reused` (тот же ключ
+  с другим телом), `400 idempotency.bad_key` (ключ длиннее 255 символов),
+  `409 idempotency.in_progress` (параллельный повтор, пока первый ещё выполняется),
+  `503 idempotency.unavailable` (стор недоступен, fail-closed by design). Классификация ретраев в
+  `OblodaiApiError.isRetriable` уже корректна: 4xx терминальны, 503 ретраится.
+- **Дубль `reference` у payout-ссылки теперь `409 payoutlink.duplicate_reference`, а не 500.**
+  Важно на практике: 500 SDK ретраил вхолостую (до 4 попыток), 409 сразу завершает цикл повторов.
+- **Про батчи payout-ссылок**: ответ больше 256 КБ шлюз НЕ кэширует, поэтому повтор такого батча
+  выполнится заново — на батчах стоит проставлять per-item `reference` (второй, durable слой
+  защиты). Частично упавший батч реплеится КАК ЕСТЬ: упавшие элементы под тем же ключом не
+  повторяются, их надо слать НОВЫМ ключом.
+- **`payouts.approve`** — задокументировано, что ключ идемпотентности ему не нужен: это переход
+  состояния, принимается только `pending`, иначе `409 payout.not_pending`; повторный approve не
+  может одобрить или двинуть деньги дважды. Читайте этот 409 как «уже одобрено» и уточняйте
+  статус через `payouts.info`.
+- **Убрано ложное утверждение о «дозревании» депозита в песочнице.** README, doc-комментарии
+  (`sandbox.simulateDeposit`, `SandboxDepositParams.confirmations`) и запись CHANGELOG
+  утверждали, что депозит с малым `confirmations` дозревает сам примерно за 10 минут. Это
+  неверно: симулированную транзакцию никто не переэмитит и курсор по ней не двигается — инвойс
+  висит в `confirm_check` бесконечно, довести его до `paid` можно **только** повторив
+  `simulateDeposit` с тем же `txid` и бОльшим `confirmations`. Смешаны были два разных
+  механизма: ~10 минут относятся к maturity-холду на **выплате** (`payout.funds_maturing`),
+  который действительно снимается по возрасту фоновым джобом.
 
 ### ⚠ ЛОМАЮЩЕЕ ИЗМЕНЕНИЕ: новая семантика идемпотентности
 
@@ -63,11 +115,11 @@
 - **Свой ключ** — новый опциональный параметр `idempotency_key` в создающих вызовах
   (`payments.create/refund/createBatch/refundBatch/resolve`, `payouts.create/createMass/createBatch`,
   `account.transferToPersonal`): уходит в заголовок, НЕ в тело.
-- Заголовок шлётся только на эндпоинты, обёрнутые идемпотентностью на бэкенде:
+- Заголовок шлётся на эндпоинты, обёрнутые идемпотентностью на бэкенде:
   `/v1/payment`, `/v1/payment/refund`, `/v1/payment/resolve`, `/v1/payment/batch`, `/v1/refund/batch`,
-  `/v1/payout`, `/v1/payout/mass`, `/v1/payout/batch`, `/v1/transfer/to-personal`.
-  На `/v1/payout/link*`, `/v1/payment/link*`, `/v1/split/*`, `/v1/payment/send-email` он не действует
-  и не отправляется (у payout-ссылок дедуп — per-link `reference`).
+  `/v1/payout`, `/v1/payout/mass`, `/v1/payout/batch`, `/v1/payout/link`, `/v1/payout/link/batch`,
+  `/v1/transfer/to-personal`. На `/v1/payment/link*`, `/v1/split/*`, `/v1/payment/send-email` он не
+  действует и не отправляется.
 
 ### Добавлено
 
