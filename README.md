@@ -1,6 +1,25 @@
-# Oblodai SDK
+<div align="center">
 
-> [Читать по-русски →](README.ru.md)
+<a href="https://oblodai.com">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/oblodai/.github/main/brand/logo-white.svg">
+    <img src="https://raw.githubusercontent.com/oblodai/.github/main/brand/logo-black.svg" alt="oblodai" height="52">
+  </picture>
+</a>
+
+<h3>Official TypeScript / Node.js SDK for the <a href="https://oblodai.com">oblodai</a> payment gateway</h3>
+
+Payments, payouts, payment links, splits, static wallets, webhooks — one API key.
+
+<a href="https://www.npmjs.com/package/@oblodai-npm/sdk"><img src="https://img.shields.io/npm/v/%40oblodai-npm%2Fsdk?style=flat-square&color=CB3837&label=npm" alt="npm"></a>
+<a href="https://www.npmjs.com/package/@oblodai-npm/sdk"><img src="https://img.shields.io/badge/types-TypeScript-3178C6?style=flat-square" alt="TypeScript"></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-000000?style=flat-square" alt="License: MIT"></a>
+
+[Documentation](https://docs.oblodai.com) · [Dashboard](https://my.oblodai.com) · [Читать по-русски →](README.ru.md)
+
+</div>
+
+---
 
 The official TypeScript / Node.js SDK for the **Oblodai** payment gateway: accepting payments, payouts,
 bulk operations, payment and payout links, splits, static wallets, webhooks. Request signing,
