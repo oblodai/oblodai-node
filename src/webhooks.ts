@@ -1,7 +1,7 @@
-import crypto from 'node:crypto';
-import { OblodaiSignatureError } from './errors.js';
-import { resolveLogger } from './logger.js';
-import type { OblodaiLogger } from './types.js';
+import crypto from "node:crypto";
+import { OblodaiSignatureError } from "./errors.js";
+import { resolveLogger } from "./logger.js";
+import type { OblodaiLogger } from "./types.js";
 
 /**
  * Проверка входящих вебхуков.
@@ -59,20 +59,20 @@ export function verifyWebhook(
   const log = resolveLogger(options.logger);
 
   if (!timestamp || !signature) {
-    log('warn', 'oblodai: webhook verify failed', { reason: 'missing headers' });
-    throw new OblodaiSignatureError('Отсутствует timestamp или signature вебхука');
+    log("warn", "oblodai: webhook verify failed", { reason: "missing headers" });
+    throw new OblodaiSignatureError("Отсутствует timestamp или signature вебхука");
   }
 
-  const raw = typeof rawBody === 'string' ? Buffer.from(rawBody, 'utf8') : rawBody;
-  const signingString = Buffer.concat([Buffer.from(`${timestamp}.`, 'utf8'), raw]);
-  const expected = crypto.createHmac('sha256', secret).update(signingString).digest('hex');
+  const raw = typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : rawBody;
+  const signingString = Buffer.concat([Buffer.from(`${timestamp}.`, "utf8"), raw]);
+  const expected = crypto.createHmac("sha256", secret).update(signingString).digest("hex");
 
   // Сравнение в постоянном времени
-  const expectedBuf = Buffer.from(expected, 'utf8');
-  const actualBuf = Buffer.from(signature, 'utf8');
+  const expectedBuf = Buffer.from(expected, "utf8");
+  const actualBuf = Buffer.from(signature, "utf8");
   if (expectedBuf.length !== actualBuf.length || !crypto.timingSafeEqual(expectedBuf, actualBuf)) {
-    log('warn', 'oblodai: webhook verify failed', { reason: 'signature mismatch' });
-    throw new OblodaiSignatureError('Подпись вебхука не совпадает');
+    log("warn", "oblodai: webhook verify failed", { reason: "signature mismatch" });
+    throw new OblodaiSignatureError("Подпись вебхука не совпадает");
   }
 
   // Replay-защита: проверка свежести timestamp
@@ -81,19 +81,19 @@ export function verifyWebhook(
     const now = options.now ?? Date.now();
     const ts = Number(timestamp);
     if (!Number.isFinite(ts)) {
-      log('warn', 'oblodai: webhook verify failed', { reason: 'invalid timestamp' });
-      throw new OblodaiSignatureError('Некорректный timestamp вебхука');
+      log("warn", "oblodai: webhook verify failed", { reason: "invalid timestamp" });
+      throw new OblodaiSignatureError("Некорректный timestamp вебхука");
     }
     const ageSeconds = Math.abs(now / 1000 - ts);
     if (ageSeconds > maxAge) {
-      log('warn', 'oblodai: webhook verify failed', { reason: 'stale' });
+      log("warn", "oblodai: webhook verify failed", { reason: "stale" });
       throw new OblodaiSignatureError(
         `Вебхук слишком старый: возраст ${Math.round(ageSeconds)}с > ${maxAge}с`,
       );
     }
   }
 
-  log('debug', 'oblodai: webhook signature ok');
+  log("debug", "oblodai: webhook signature ok");
   return true;
 }
 
@@ -108,6 +108,6 @@ export function constructWebhookEvent<T = unknown>(
   options?: VerifyWebhookOptions,
 ): T {
   verifyWebhook(secret, rawBody, headers, options);
-  const text = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
+  const text = typeof rawBody === "string" ? rawBody : rawBody.toString("utf8");
   return JSON.parse(text) as T;
 }

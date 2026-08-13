@@ -1,5 +1,5 @@
-import { BaseResource } from './base.js';
-import { idempotencyKeyFor } from './idempotency.js';
+import { BaseResource } from "./base.js";
+import { idempotencyKeyFor } from "./idempotency.js";
 import type {
   Balance,
   ReferralInfo,
@@ -8,18 +8,18 @@ import type {
   TransferToUserResult,
   BatchOptions,
   BatchSubmitResult,
-} from '../models.js';
+} from "../models.js";
 
 /** Баланс, рефералы, переводы на личный кошелёк и пользователям платформы, VRCS. */
 export class Account extends BaseResource {
   /** Доступные балансы мерчанта. `POST /v1/balance` */
   balance(): Promise<Balance> {
-    return this.http.request<Balance>('/v1/balance', {});
+    return this.http.request<Balance>("/v1/balance", {});
   }
 
   /** Реферальная статистика. `POST /v1/referral/info` */
   referral(): Promise<ReferralInfo> {
-    return this.http.request<ReferralInfo>('/v1/referral/info', {});
+    return this.http.request<ReferralInfo>("/v1/referral/info", {});
   }
 
   /**
@@ -43,7 +43,7 @@ export class Account extends BaseResource {
     personal_balance: string;
   }> {
     const { idempotency_key, ...body } = params;
-    return this.http.request('/v1/transfer/to-personal', body, {
+    return this.http.request("/v1/transfer/to-personal", body, {
       idempotencyKey: idempotencyKeyFor(idempotency_key),
     });
   }
@@ -62,7 +62,7 @@ export class Account extends BaseResource {
    */
   transferToUser(params: TransferToUserParams): Promise<TransferToUserResult> {
     const { idempotency_key, ...body } = params;
-    return this.http.request<TransferToUserResult>('/v1/transfer/to-user', body, {
+    return this.http.request<TransferToUserResult>("/v1/transfer/to-user", body, {
       idempotencyKey: idempotencyKeyFor(idempotency_key),
     });
   }
@@ -81,7 +81,7 @@ export class Account extends BaseResource {
   ): Promise<BatchSubmitResult> {
     const body: Record<string, unknown> = { transfers };
     if (opts.onError) body.on_error = opts.onError;
-    return this.http.request<BatchSubmitResult>('/v1/transfer/batch', body, {
+    return this.http.request<BatchSubmitResult>("/v1/transfer/batch", body, {
       idempotencyKey: idempotencyKeyFor(opts.idempotency_key),
     });
   }
@@ -89,6 +89,6 @@ export class Account extends BaseResource {
   /** Включить/выключить VRCS. Без enabled — чтение. `POST /v1/vrcs` */
   vrcs(enabled?: boolean): Promise<{ enabled: boolean }> {
     const body = enabled === undefined ? {} : { enabled };
-    return this.http.request<{ enabled: boolean }>('/v1/vrcs', body);
+    return this.http.request<{ enabled: boolean }>("/v1/vrcs", body);
   }
 }

@@ -1,5 +1,5 @@
-import { BaseResource } from './base.js';
-import type { CreateSplitRuleParams, SplitRule, SplitConfig } from '../models.js';
+import { BaseResource } from "./base.js";
+import type { CreateSplitRuleParams, SplitRule, SplitConfig } from "../models.js";
 
 /**
  * Сплит-платежи (v1.1.0): доля каждого входящего платежа автоматически уходит партнёру.
@@ -17,7 +17,7 @@ export class Splits extends BaseResource {
    * правил тоже ≤ 100. Удобные обёртки: {@link splitToAddress}, {@link splitToMerchant}.
    */
   createRule(params: CreateSplitRuleParams): Promise<{ rule_id: string; percent: number }> {
-    return this.http.request('/v1/split/rule', params);
+    return this.http.request("/v1/split/rule", params);
   }
 
   /** Доля на внешний адрес (необратимо при возврате). Обёртка над {@link createRule}. */
@@ -45,18 +45,18 @@ export class Splits extends BaseResource {
 
   /** Список правил сплита. `POST /v1/split/rule/list` */
   async listRules(): Promise<SplitRule[]> {
-    const res = await this.http.request<{ items: SplitRule[] }>('/v1/split/rule/list', {});
+    const res = await this.http.request<{ items: SplitRule[] }>("/v1/split/rule/list", {});
     return res.items;
   }
 
   /** Удалить правило. `POST /v1/split/rule/delete` */
   deleteRule(ruleId: string): Promise<{ deleted: boolean }> {
-    return this.http.request('/v1/split/rule/delete', { rule_id: ruleId });
+    return this.http.request("/v1/split/rule/delete", { rule_id: ruleId });
   }
 
   /** Настройки сплитов (окно удержания перед отправкой долей). `POST /v1/split/config/get` */
   getConfig(): Promise<SplitConfig> {
-    return this.http.request<SplitConfig>('/v1/split/config/get', {});
+    return this.http.request<SplitConfig>("/v1/split/config/get", {});
   }
 
   /**
@@ -64,7 +64,7 @@ export class Splits extends BaseResource {
    * (сплиты/авто-вывод/авто-конверсия) после settle. `POST /v1/split/config/set`
    */
   setConfig(refundHoldHours: number): Promise<SplitConfig> {
-    return this.http.request<SplitConfig>('/v1/split/config/set', {
+    return this.http.request<SplitConfig>("/v1/split/config/set", {
       refund_hold_hours: refundHoldHours,
     });
   }

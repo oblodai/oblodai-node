@@ -51,7 +51,7 @@ export OBLODAI_SECRET=oblodai_test_...
 `http://[::1]:...`).
 
 ```ts
-import { OblodaiClient } from '@oblodai-npm/sdk';
+import { OblodaiClient } from "@oblodai-npm/sdk";
 
 const client = OblodaiClient.fromEnv(); // OBLODAI_PUBLIC_ID / OBLODAI_SECRET / OBLODAI_BASE_URL
 ```
@@ -59,26 +59,26 @@ const client = OblodaiClient.fromEnv(); // OBLODAI_PUBLIC_ID / OBLODAI_SECRET / 
 ## Быстрый старт
 
 ```ts
-import { OblodaiClient } from '@oblodai-npm/sdk';
+import { OblodaiClient } from "@oblodai-npm/sdk";
 
 // либо явно (эквивалент fromEnv выше):
 const client = new OblodaiClient({
   publicId: process.env.OBLODAI_PUBLIC_ID!,
   secret: process.env.OBLODAI_SECRET!,
-  baseUrl: 'https://api.oblodai.com', // необязательно
+  baseUrl: "https://api.oblodai.com", // необязательно
 });
 
 // Создать платёж
 const payment = await client.payments.create({
-  amount: '10',
-  currency: 'USD',
-  order_id: 'order-1',
-  to_currency: 'USDT',
-  network: 'tron',
+  amount: "10",
+  currency: "USD",
+  order_id: "order-1",
+  to_currency: "USDT",
+  network: "tron",
 });
 
 console.log(payment.address); // адрес для оплаты
-console.log(payment.url);     // hosted-страница оплаты
+console.log(payment.url); // hosted-страница оплаты
 ```
 
 Клиент возвращает промисы — работает и через `await`, и через `.then()`.
@@ -104,17 +104,20 @@ console.log(payment.url);     // hosted-страница оплаты
 Проверить ключ можно хелпером `isTestKey(publicId)` (экспортируется из корня пакета).
 
 ```ts
-import { OblodaiClient } from '@oblodai-npm/sdk';
+import { OblodaiClient } from "@oblodai-npm/sdk";
 
 const client = new OblodaiClient({
   publicId: process.env.OBLODAI_TEST_PUBLIC_ID!, // test_...
-  secret: process.env.OBLODAI_TEST_SECRET!,      // oblodai_test_...
+  secret: process.env.OBLODAI_TEST_SECRET!, // oblodai_test_...
 });
 
 // 1. Обычный код интеграции — создать счёт (ничего «тестового» в нём нет)
 const payment = await client.payments.create({
-  amount: '10', currency: 'USD', order_id: 'order-1',
-  to_currency: 'USDT', network: 'tron',
+  amount: "10",
+  currency: "USD",
+  order_id: "order-1",
+  to_currency: "USDT",
+  network: "tron",
 });
 
 // 2. Тестовый код — «покупатель заплатил он-чейн»
@@ -126,10 +129,13 @@ await client.sandbox.simulateDeposit({ invoice_id: payment.uuid });
 const info = await client.payments.info({ uuid: payment.uuid }); // → 'paid'
 
 // 4. Начислить тестовый баланс (до 1000000 за вызов) и погонять выплату
-await client.sandbox.faucet({ asset: 'USDT', amount: '1000' });
+await client.sandbox.faucet({ asset: "USDT", amount: "1000" });
 await client.payouts.create({
-  amount: '25', currency: 'USDT', network: 'tron',
-  address: 'T...', order_id: 'payout-1',
+  amount: "25",
+  currency: "USDT",
+  network: "tron",
+  address: "T...",
+  order_id: "payout-1",
 });
 
 // Журнал вебхуков и повторная доставка:
@@ -168,16 +174,16 @@ await client.sandbox.reset(); // история операций сохраня�
 Словарь `payment_status` (тип `PaymentStatus`). Терминальные помечены — в ответе им соответствует
 `is_final: true`, статус больше не изменится:
 
-| Статус | Что значит | Терминальный |
-|---|---|---|
-| `check` | счёт создан, оплаты ещё не видели | нет |
-| `confirm_check` | оплата увидена, ждём подтверждений сети | нет |
-| `wrong_amount_waiting` | увидели **частичную** оплату, счёт ещё живой, ждём доплату | **нет** |
-| `paid` | оплачен полностью (в пределах допуска) | да |
-| `paid_over` | переплачен; излишек уходит в авто-возврат, если он включён и сеть его поддерживает | да |
-| `wrong_amount` | счёт **закрылся** недоплаченным | да |
-| `cancel` | истёк или отменён | да |
-| `select` | валюто-агностичный счёт: покупатель ещё не выбрал валюту/сеть | нет |
+| Статус                 | Что значит                                                                         | Терминальный |
+| ---------------------- | ---------------------------------------------------------------------------------- | ------------ |
+| `check`                | счёт создан, оплаты ещё не видели                                                  | нет          |
+| `confirm_check`        | оплата увидена, ждём подтверждений сети                                            | нет          |
+| `wrong_amount_waiting` | увидели **частичную** оплату, счёт ещё живой, ждём доплату                         | **нет**      |
+| `paid`                 | оплачен полностью (в пределах допуска)                                             | да           |
+| `paid_over`            | переплачен; излишек уходит в авто-возврат, если он включён и сеть его поддерживает | да           |
+| `wrong_amount`         | счёт **закрылся** недоплаченным                                                    | да           |
+| `cancel`               | истёк или отменён                                                                  | да           |
+| `select`               | валюто-агностичный счёт: покупатель ещё не выбрал валюту/сеть                      | нет          |
 
 ⚠ **`wrong_amount_waiting` ≠ `wrong_amount`** — самая частая путаница:
 
@@ -206,32 +212,32 @@ await client.sandbox.reset(); // история операций сохраня�
 > например в `OBLODAI_WEBHOOK_SECRET`.
 
 ```ts
-import express from 'express';
-import { constructWebhookEvent, OblodaiSignatureError, type WebhookEvent } from '@oblodai-npm/sdk';
+import express from "express";
+import { constructWebhookEvent, OblodaiSignatureError, type WebhookEvent } from "@oblodai-npm/sdk";
 
 const app = express();
 const WEBHOOK_SECRET = process.env.OBLODAI_WEBHOOK_SECRET!; // из client.webhooks.register()
 
 // ВАЖНО: сырое тело, не express.json()
-app.post('/oblodai/callback', express.raw({ type: '*/*' }), (req, res) => {
+app.post("/oblodai/callback", express.raw({ type: "*/*" }), (req, res) => {
   const raw = req.body as Buffer;
 
   // Пробные тела (is_test) не подписаны
-  const maybe = JSON.parse(raw.toString('utf8'));
-  if (maybe.is_test) return res.send('ok');
+  const maybe = JSON.parse(raw.toString("utf8"));
+  if (maybe.is_test) return res.send("ok");
 
   try {
     const event = constructWebhookEvent<WebhookEvent>(WEBHOOK_SECRET, raw, {
-      timestamp: req.get('X-Webhook-Timestamp')!,
-      signature: req.get('X-Webhook-Signature')!,
+      timestamp: req.get("X-Webhook-Timestamp")!,
+      signature: req.get("X-Webhook-Signature")!,
     }); // проверяет подпись И свежесть (replay-защита, окно 5 мин по умолчанию)
 
-    if (event.type === 'payment' && event.status === 'paid') {
+    if (event.type === "payment" && event.status === "paid") {
       // пометить заказ event.order_id оплаченным (идемпотентно по uuid + status)
     }
-    res.send('ok');
+    res.send("ok");
   } catch (e) {
-    if (e instanceof OblodaiSignatureError) return res.status(403).send('bad signature');
+    if (e instanceof OblodaiSignatureError) return res.status(403).send("bad signature");
     throw e;
   }
 });
@@ -240,7 +246,7 @@ app.post('/oblodai/callback', express.raw({ type: '*/*' }), (req, res) => {
 ### Регистрация URL: один эндпоинт на проект (upsert)
 
 ```ts
-const hook = await client.webhooks.register('https://example.com/oblodai/callback');
+const hook = await client.webhooks.register("https://example.com/oblodai/callback");
 // hook.endpoint_id, hook.url, hook.secret — секрет вебхуков, сохраните его
 ```
 
@@ -263,18 +269,21 @@ const hook = await client.webhooks.register('https://example.com/oblodai/callbac
 Все ошибки API — экземпляры `OblodaiApiError` с машиночитаемым `.code`. Ветвитесь по коду.
 
 ```ts
-import { OblodaiApiError } from '@oblodai-npm/sdk';
+import { OblodaiApiError } from "@oblodai-npm/sdk";
 
 try {
   await client.payouts.create({
-    amount: '25', currency: 'USDT', network: 'tron',
-    address: 'T...', order_id: 'payout-1',
+    amount: "25",
+    currency: "USDT",
+    network: "tron",
+    address: "T...",
+    order_id: "payout-1",
   });
 } catch (e) {
   if (e instanceof OblodaiApiError) {
-    if (e.code === 'payout.insufficient_funds') {
+    if (e.code === "payout.insufficient_funds") {
       // недостаточно средств
-    } else if (e.code === 'payout.funds_maturing') {
+    } else if (e.code === "payout.funds_maturing") {
       // средства ещё дозревают — терминальная ошибка (e.isRetriable === false):
       // не повторяйте вслепую, попробуйте позже
     }
@@ -285,13 +294,13 @@ try {
 
 ### Классы ошибок
 
-| Класс | Когда |
-|---|---|
-| `OblodaiApiError` | API вернул конверт `error`. Есть `.code`, `.status`, `.isRetriable`. |
-| `OblodaiConnectionError` | Сеть недоступна. |
-| `OblodaiTimeoutError` | Истёк таймаут запроса. |
-| `OblodaiSignatureError` | Не прошла проверка подписи вебхука. |
-| `OblodaiError` | Базовый класс для всех выше. |
+| Класс                    | Когда                                                                |
+| ------------------------ | -------------------------------------------------------------------- |
+| `OblodaiApiError`        | API вернул конверт `error`. Есть `.code`, `.status`, `.isRetriable`. |
+| `OblodaiConnectionError` | Сеть недоступна.                                                     |
+| `OblodaiTimeoutError`    | Истёк таймаут запроса.                                               |
+| `OblodaiSignatureError`  | Не прошла проверка подписи вебхука.                                  |
+| `OblodaiError`           | Базовый класс для всех выше.                                         |
 
 ## Повторы (retry)
 
@@ -301,7 +310,8 @@ try {
 
 ```ts
 const client = new OblodaiClient({
-  publicId: '...', secret: '...',
+  publicId: "...",
+  secret: "...",
   retry: { maxAttempts: 4, initialDelayMs: 500, maxDelayMs: 30_000 },
   // retry: false — отключить
 });
@@ -331,12 +341,12 @@ const client = new OblodaiClient({
 >
 > Специфичные для повторов коды на эндпоинтах с идемпотентностью:
 >
-> | Код | Когда | Ретраить? |
-> |---|---|---|
-> | `400 idempotency.key_reused` | тот же ключ с ДРУГИМ телом | нет (терминальная) |
-> | `400 idempotency.bad_key` | ключ длиннее 255 символов | нет (терминальная) |
-> | `409 idempotency.in_progress` | параллельный повтор, пока первый ещё выполняется | вручную, чуть позже, тем же ключом |
-> | `503 idempotency.unavailable` | стор идемпотентности недоступен (fail-closed by design) | да, SDK повторит сам |
+> | Код                           | Когда                                                   | Ретраить?                          |
+> | ----------------------------- | ------------------------------------------------------- | ---------------------------------- |
+> | `400 idempotency.key_reused`  | тот же ключ с ДРУГИМ телом                              | нет (терминальная)                 |
+> | `400 idempotency.bad_key`     | ключ длиннее 255 символов                               | нет (терминальная)                 |
+> | `409 idempotency.in_progress` | параллельный повтор, пока первый ещё выполняется        | вручную, чуть позже, тем же ключом |
+> | `503 idempotency.unavailable` | стор идемпотентности недоступен (fail-closed by design) | да, SDK повторит сам               |
 >
 > ⚠ **Без заголовка защиты нет**: два одинаковых вызова `payoutLinks.create` создадут ДВЕ ссылки
 > с двумя резервами. SDK шлёт ключ всегда, но если вы ходите в API мимо SDK — шлите его сами.
@@ -367,10 +377,10 @@ const client = new OblodaiClient({
 ```ts
 const sub = await client.payments.createBatch(
   [
-    { amount: '10', currency: 'USD', order_id: 'a-1', to_currency: 'USDT', network: 'tron' },
-    { amount: '20', currency: 'EUR', order_id: 'a-2', to_currency: 'USDT', network: 'tron' },
+    { amount: "10", currency: "USD", order_id: "a-1", to_currency: "USDT", network: "tron" },
+    { amount: "20", currency: "EUR", order_id: "a-2", to_currency: "USDT", network: "tron" },
   ],
-  { onError: 'continue' }, // 'continue' (по умолчанию) или 'stop'
+  { onError: "continue" }, // 'continue' (по умолчанию) или 'stop'
 );
 const info = await client.batches.info(sub.batch_id, { limit: 100 });
 // info.status: pending → processing → completed; info.items[i].result / .error — по элементам
@@ -382,11 +392,11 @@ const info = await client.batches.info(sub.batch_id, { limit: 100 });
 ### Платёжные ссылки (донаты) — платят многие, каждый платёж свой инвойс
 
 ```ts
-const link = await client.paymentLinks.create({ amount_mode: 'open', currency: 'USD' }); // { link_id, url }
+const link = await client.paymentLinks.create({ amount_mode: "open", currency: "USD" }); // { link_id, url }
 await client.paymentLinks.toggle(link.link_id, false); // выключить
 // Публичные (без подписи) — для страницы плательщика:
 await client.paymentLinks.publicGet(link.link_id);
-await client.paymentLinks.checkout(link.link_id, { amount: '5', payer_email: 'a@b.c' }); // → обычный платёж
+await client.paymentLinks.checkout(link.link_id, { amount: "5", payer_email: "a@b.c" }); // → обычный платёж
 ```
 
 > **Два имени одного ресурса.** `client.paymentLinks` и `client.links` — это **один и тот же
@@ -400,19 +410,19 @@ await client.paymentLinks.checkout(link.link_id, { amount: '5', payer_email: 'a@
 ### Сплит-платежи — доля каждого платежа уходит партнёру
 
 ```ts
-await client.splits.splitToAddress('T...', 'tron', 10, 'партнёр А'); // внешний адрес, необратимо
-await client.splits.splitToMerchant('m-42', 5);                      // аккаунт платформы, обратимо
+await client.splits.splitToAddress("T...", "tron", 10, "партнёр А"); // внешний адрес, необратимо
+await client.splits.splitToMerchant("m-42", 5); // аккаунт платформы, обратимо
 await client.splits.setConfig(24); // окно удержания refund_hold_hours (защита возвратов)
 ```
 
 ### Счёт на e-mail и resolve недоплаты
 
 ```ts
-await client.payments.sendEmail({ uuid: payment.uuid, email: 'buyer@example.com' });
+await client.payments.sendEmail({ uuid: payment.uuid, email: "buyer@example.com" });
 
 // Недоплата: оставить себе или вернуть (нужен payout-ключ)
-await client.payments.resolve({ uuid: payment.uuid, action: 'accept' });
-await client.payments.resolve({ uuid: payment.uuid, action: 'refund' }); // по умолчанию на адрес плательщика
+await client.payments.resolve({ uuid: payment.uuid, action: "accept" });
+await client.payments.resolve({ uuid: payment.uuid, action: "refund" }); // по умолчанию на адрес плательщика
 ```
 
 ⚠ Резолвится **только** статус `wrong_amount` — счёт, который уже **закрылся** недоплаченным.
@@ -423,15 +433,18 @@ await client.payments.resolve({ uuid: payment.uuid, action: 'refund' }); // по
 
 ```ts
 const check = await client.payoutLinks.create({
-  currency: 'USDT', network: 'tron', amount: '50',
-  title: 'Бонус', email: 'user@example.com',
+  currency: "USDT",
+  network: "tron",
+  amount: "50",
+  title: "Бонус",
+  email: "user@example.com",
   expires_in_hours: 168, // задавайте явно: при 0/отсутствии окно клампится к 1 часу
 });
 // check.claim_url / check.claim_token — ТОЛЬКО в этом ответе, сохраните сразу.
 
 // Получатель (публично, без подписи):
-const details = await client.payoutLinks.claimInfo(token);          // { claimable, amount, ... }
-await client.payoutLinks.claim(token, { address: 'T...' });         // → { status: 'claimed', payout_id }
+const details = await client.payoutLinks.claimInfo(token); // { claimable, amount, ... }
+await client.payoutLinks.claim(token, { address: "T..." }); // → { status: 'claimed', payout_id }
 
 // Мерчант: createBatch (до 500), list, info, cancel (funded-ссылка вернёт резерв).
 ```
@@ -454,17 +467,19 @@ await client.payoutLinks.claim(token, { address: 'T...' });         // → { sta
 
 ```ts
 await client.account.transferToUser({
-  to_user_id: '5c3f1c7e-9a44-4a5f-8d1a-2f6b7c8d9e0f', // UUID пользователя платформы
-  amount: '25', currency: 'USDT', order_id: 'bonus-1',
+  to_user_id: "5c3f1c7e-9a44-4a5f-8d1a-2f6b7c8d9e0f", // UUID пользователя платформы
+  amount: "25",
+  currency: "USDT",
+  order_id: "bonus-1",
 }); // → { currency, amount, to_user_id, recipient_balance }
 
 // «Зарплатная» пачка — обработка в фоне, прогресс через СУЩЕСТВУЮЩИЙ batches.info:
 const sub = await client.account.transferBatch(
   [
-    { to_user_id: '...', amount: '100', currency: 'USDT', order_id: 'salary-1' },
-    { to_user_id: '...', amount: '150', currency: 'USDT', order_id: 'salary-2' },
+    { to_user_id: "...", amount: "100", currency: "USDT", order_id: "salary-1" },
+    { to_user_id: "...", amount: "150", currency: "USDT", order_id: "salary-2" },
   ],
-  { onError: 'continue' },
+  { onError: "continue" },
 );
 const info = await client.batches.info(sub.batch_id); // items[i].result — как у /v1/transfer/to-user
 ```
@@ -485,7 +500,8 @@ const view = await client.payments.publicGet(payment.uuid); // GET /v1/pay/{id}
 // view.payment_status === 'select' — счёт ждёт выбора валюты, view.accepted — доступные методы
 
 const inv = await client.payments.publicSelect(payment.uuid, {
-  currency: 'USDT', network: 'tron',
+  currency: "USDT",
+  network: "tron",
 }); // POST /v1/pay/{id}/select → финализированный счёт: address, payer_amount, QR
 ```
 
@@ -591,12 +607,12 @@ client.sandbox.replayWebhook(deliveryId)
 
 ```ts
 interface OblodaiConfig {
-  publicId: string;          // обязательно
-  secret: string;            // обязательно
-  baseUrl?: string;          // по умолчанию https://api.oblodai.com
-  timeoutMs?: number;        // по умолчанию 30000
+  publicId: string; // обязательно
+  secret: string; // обязательно
+  baseUrl?: string; // по умолчанию https://api.oblodai.com
+  timeoutMs?: number; // по умолчанию 30000
   retry?: RetryOptions | false;
-  fetch?: typeof fetch;      // кастомный fetch
+  fetch?: typeof fetch; // кастомный fetch
 }
 ```
 

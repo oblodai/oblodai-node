@@ -1,4 +1,4 @@
-import crypto from 'node:crypto';
+import crypto from "node:crypto";
 
 /**
  * Подпись запросов к API.
@@ -35,6 +35,6 @@ export function signRequest(
 ): SignedRequest {
   const ts = timestamp ?? Math.floor(Date.now() / 1000).toString();
   const signingString = `${ts}\n${method}\n${path}\n${body}`;
-  const signature = crypto.createHmac('sha256', secret).update(signingString).digest('hex');
+  const signature = crypto.createHmac("sha256", secret).update(signingString).digest("hex");
   return { timestamp: ts, signature, body };
 }

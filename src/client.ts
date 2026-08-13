@@ -1,17 +1,17 @@
-import { HttpClient } from './http.js';
-import type { OblodaiConfig } from './types.js';
-import { Payments } from './resources/payments.js';
-import { Payouts } from './resources/payouts.js';
-import { Wallets } from './resources/wallets.js';
-import { Account } from './resources/account.js';
-import { Webhooks } from './resources/webhooks.js';
-import { Settings } from './resources/settings.js';
-import { Rates } from './resources/rates.js';
-import { Batches } from './resources/batches.js';
-import { Links } from './resources/links.js';
-import { Splits } from './resources/splits.js';
-import { PayoutLinks } from './resources/payoutlinks.js';
-import { Sandbox } from './resources/sandbox.js';
+import { HttpClient } from "./http.js";
+import type { OblodaiConfig } from "./types.js";
+import { Payments } from "./resources/payments.js";
+import { Payouts } from "./resources/payouts.js";
+import { Wallets } from "./resources/wallets.js";
+import { Account } from "./resources/account.js";
+import { Webhooks } from "./resources/webhooks.js";
+import { Settings } from "./resources/settings.js";
+import { Rates } from "./resources/rates.js";
+import { Batches } from "./resources/batches.js";
+import { Links } from "./resources/links.js";
+import { Splits } from "./resources/splits.js";
+import { PayoutLinks } from "./resources/payoutlinks.js";
+import { Sandbox } from "./resources/sandbox.js";
 
 /**
  * Клиент Oblodai API.
@@ -96,13 +96,15 @@ export class OblodaiClient {
    * const client = OblodaiClient.fromEnv();
    * ```
    */
-  static fromEnv(overrides: Partial<Omit<OblodaiConfig, 'publicId' | 'secret'>> = {}): OblodaiClient {
+  static fromEnv(
+    overrides: Partial<Omit<OblodaiConfig, "publicId" | "secret">> = {},
+  ): OblodaiClient {
     const env: Record<string, string | undefined> =
-      typeof process !== 'undefined' && process.env ? process.env : {};
+      typeof process !== "undefined" && process.env ? process.env : {};
     const publicId = env.OBLODAI_PUBLIC_ID;
     const secret = env.OBLODAI_SECRET;
-    if (!publicId) throw new Error('oblodai: переменная окружения OBLODAI_PUBLIC_ID не задана');
-    if (!secret) throw new Error('oblodai: переменная окружения OBLODAI_SECRET не задана');
+    if (!publicId) throw new Error("oblodai: переменная окружения OBLODAI_PUBLIC_ID не задана");
+    if (!secret) throw new Error("oblodai: переменная окружения OBLODAI_SECRET не задана");
     return new OblodaiClient({
       publicId,
       secret,

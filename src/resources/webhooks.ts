@@ -1,5 +1,5 @@
-import { BaseResource } from './base.js';
-import type { WebhookRegistration, Delivery } from '../models.js';
+import { BaseResource } from "./base.js";
+import type { WebhookRegistration, Delivery } from "../models.js";
 
 /**
  * Управление вебхуками. Проверка ВХОДЯЩИХ вебхуков — отдельные функции verifyWebhook /
@@ -29,7 +29,7 @@ export class Webhooks extends BaseResource {
    * Технически: ответ приходит БЕЗ конверта `state`/`result`.
    */
   register(url: string): Promise<WebhookRegistration> {
-    return this.http.request<WebhookRegistration>('/v1/webhooks', { url });
+    return this.http.request<WebhookRegistration>("/v1/webhooks", { url });
   }
 
   /**
@@ -39,7 +39,7 @@ export class Webhooks extends BaseResource {
    * конверт разворачивается, как в `sandbox.listWebhooks()` и `payoutLinks.list()`.
    */
   async deliveries(): Promise<Delivery[]> {
-    const res = await this.http.request<{ deliveries: Delivery[] }>('/v1/webhooks/deliveries', {});
+    const res = await this.http.request<{ deliveries: Delivery[] }>("/v1/webhooks/deliveries", {});
     return res.deliveries ?? [];
   }
 
@@ -52,7 +52,7 @@ export class Webhooks extends BaseResource {
     uuid?: string;
     order_id?: string;
   }): Promise<{ result: boolean; status_code: number }> {
-    return this.http.request('/v1/test-webhook/payment', params);
+    return this.http.request("/v1/test-webhook/payment", params);
   }
 
   /** Пробный вебхук кошелька. `POST /v1/test-webhook/wallet` */
@@ -64,7 +64,7 @@ export class Webhooks extends BaseResource {
     uuid?: string;
     order_id?: string;
   }): Promise<{ result: boolean; status_code: number }> {
-    return this.http.request('/v1/test-webhook/wallet', params);
+    return this.http.request("/v1/test-webhook/wallet", params);
   }
 
   /** Пробный вебхук выплаты. `POST /v1/test-webhook/payout` */
@@ -76,6 +76,6 @@ export class Webhooks extends BaseResource {
     uuid?: string;
     order_id?: string;
   }): Promise<{ result: boolean; status_code: number }> {
-    return this.http.request('/v1/test-webhook/payout', params);
+    return this.http.request("/v1/test-webhook/payout", params);
   }
 }

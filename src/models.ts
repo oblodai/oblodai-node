@@ -3,7 +3,7 @@
  *
  * Суммы — строки в единицах валюты. Поля, помеченные "minor", приходят в минимальных единицах.
  */
-import type { PaymentStatus, PayoutStatus, Paginate } from './types.js';
+import type { PaymentStatus, PayoutStatus, Paginate } from "./types.js";
 
 // ─────────────────────────────── Платежи ───────────────────────────────
 
@@ -49,7 +49,7 @@ export interface Payment {
   /** С v1.1.0: возвраты по платежу. */
   refunds?: PaymentRefundEntry[];
   /** С v1.1.0: агрегированный статус возвратов. */
-  refund_status?: 'none' | 'partial' | 'full';
+  refund_status?: "none" | "partial" | "full";
 }
 
 /** Запись возврата в `Payment.refunds` (v1.1.0). */
@@ -79,7 +79,7 @@ export interface CreatePaymentParams {
   url_success?: string;
   additional_data?: string;
   payer_email?: string;
-  theme?: 'dark' | 'light';
+  theme?: "dark" | "light";
   is_payment_multiple?: boolean;
   is_refresh?: boolean;
   /**
@@ -102,7 +102,9 @@ export interface HistoryParams {
 }
 
 export interface PaymentList {
-  items: Array<Partial<Payment> & Pick<Payment, 'uuid' | 'order_id' | 'amount' | 'payment_status' | 'is_final'>>;
+  items: Array<
+    Partial<Payment> & Pick<Payment, "uuid" | "order_id" | "amount" | "payment_status" | "is_final">
+  >;
   paginate: Paginate;
 }
 
@@ -200,7 +202,7 @@ export interface CreatePayoutParams {
   memo?: string;
   url_callback?: string;
   from_currency?: string;
-  source?: 'api' | 'manual';
+  source?: "api" | "manual";
   /**
    * Свой ключ идемпотентности (v1.1.0). Уходит HTTP-заголовком `Idempotency-Key`, НЕ в тело.
    * Если не задан, SDK генерирует UUID один раз на вызов (стабилен между внутренними повторами).
@@ -263,7 +265,7 @@ export interface ExchangeRate {
 export interface CurrencyNetwork {
   network: string;
   /** `native` (монета сети) или `token`. */
-  kind: 'native' | 'token';
+  kind: "native" | "token";
   /** Адрес контракта токена (только для `token`). */
   contract?: string;
   min_confirmations: number;
@@ -287,7 +289,7 @@ export interface Currency {
  * generic-ом в {@link constructWebhookEvent}.
  */
 export interface WebhookEvent {
-  type: 'payment' | 'wallet' | 'payout';
+  type: "payment" | "wallet" | "payout";
   uuid: string;
   order_id: string;
   /** Для платежа/кошелька — `payment_status`; для выплаты — укрупнённый статус (`paid`/`process`/…). */
@@ -329,7 +331,7 @@ export interface Delivery {
   id: string;
   url: string;
   event_type: string;
-  status: 'pending' | 'delivered' | 'dead';
+  status: "pending" | "delivered" | "dead";
   attempts: number;
   last_error: string;
   created_at: string;
@@ -352,7 +354,7 @@ export interface AutoWithdrawRule {
 // ─────────────────────────────── Батчи (v1.1.0) ───────────────────────────────
 
 /** Поведение батча при ошибке элемента: продолжать (по умолчанию) или остановиться на первой. */
-export type BatchOnError = 'continue' | 'stop';
+export type BatchOnError = "continue" | "stop";
 
 /** Опции создающих batch-методов. */
 export interface BatchOptions {
@@ -370,7 +372,7 @@ export interface BatchSubmitResult {
   status: BatchStatus;
 }
 
-export type BatchStatus = 'pending' | 'processing' | 'completed';
+export type BatchStatus = "pending" | "processing" | "completed";
 
 /** Элемент возврата в `payments.refundBatch`. `reference` и `uuid`/`order_id` инвойса обязательны. */
 export interface RefundBatchItem {
@@ -411,7 +413,7 @@ export interface BatchInfo {
 // ─────────────────────────── Платёжные ссылки (v1.1.0) ───────────────────────────
 
 /** Режим суммы платёжной ссылки: фиксированная, свободная или диапазон. */
-export type PaymentLinkAmountMode = 'fixed' | 'open' | 'range';
+export type PaymentLinkAmountMode = "fixed" | "open" | "range";
 
 /** Параметры создания платёжной ссылки (`POST /v1/payment/link`). */
 export interface CreatePaymentLinkParams {
@@ -540,7 +542,7 @@ export interface ResolveParams {
   uuid?: string;
   order_id?: string;
   /** `accept` — оставить частичную оплату (глушит авто-возврат); `refund` — вернуть плательщику. */
-  action: 'accept' | 'refund';
+  action: "accept" | "refund";
   /** Только refund: адрес возврата; по умолчанию `payer_address` инвойса (для UTXO обязателен). */
   address?: string;
   /** Только refund: сеть; по умолчанию сеть инвойса. */
@@ -555,7 +557,7 @@ export interface ResolveParams {
 export interface ResolveResult {
   payment_uuid: string;
   order_id: string;
-  resolution: 'accepted' | 'refunded';
+  resolution: "accepted" | "refunded";
   currency: string;
   /** accept: сколько оставлено мерчанту. */
   amount_kept?: string;
@@ -581,7 +583,7 @@ export interface ResolveResult {
  * - `expired` — срок вышел без claim, резерв возвращён (терминальный);
  * - `cancelled` — отменена мерчантом до claim, резерв возвращён (терминальный).
  */
-export type PayoutLinkStatus = 'funded' | 'claiming' | 'claimed' | 'expired' | 'cancelled';
+export type PayoutLinkStatus = "funded" | "claiming" | "claimed" | "expired" | "cancelled";
 
 /** Параметры создания payout-ссылки (`POST /v1/payout/link`). */
 export interface CreatePayoutLinkParams {
@@ -684,7 +686,7 @@ export interface PayoutLinkClaimInfo {
 
 /** Результат успешного claim (`POST /v1/claim/{token}`). */
 export interface PayoutLinkClaimResult {
-  status: 'claimed';
+  status: "claimed";
   payout_id: string;
   amount: string;
   currency: string;
@@ -810,8 +812,10 @@ export interface TransferToUserResult {
  * `POST /v1/pay/{id}/select`) — {@link Payment} без мерчант-приватных полей
  * (`additional_data`, `payer_email`, `payer_address`).
  */
-export interface PublicPayment
-  extends Omit<Payment, 'payment_status' | 'additional_data' | 'payer_email' | 'payer_address'> {
+export interface PublicPayment extends Omit<
+  Payment,
+  "payment_status" | "additional_data" | "payer_email" | "payer_address"
+> {
   /**
    * Тот же словарь, что у `Payment.payment_status`. У валюто-агностичного счёта до выбора
    * это `'select'` — адрес не выделен, курс не зафиксирован (см. {@link PaymentStatus}).

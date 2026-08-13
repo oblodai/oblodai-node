@@ -1,4 +1,4 @@
-import { BaseResource } from './base.js';
+import { BaseResource } from "./base.js";
 import type {
   CreatePaymentLinkParams,
   PaymentLinkCreated,
@@ -6,7 +6,7 @@ import type {
   PaymentLinkInfo,
   LinkCheckoutParams,
   Payment,
-} from '../models.js';
+} from "../models.js";
 
 /**
  * Платёжные ссылки (v1.1.0): переиспользуемая ссылка, по которой платят многие —
@@ -23,23 +23,23 @@ export class Links extends BaseResource {
    * `expires_in` — в СЕКУНДАХ; 0/отсутствие = бессрочная. Ответ: `{ link_id, url }`.
    */
   create(params: CreatePaymentLinkParams): Promise<PaymentLinkCreated> {
-    return this.http.request<PaymentLinkCreated>('/v1/payment/link', params);
+    return this.http.request<PaymentLinkCreated>("/v1/payment/link", params);
   }
 
   /** Список ссылок мерчанта. `POST /v1/payment/link/list` */
   async list(params: { limit?: number; offset?: number } = {}): Promise<PaymentLink[]> {
-    const res = await this.http.request<{ items: PaymentLink[] }>('/v1/payment/link/list', params);
+    const res = await this.http.request<{ items: PaymentLink[] }>("/v1/payment/link/list", params);
     return res.items;
   }
 
   /** Ссылка + платежи по ней. `POST /v1/payment/link/info` */
   info(linkId: string): Promise<PaymentLinkInfo> {
-    return this.http.request<PaymentLinkInfo>('/v1/payment/link/info', { link_id: linkId });
+    return this.http.request<PaymentLinkInfo>("/v1/payment/link/info", { link_id: linkId });
   }
 
   /** Включить/выключить ссылку. `POST /v1/payment/link/toggle` */
   toggle(linkId: string, active: boolean): Promise<{ link_id: string; active: boolean }> {
-    return this.http.request('/v1/payment/link/toggle', { link_id: linkId, active });
+    return this.http.request("/v1/payment/link/toggle", { link_id: linkId, active });
   }
 
   /**
@@ -50,7 +50,7 @@ export class Links extends BaseResource {
     return this.http.requestPublic<PaymentLink>(
       `/v1/link/${encodeURIComponent(linkId)}`,
       {},
-      'GET',
+      "GET",
     );
   }
 

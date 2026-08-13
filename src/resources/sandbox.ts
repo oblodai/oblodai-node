@@ -1,4 +1,4 @@
-import { BaseResource } from './base.js';
+import { BaseResource } from "./base.js";
 import type {
   SandboxDepositParams,
   SandboxDeposit,
@@ -7,7 +7,7 @@ import type {
   SandboxResetResult,
   SandboxDelivery,
   SandboxReplayResult,
-} from '../models.js';
+} from "../models.js";
 
 /**
  * `true`, если ключ тестовый: `public_id` тестового ключа начинается с `test_`
@@ -15,7 +15,7 @@ import type {
  * как с боевым — меняется только ключ; тестовые же (`/v1/sandbox/*`) доступны ТОЛЬКО ему.
  */
 export function isTestKey(publicId: string): boolean {
-  return publicId.startsWith('test_');
+  return publicId.startsWith("test_");
 }
 
 /**
@@ -39,7 +39,7 @@ export class Sandbox extends BaseResource {
    * по возрасту (в песочнице по умолчанию ~10 минут) и к подтверждениям инвойса не относится.
    */
   simulateDeposit(params: SandboxDepositParams): Promise<SandboxDeposit> {
-    return this.http.request<SandboxDeposit>('/v1/sandbox/deposit', params);
+    return this.http.request<SandboxDeposit>("/v1/sandbox/deposit", params);
   }
 
   /**
@@ -47,7 +47,7 @@ export class Sandbox extends BaseResource {
    * Максимум 1000000 за вызов; `idempotency_key` (в теле) защищает от дублей при повторе.
    */
   faucet(params: SandboxFaucetParams): Promise<SandboxFaucetResult> {
-    return this.http.request<SandboxFaucetResult>('/v1/sandbox/faucet', params);
+    return this.http.request<SandboxFaucetResult>("/v1/sandbox/faucet", params);
   }
 
   /**
@@ -65,7 +65,7 @@ export class Sandbox extends BaseResource {
    * история ваших экспериментов остаётся читаемой.
    */
   reset(): Promise<SandboxResetResult> {
-    return this.http.request<SandboxResetResult>('/v1/sandbox/reset', {});
+    return this.http.request<SandboxResetResult>("/v1/sandbox/reset", {});
   }
 
   /**
@@ -73,13 +73,15 @@ export class Sandbox extends BaseResource {
    * Подписанный GET без тела (подписывается пустая строка).
    */
   async listWebhooks(): Promise<SandboxDelivery[]> {
-    const res = await this.http.requestGet<{ deliveries: SandboxDelivery[] }>('/v1/sandbox/webhooks');
+    const res = await this.http.requestGet<{ deliveries: SandboxDelivery[] }>(
+      "/v1/sandbox/webhooks",
+    );
     return res.deliveries ?? [];
   }
 
   /** Перепоставить одну доставку в очередь. `POST /v1/sandbox/webhooks/replay` */
   replayWebhook(deliveryId: string): Promise<SandboxReplayResult> {
-    return this.http.request<SandboxReplayResult>('/v1/sandbox/webhooks/replay', {
+    return this.http.request<SandboxReplayResult>("/v1/sandbox/webhooks/replay", {
       delivery_id: deliveryId,
     });
   }

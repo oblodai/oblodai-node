@@ -1,5 +1,5 @@
-import { BaseResource } from './base.js';
-import { idempotencyKeyFor } from './idempotency.js';
+import { BaseResource } from "./base.js";
+import { idempotencyKeyFor } from "./idempotency.js";
 import type {
   Payout,
   CreatePayoutParams,
@@ -12,8 +12,8 @@ import type {
   RefundParams,
   BatchOptions,
   BatchSubmitResult,
-} from '../models.js';
-import type { Paginate } from '../types.js';
+} from "../models.js";
+import type { Paginate } from "../types.js";
 
 /** Методы выплат и возвратов. */
 export class Payouts extends BaseResource {
@@ -26,7 +26,7 @@ export class Payouts extends BaseResource {
    */
   create(params: CreatePayoutParams): Promise<Payout> {
     const { idempotency_key, ...body } = params;
-    return this.http.request<Payout>('/v1/payout', body, {
+    return this.http.request<Payout>("/v1/payout", body, {
       idempotencyKey: idempotencyKeyFor(idempotency_key),
     });
   }
@@ -43,7 +43,7 @@ export class Payouts extends BaseResource {
   ): Promise<{ items: MassPayoutItem[] }> {
     const body: Record<string, unknown> = { payouts };
     if (source !== undefined) body.source = source;
-    return this.http.request('/v1/payout/mass', body, {
+    return this.http.request("/v1/payout/mass", body, {
       idempotencyKey: idempotencyKeyFor(opts.idempotency_key),
     });
   }
@@ -58,29 +58,29 @@ export class Payouts extends BaseResource {
   createBatch(payouts: CreatePayoutParams[], opts: BatchOptions = {}): Promise<BatchSubmitResult> {
     const body: Record<string, unknown> = { payouts };
     if (opts.onError) body.on_error = opts.onError;
-    return this.http.request<BatchSubmitResult>('/v1/payout/batch', body, {
+    return this.http.request<BatchSubmitResult>("/v1/payout/batch", body, {
       idempotencyKey: idempotencyKeyFor(opts.idempotency_key),
     });
   }
 
   /** Информация о выплате по uuid или order_id. `POST /v1/payout/info` */
   info(lookup: Lookup): Promise<Payout> {
-    return this.http.request<Payout>('/v1/payout/info', lookup);
+    return this.http.request<Payout>("/v1/payout/info", lookup);
   }
 
   /** История выплат. `POST /v1/payout/history` */
   history(params: HistoryParams = {}): Promise<{ items: Partial<Payout>[]; paginate: Paginate }> {
-    return this.http.request('/v1/payout/history', params);
+    return this.http.request("/v1/payout/history", params);
   }
 
   /** Доступные методы выплат. `POST /v1/payout/services` */
   services(): Promise<ServiceMethod[]> {
-    return this.http.request<ServiceMethod[]>('/v1/payout/services', {});
+    return this.http.request<ServiceMethod[]>("/v1/payout/services", {});
   }
 
   /** Предрасчёт комиссии и сумм без создания. `POST /v1/payout/calculate` */
   calculate(params: CalculatePayoutParams): Promise<PayoutCalculation> {
-    return this.http.request<PayoutCalculation>('/v1/payout/calculate', params);
+    return this.http.request<PayoutCalculation>("/v1/payout/calculate", params);
   }
 
   /**
@@ -92,7 +92,7 @@ export class Payouts extends BaseResource {
    * этот 409 как «уже одобрено» и уточняйте фактический статус через {@link info}.
    */
   approve(uuid: string): Promise<unknown> {
-    return this.http.request('/v1/payout/approve', { uuid });
+    return this.http.request("/v1/payout/approve", { uuid });
   }
 
   /**
@@ -102,7 +102,7 @@ export class Payouts extends BaseResource {
    */
   refund(params: RefundParams): Promise<unknown> {
     const { idempotency_key, ...body } = params;
-    return this.http.request('/v1/payment/refund', body, {
+    return this.http.request("/v1/payment/refund", body, {
       idempotencyKey: idempotencyKeyFor(idempotency_key),
     });
   }
@@ -111,21 +111,23 @@ export class Payouts extends BaseResource {
 
   /** Кто платит сетевую комиссию выплаты — чтение. `POST /v1/payout/fee-config/get` */
   getFeeConfig(): Promise<{ fee_on_recipient: boolean; configured: boolean }> {
-    return this.http.request('/v1/payout/fee-config/get', {});
+    return this.http.request("/v1/payout/fee-config/get", {});
   }
 
   /** Кто платит сетевую комиссию выплаты — запись. `POST /v1/payout/fee-config/set` */
   setFeeConfig(feeOnRecipient: boolean): Promise<{ fee_on_recipient: boolean }> {
-    return this.http.request('/v1/payout/fee-config/set', { fee_on_recipient: feeOnRecipient });
+    return this.http.request("/v1/payout/fee-config/set", { fee_on_recipient: feeOnRecipient });
   }
 
   /** Кто несёт нашу комиссию при возврате — чтение. `POST /v1/payout/refund-fee-config/get` */
   getRefundFeeConfig(): Promise<{ fee_on_customer: boolean; configured: boolean }> {
-    return this.http.request('/v1/payout/refund-fee-config/get', {});
+    return this.http.request("/v1/payout/refund-fee-config/get", {});
   }
 
   /** Кто несёт нашу комиссию при возврате — запись. `POST /v1/payout/refund-fee-config/set` */
   setRefundFeeConfig(feeOnCustomer: boolean): Promise<{ fee_on_customer: boolean }> {
-    return this.http.request('/v1/payout/refund-fee-config/set', { fee_on_customer: feeOnCustomer });
+    return this.http.request("/v1/payout/refund-fee-config/set", {
+      fee_on_customer: feeOnCustomer,
+    });
   }
 }

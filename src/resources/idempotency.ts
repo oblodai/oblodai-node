@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID } from "node:crypto";
 
 /**
  * Ключ идемпотентности для создающего вызова: явный ключ пользователя (если это непустая
@@ -12,5 +12,5 @@ import { randomUUID } from 'node:crypto';
  * `order_id` уходит на бэкенд ровно так, как его передал вызывающий.
  */
 export function idempotencyKeyFor(explicit?: string | null): string {
-  return typeof explicit === 'string' && explicit.trim() !== '' ? explicit : randomUUID();
+  return typeof explicit === "string" && explicit.trim() !== "" ? explicit : randomUUID();
 }

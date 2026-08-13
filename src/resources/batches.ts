@@ -1,5 +1,5 @@
-import { BaseResource } from './base.js';
-import type { BatchInfo } from '../models.js';
+import { BaseResource } from "./base.js";
+import type { BatchInfo } from "../models.js";
 
 /**
  * Статус массовых операций (v1.1.0). Постановка батча — методами `payments.createBatch`,
@@ -12,6 +12,6 @@ export class Batches extends BaseResource {
    * соответствующего единичного эндпоинта.
    */
   info(batchId: string, params: { limit?: number; offset?: number } = {}): Promise<BatchInfo> {
-    return this.http.request<BatchInfo>('/v1/batch/info', { batch_id: batchId, ...params });
+    return this.http.request<BatchInfo>("/v1/batch/info", { batch_id: batchId, ...params });
   }
 }

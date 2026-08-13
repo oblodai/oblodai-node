@@ -5,7 +5,7 @@
  */
 
 // Клиент
-export { OblodaiClient } from './client.js';
+export { OblodaiClient } from "./client.js";
 
 // Вебхуки: проверка входящих
 export {
@@ -13,13 +13,13 @@ export {
   constructWebhookEvent,
   type WebhookHeaders,
   type VerifyWebhookOptions,
-} from './webhooks.js';
+} from "./webhooks.js";
 
 // Низкоуровневая подпись (на случай кастомного транспорта)
-export { signRequest, type SignedRequest } from './signing.js';
+export { signRequest, type SignedRequest } from "./signing.js";
 
 // Песочница: проверка «тестовости» ключа (префикс public_id `test_`)
-export { isTestKey } from './resources/sandbox.js';
+export { isTestKey } from "./resources/sandbox.js";
 
 // Ошибки
 export {
@@ -28,7 +28,7 @@ export {
   OblodaiConnectionError,
   OblodaiTimeoutError,
   OblodaiSignatureError,
-} from './errors.js';
+} from "./errors.js";
 
 // Типы конфигурации и общие
 export type {
@@ -41,7 +41,7 @@ export type {
   Paginate,
   Envelope,
   ErrorEnvelope,
-} from './types.js';
+} from "./types.js";
 
 // Модели объектов и параметры
 export type {
@@ -119,4 +119,4 @@ export type {
   TransferToUserResult,
   PublicPayment,
   PaySelectParams,
-} from './models.js';
+} from "./models.js";

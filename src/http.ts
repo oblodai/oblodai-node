@@ -1,13 +1,15 @@
-import { signRequest } from './signing.js';
-import {
-  OblodaiApiError,
-  OblodaiConnectionError,
-  OblodaiTimeoutError,
-} from './errors.js';
-import type { Envelope, ErrorEnvelope, OblodaiConfig, OblodaiLogger, RetryOptions } from './types.js';
-import { resolveLogger } from './logger.js';
+import { signRequest } from "./signing.js";
+import { OblodaiApiError, OblodaiConnectionError, OblodaiTimeoutError } from "./errors.js";
+import type {
+  Envelope,
+  ErrorEnvelope,
+  OblodaiConfig,
+  OblodaiLogger,
+  RetryOptions,
+} from "./types.js";
+import { resolveLogger } from "./logger.js";
 
-const DEFAULT_BASE_URL = 'https://api.oblodai.com';
+const DEFAULT_BASE_URL = "https://api.oblodai.com";
 
 /**
  * `true`, если хост — петля (loopback): по нему ходит локальный стенд, и там открытый HTTP
@@ -18,9 +20,9 @@ const DEFAULT_BASE_URL = 'https://api.oblodai.com';
  * (`[::1]`), поэтому скобки снимаем.
  */
 function isLoopbackHost(hostname: string): boolean {
-  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  if (host === 'localhost' || host.endsWith('.localhost')) return true;
-  if (host === '::1' || host === '0:0:0:0:0:0:0:1') return true;
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  if (host === "::1" || host === "0:0:0:0:0:0:0:1") return true;
   return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
 }
 
@@ -42,8 +44,8 @@ function assertSecureBaseUrl(baseUrl: string): void {
         `https://api.oblodai.com`,
     );
   }
-  if (parsed.protocol === 'https:') return;
-  if (parsed.protocol === 'http:' && isLoopbackHost(parsed.hostname)) return;
+  if (parsed.protocol === "https:") return;
+  if (parsed.protocol === "http:" && isLoopbackHost(parsed.hostname)) return;
   throw new Error(
     `oblodai: baseUrl должен использовать https:// — получено «${baseUrl}». ` +
       `По открытому каналу подпись запроса (X-Signature) и public_id видны посредникам. ` +
@@ -97,21 +99,20 @@ export class HttpClient {
   private readonly log: OblodaiLogger;
 
   constructor(config: OblodaiConfig) {
-    if (!config.publicId) throw new Error('OblodaiConfig.publicId обязателен');
-    if (!config.secret) throw new Error('OblodaiConfig.secret обязателен');
+    if (!config.publicId) throw new Error("OblodaiConfig.publicId обязателен");
+    if (!config.secret) throw new Error("OblodaiConfig.secret обязателен");
 
     this.publicId = config.publicId;
     this.secret = config.secret;
-    this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     assertSecureBaseUrl(this.baseUrl);
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.retry =
-      config.retry === false ? null : { ...DEFAULT_RETRY, ...(config.retry ?? {}) };
+    this.retry = config.retry === false ? null : { ...DEFAULT_RETRY, ...(config.retry ?? {}) };
 
     const f = config.fetch ?? globalThis.fetch;
     if (!f) {
       throw new Error(
-        'Глобальный fetch недоступен. Используйте Node.js 18+ или передайте config.fetch.',
+        "Глобальный fetch недоступен. Используйте Node.js 18+ или передайте config.fetch.",
       );
     }
     this.fetchImpl = f;
@@ -123,7 +124,7 @@ export class HttpClient {
    * конверта. Публичные (неподписанные) вызовы используют {@link requestPublic}.
    */
   async request<T>(path: string, payload: unknown = {}, opts: RequestOpts = {}): Promise<T> {
-    return this.execute<T>(path, payload, true, 'POST', opts);
+    return this.execute<T>(path, payload, true, "POST", opts);
   }
 
   /**
@@ -132,14 +133,14 @@ export class HttpClient {
    * `{timestamp}\nGET\n{path}\n` (тело — пустая строка).
    */
   async requestGet<T>(path: string): Promise<T> {
-    return this.execute<T>(path, undefined, true, 'GET');
+    return this.execute<T>(path, undefined, true, "GET");
   }
 
   /** Выполняет запрос БЕЗ подписи (для публичных эндпоинтов). */
   async requestPublic<T>(
     path: string,
     payload: unknown = {},
-    method: 'GET' | 'POST' = 'POST',
+    method: "GET" | "POST" = "POST",
   ): Promise<T> {
     return this.execute<T>(path, payload, false, method);
   }
@@ -148,14 +149,14 @@ export class HttpClient {
     path: string,
     payload: unknown,
     signed: boolean,
-    method: 'GET' | 'POST' = 'POST',
+    method: "GET" | "POST" = "POST",
     opts: RequestOpts = {},
   ): Promise<T> {
     const attempts = this.retry?.maxAttempts ?? 1;
     let lastErr: unknown;
 
     for (let attempt = 1; attempt <= attempts; attempt++) {
-      this.log('debug', 'oblodai: request', { method, path, attempt, attempts });
+      this.log("debug", "oblodai: request", { method, path, attempt, attempts });
       try {
         return await this.once<T>(path, payload, signed, method, opts);
       } catch (err) {
@@ -164,7 +165,7 @@ export class HttpClient {
         if (!retriable || attempt === attempts) {
           const status = err instanceof OblodaiApiError ? err.status : undefined;
           const code = err instanceof OblodaiApiError ? err.code : undefined;
-          this.log('warn', 'oblodai: request failed', { status, code, method, path });
+          this.log("warn", "oblodai: request failed", { status, code, method, path });
           throw err;
         }
         // Уважаем Retry-After от сервера (напр. 429), иначе — собственный backoff с джиттером.
@@ -175,7 +176,7 @@ export class HttpClient {
           err instanceof OblodaiApiError && err.retryAfterMs != null ? err.retryAfterMs : undefined;
         const delay =
           suggested != null ? Math.min(suggested, MAX_RETRY_AFTER_MS) : this.backoffDelay(attempt);
-        this.log('warn', 'oblodai: retrying', {
+        this.log("warn", "oblodai: retrying", {
           method,
           path,
           delayMs: delay,
@@ -193,23 +194,23 @@ export class HttpClient {
     path: string,
     payload: unknown,
     signed: boolean,
-    method: 'GET' | 'POST',
+    method: "GET" | "POST",
     opts: RequestOpts = {},
   ): Promise<T> {
     const url = this.baseUrl + path;
-    const body = method === 'GET' ? undefined : JSON.stringify(payload ?? {});
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const body = method === "GET" ? undefined : JSON.stringify(payload ?? {});
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
 
     if (signed) {
       // Для GET тело отсутствует — подписывается пустая строка (та же каноническая форма).
-      const s = signRequest(this.secret, method, path, body ?? '');
-      headers['X-Public-Id'] = this.publicId;
-      headers['X-Timestamp'] = s.timestamp;
-      headers['X-Signature'] = s.signature;
+      const s = signRequest(this.secret, method, path, body ?? "");
+      headers["X-Public-Id"] = this.publicId;
+      headers["X-Timestamp"] = s.timestamp;
+      headers["X-Signature"] = s.signature;
     }
     // Заголовок идемпотентности одинаков на всех попытках (генерируется до цикла ретраев)
     // и не участвует в подписи.
-    if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
+    if (opts.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
@@ -224,7 +225,7 @@ export class HttpClient {
         signal: controller.signal,
       });
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
+      if (err instanceof Error && err.name === "AbortError") {
         throw new OblodaiTimeoutError(`Таймаут запроса ${path} (${this.timeoutMs}мс)`, err);
       }
       throw new OblodaiConnectionError(`Сетевая ошибка при запросе ${path}`, err);
@@ -232,7 +233,7 @@ export class HttpClient {
       clearTimeout(timer);
     }
 
-    this.log('debug', 'oblodai: response', {
+    this.log("debug", "oblodai: response", {
       status: res.status,
       method,
       path,
@@ -245,7 +246,7 @@ export class HttpClient {
       parsed = text ? JSON.parse(text) : {};
     } catch {
       throw new OblodaiApiError(
-        'response.not_json',
+        "response.not_json",
         `Ответ не является JSON (HTTP ${res.status})`,
         res.status,
         text,
@@ -253,11 +254,11 @@ export class HttpClient {
     }
 
     // Ошибочный конверт
-    if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+    if (parsed && typeof parsed === "object" && "error" in parsed) {
       const e = (parsed as ErrorEnvelope).error;
       throw new OblodaiApiError(
-        e?.code ?? 'unknown',
-        e?.message ?? 'Неизвестная ошибка',
+        e?.code ?? "unknown",
+        e?.message ?? "Неизвестная ошибка",
         res.status,
         parsed,
       );
@@ -267,7 +268,9 @@ export class HttpClient {
     // без ключа `error`) — вытаскиваем message из тела и учитываем заголовок Retry-After.
     if (!res.ok) {
       const bodyMsg =
-        parsed && typeof parsed === 'object' && typeof (parsed as { message?: unknown }).message === 'string'
+        parsed &&
+        typeof parsed === "object" &&
+        typeof (parsed as { message?: unknown }).message === "string"
           ? (parsed as { message: string }).message
           : `HTTP ${res.status}`;
       throw new OblodaiApiError(
@@ -275,12 +278,12 @@ export class HttpClient {
         bodyMsg,
         res.status,
         parsed,
-        parseRetryAfterMs(res.headers.get('Retry-After')),
+        parseRetryAfterMs(res.headers.get("Retry-After")),
       );
     }
 
     // Успешный конверт { state: 0, result: ... }
-    if (parsed && typeof parsed === 'object' && 'result' in parsed) {
+    if (parsed && typeof parsed === "object" && "result" in parsed) {
       return (parsed as Envelope<T>).result;
     }
 
@@ -291,10 +294,10 @@ export class HttpClient {
   /** Человекочитаемая причина повтора для логов (без секретов и тел). */
   private retryReason(err: unknown): string {
     if (err instanceof OblodaiApiError) {
-      if (err.status === 429) return '429 rate limit';
-      if (err.status >= 500) return '5xx';
+      if (err.status === 429) return "429 rate limit";
+      if (err.status >= 500) return "5xx";
     }
-    return 'network';
+    return "network";
   }
 
   /**

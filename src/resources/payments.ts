@@ -1,5 +1,5 @@
-import { BaseResource } from './base.js';
-import { idempotencyKeyFor } from './idempotency.js';
+import { BaseResource } from "./base.js";
+import { idempotencyKeyFor } from "./idempotency.js";
 import type {
   Payment,
   CreatePaymentParams,
@@ -18,7 +18,7 @@ import type {
   ResolveResult,
   PublicPayment,
   PaySelectParams,
-} from '../models.js';
+} from "../models.js";
 
 /** Методы приёма платежей. */
 export class Payments extends BaseResource {
@@ -37,7 +37,7 @@ export class Payments extends BaseResource {
    */
   create(params: CreatePaymentParams): Promise<Payment> {
     const { idempotency_key, ...body } = params;
-    return this.http.request<Payment>('/v1/payment', body, {
+    return this.http.request<Payment>("/v1/payment", body, {
       idempotencyKey: idempotencyKeyFor(idempotency_key),
     });
   }
@@ -51,10 +51,13 @@ export class Payments extends BaseResource {
    * батча → `batch.duplicate_order_id`. Идемпотентность вызова — заголовком `Idempotency-Key`
    * (генерируется SDK или `opts.idempotency_key`).
    */
-  createBatch(payments: CreatePaymentParams[], opts: BatchOptions = {}): Promise<BatchSubmitResult> {
+  createBatch(
+    payments: CreatePaymentParams[],
+    opts: BatchOptions = {},
+  ): Promise<BatchSubmitResult> {
     const body: Record<string, unknown> = { payments };
     if (opts.onError) body.on_error = opts.onError;
-    return this.http.request<BatchSubmitResult>('/v1/payment/batch', body, {
+    return this.http.request<BatchSubmitResult>("/v1/payment/batch", body, {
       idempotencyKey: idempotencyKeyFor(opts.idempotency_key),
     });
   }
@@ -68,7 +71,7 @@ export class Payments extends BaseResource {
   refundBatch(refunds: RefundBatchItem[], opts: BatchOptions = {}): Promise<BatchSubmitResult> {
     const body: Record<string, unknown> = { refunds };
     if (opts.onError) body.on_error = opts.onError;
-    return this.http.request<BatchSubmitResult>('/v1/refund/batch', body, {
+    return this.http.request<BatchSubmitResult>("/v1/refund/batch", body, {
       idempotencyKey: idempotencyKeyFor(opts.idempotency_key),
     });
   }
@@ -81,7 +84,7 @@ export class Payments extends BaseResource {
    * (эндпоинт им не обёрнут) — повтор вызова отправит письмо ещё раз.
    */
   sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
-    return this.http.request<SendEmailResult>('/v1/payment/send-email', params);
+    return this.http.request<SendEmailResult>("/v1/payment/send-email", params);
   }
 
   /**
@@ -101,34 +104,34 @@ export class Payments extends BaseResource {
    */
   resolve(params: ResolveParams): Promise<ResolveResult> {
     const { idempotency_key, ...body } = params;
-    return this.http.request<ResolveResult>('/v1/payment/resolve', body, {
+    return this.http.request<ResolveResult>("/v1/payment/resolve", body, {
       idempotencyKey: idempotencyKeyFor(idempotency_key),
     });
   }
 
   /** Информация о счёте по uuid или order_id. `POST /v1/payment/info` */
   info(lookup: Lookup): Promise<Payment> {
-    return this.http.request<Payment>('/v1/payment/info', lookup);
+    return this.http.request<Payment>("/v1/payment/info", lookup);
   }
 
   /** Список платежей мерчанта. `POST /v1/payment/history` */
   history(params: HistoryParams = {}): Promise<PaymentList> {
-    return this.http.request<PaymentList>('/v1/payment/history', params);
+    return this.http.request<PaymentList>("/v1/payment/history", params);
   }
 
   /** Доступные методы приёма. `POST /v1/payment/services` */
   services(): Promise<ServiceMethod[]> {
-    return this.http.request<ServiceMethod[]>('/v1/payment/services', {});
+    return this.http.request<ServiceMethod[]>("/v1/payment/services", {});
   }
 
   /** QR-код депозит-адреса счёта (data:-URI). `POST /v1/payment/qr` */
   qr(lookup: Lookup): Promise<{ image: string }> {
-    return this.http.request<{ image: string }>('/v1/payment/qr', lookup);
+    return this.http.request<{ image: string }>("/v1/payment/qr", lookup);
   }
 
   /** Переотправить текущий вебхук платежа. `POST /v1/payment/resend`. Ответ: `{ result: true }`. */
   resend(lookup: Lookup): Promise<{ result: boolean }> {
-    return this.http.request<{ result: boolean }>('/v1/payment/resend', lookup);
+    return this.http.request<{ result: boolean }>("/v1/payment/resend", lookup);
   }
 
   /**
@@ -140,7 +143,7 @@ export class Payments extends BaseResource {
    */
   refund(params: RefundParams): Promise<unknown> {
     const { idempotency_key, ...body } = params;
-    return this.http.request('/v1/payment/refund', body, {
+    return this.http.request("/v1/payment/refund", body, {
       idempotencyKey: idempotencyKeyFor(idempotency_key),
     });
   }
@@ -157,11 +160,7 @@ export class Payments extends BaseResource {
    * методы, из которых плательщик может выбрать (см. {@link publicSelect}).
    */
   publicGet(uuid: string): Promise<PublicPayment> {
-    return this.http.requestPublic<PublicPayment>(
-      `/v1/pay/${encodeURIComponent(uuid)}`,
-      {},
-      'GET',
-    );
+    return this.http.requestPublic<PublicPayment>(`/v1/pay/${encodeURIComponent(uuid)}`, {}, "GET");
   }
 
   /**
@@ -190,17 +189,17 @@ export class Payments extends BaseResource {
 
   /** Список принимаемых валют для агностичных счетов. `POST /v1/payment/accepted/list` */
   listAccepted(): Promise<{ accepted: AcceptedMethod[] }> {
-    return this.http.request('/v1/payment/accepted/list', {});
+    return this.http.request("/v1/payment/accepted/list", {});
   }
 
   /** Заменить набор принимаемых валют. `POST /v1/payment/accepted/set` */
   setAccepted(accepted: AcceptedMethod[]): Promise<{ ok: boolean }> {
-    return this.http.request('/v1/payment/accepted/set', { accepted });
+    return this.http.request("/v1/payment/accepted/set", { accepted });
   }
 
   /** Список правил скидок/наценок. `POST /v1/payment/discount/list` */
   listDiscounts(): Promise<Array<{ currency: string; network: string; discount_percent: number }>> {
-    return this.http.request('/v1/payment/discount/list', {});
+    return this.http.request("/v1/payment/discount/list", {});
   }
 
   /** Задать скидку/наценку. `POST /v1/payment/discount/set` */
@@ -209,26 +208,26 @@ export class Payments extends BaseResource {
     currency?: string;
     network?: string;
   }): Promise<unknown> {
-    return this.http.request('/v1/payment/discount/set', params);
+    return this.http.request("/v1/payment/discount/set", params);
   }
 
   /** Прочитать допуск недоплаты. `POST /v1/payment/accuracy/get` */
   getAccuracy(): Promise<{ enabled: boolean; accuracy_percent: number }> {
-    return this.http.request('/v1/payment/accuracy/get', {});
+    return this.http.request("/v1/payment/accuracy/get", {});
   }
 
   /** Задать допуск недоплаты. `POST /v1/payment/accuracy/set` */
   setAccuracy(params: { enabled: boolean; accuracy_percent?: number }): Promise<unknown> {
-    return this.http.request('/v1/payment/accuracy/set', params);
+    return this.http.request("/v1/payment/accuracy/set", params);
   }
 
   /** Прочитать настройки автовозврата. `POST /v1/payment/autorefund/get` */
   getAutorefund(): Promise<{ overpay: boolean; underpay: boolean; configured: boolean }> {
-    return this.http.request('/v1/payment/autorefund/get', {});
+    return this.http.request("/v1/payment/autorefund/get", {});
   }
 
   /** Задать настройки автовозврата. `POST /v1/payment/autorefund/set` */
   setAutorefund(params: { overpay: boolean; underpay: boolean }): Promise<unknown> {
-    return this.http.request('/v1/payment/autorefund/set', params);
+    return this.http.request("/v1/payment/autorefund/set", params);
   }
 }

@@ -1,5 +1,5 @@
-import { BaseResource } from './base.js';
-import { idempotencyKeyFor } from './idempotency.js';
+import { BaseResource } from "./base.js";
+import { idempotencyKeyFor } from "./idempotency.js";
 import type {
   CreatePayoutLinkParams,
   PayoutLink,
@@ -7,7 +7,7 @@ import type {
   PayoutLinkBatchResult,
   PayoutLinkClaimInfo,
   PayoutLinkClaimResult,
-} from '../models.js';
+} from "../models.js";
 
 /**
  * Payout-ссылки — «крипто-чеки» (v1.1.0): вы резервируете средства в claimable-ссылку,
@@ -61,7 +61,7 @@ export class PayoutLinks extends BaseResource {
    */
   create(params: CreatePayoutLinkParams): Promise<PayoutLinkCreated> {
     const { idempotency_key, ...body } = params;
-    return this.http.request<PayoutLinkCreated>('/v1/payout/link', body, {
+    return this.http.request<PayoutLinkCreated>("/v1/payout/link", body, {
       idempotencyKey: idempotencyKeyFor(idempotency_key),
     });
   }
@@ -89,7 +89,7 @@ export class PayoutLinks extends BaseResource {
   ): Promise<PayoutLinkBatchResult> {
     const body = links.map(({ idempotency_key: _ignored, ...link }) => link);
     return this.http.request<PayoutLinkBatchResult>(
-      '/v1/payout/link/batch',
+      "/v1/payout/link/batch",
       { links: body },
       {
         idempotencyKey: idempotencyKeyFor(opts.idempotency_key),
@@ -99,13 +99,13 @@ export class PayoutLinks extends BaseResource {
 
   /** Список ссылок (created_at DESC; limit вне (0,200] → 50). `POST /v1/payout/link/list` */
   async list(params: { limit?: number; offset?: number } = {}): Promise<PayoutLink[]> {
-    const res = await this.http.request<{ links: PayoutLink[] }>('/v1/payout/link/list', params);
+    const res = await this.http.request<{ links: PayoutLink[] }>("/v1/payout/link/list", params);
     return res.links;
   }
 
   /** Информация о ссылке (после claim содержит `payout_id`, `claim_address`). `POST /v1/payout/link/info` */
   info(linkId: string): Promise<PayoutLink> {
-    return this.http.request<PayoutLink>('/v1/payout/link/info', { link_id: linkId });
+    return this.http.request<PayoutLink>("/v1/payout/link/info", { link_id: linkId });
   }
 
   /**
@@ -114,7 +114,7 @@ export class PayoutLinks extends BaseResource {
    * гонка с claim разрешается в пользу claim (вернётся `status: 'claimed'` + `payout_id`).
    */
   cancel(linkId: string): Promise<PayoutLink> {
-    return this.http.request<PayoutLink>('/v1/payout/link/cancel', { link_id: linkId });
+    return this.http.request<PayoutLink>("/v1/payout/link/cancel", { link_id: linkId });
   }
 
   /**
@@ -125,7 +125,7 @@ export class PayoutLinks extends BaseResource {
     return this.http.requestPublic<PayoutLinkClaimInfo>(
       `/v1/claim/${encodeURIComponent(token)}`,
       {},
-      'GET',
+      "GET",
     );
   }
 
