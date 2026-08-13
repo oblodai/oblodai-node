@@ -25,7 +25,9 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "fmt": "prettier --write .",
+    "fmt:check": "prettier --check ."
   },
   "keywords": [
     "oblodai",
@@ -57,6 +59,7 @@
     "@types/node": "^20.12.0"
   },
   "devDependencies": {
+    "prettier": "^3.9.6",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0",
     "vitest": "^1.6.0"
