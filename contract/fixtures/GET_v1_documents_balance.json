@@ -1,0 +1,15 @@
+{
+ "route": "GET /v1/documents/balance",
+ "status": 404,
+ "response": {
+  "error": {
+   "code": "document.disabled",
+   "message": "documents are not enabled on this deployment",
+   "retryable": false,
+   "request_id": "664c6ad9-5a69-4fdb-87e0-7684af876d5d"
+  }
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

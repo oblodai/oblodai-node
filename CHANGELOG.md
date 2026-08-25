@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.0 — 2026-08-25
+
+Rewrite generated from the gateway's contract snapshot. See MIGRATION-1.3.md.
+
+- Fixed: requests are signed with the five-field recipe over path+query (1.x returned 401 on every call).
+- Fixed: models, statuses, pagination and parameter names match the current API vocabulary.
+- Added: every merchant route (105) — cancel/validate, batches, documents, fee configs, split opt-in, secret rotation, payer-facing checkout and claim endpoints.
+- Added: `PagePromise` (await one page / iterate all), authoritative `retryable`-driven retries, automatic idempotency keys, clock-skew correction, dual key pairs.
+- Added: `@oblodai-npm/sdk/webhooks` entry with rotation-aware `verifyWebhook`, `parseWebhook`, `isStaleEvent`.
+- Added: contract tests against golden bodies and real signed webhook deliveries; `npm run check-drift`; live journey (`npm run test:live`).
+- Changed: zero runtime dependencies; Node ≥ 18.17; ESM + CJS with a `./webhooks` subpath export.
+
 Значимые изменения этого пакета. Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версии — [SemVer](https://semver.org/lang/ru/).
 

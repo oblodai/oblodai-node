@@ -1,81 +1,51 @@
-import { BaseResource } from "./base.js";
-import type { WebhookRegistration, Delivery } from "../models.js";
+import type { RequestBodies } from "../contract/requests.js";
+import type {
+  WebhookDelivery,
+  WebhookEndpoint,
+  WebhookSecretRotated,
+  WebhookTestResult,
+} from "../contract/models/index.js";
+import type { WebhookKind } from "../contract/enums.js";
+import type { PagePromise } from "../core/pagination.js";
+import { Resource, type RequestOptions } from "./base.js";
 
-/**
- * Управление вебхуками. Проверка ВХОДЯЩИХ вебхуков — отдельные функции verifyWebhook /
- * constructWebhookEvent (импортируются из корня пакета), здесь только управление через API.
- */
-export class Webhooks extends BaseResource {
-  /**
-   * Задать URL для вебхуков и получить секрет эндпоинта. `POST /v1/webhooks`
-   *
-   * ⚠ ЭТО UPSERT ЕДИНСТВЕННОГО ЭНДПОИНТА НА ПРОЕКТ, а не «добавить ещё один».
-   * У проекта может быть ровно ОДИН вебхук-эндпоинт (в БД уникальность по `project_id`),
-   * поэтому повторный `register()` с ДРУГИМ URL не создаёт второй эндпоинт, а
-   * ПЕРЕНАПРАВЛЯЕТ доставки: возвращается ТОТ ЖЕ `endpoint_id`, а старый URL молча
-   * перестаёт что-либо получать. Веерная рассылка на несколько URL средствами API
-   * невозможна — разводите события у себя.
-   *
-   * Секрет при смене URL СОХРАНЯЕТСЯ (это не побочный эффект, а требование
-   * корректности: доставки снимают секрет в момент постановки в очередь, и новый секрет
-   * осиротил бы всё уже поставленное в очередь). На ПЕРВОЙ регистрации секрет
-   * генерируется; отзыв скомпрометированного секрета — отдельное действие (ротация),
-   * а не повторный `register()`.
-   *
-   * ⚠ Возвращаемый `secret` — СЕКРЕТ ЭНДПОИНТА, отдельный от секрета API-ключа. Именно
-   * его передавайте в `verifyWebhook` / `constructWebhookEvent`; секрет API-ключа там не
-   * подойдёт и отвергнет 100% вебхуков.
-   *
-   * Технически: ответ приходит БЕЗ конверта `state`/`result`.
-   */
-  register(url: string): Promise<WebhookRegistration> {
-    return this.http.request<WebhookRegistration>("/v1/webhooks", { url });
+export type WebhookTestParams = RequestBodies["POST /v1/test-webhook/payment"];
+
+/** Webhook endpoint management and delivery inspection. Verification lives in `@oblodai/sdk/webhooks`. */
+export class Webhooks extends Resource {
+  /** `POST /v1/webhooks` — register (or replace) the merchant's endpoint; returns the signing secret once. */
+  register(url: string, opts?: RequestOptions): Promise<WebhookEndpoint> {
+    return this.call<WebhookEndpoint>("POST /v1/webhooks", { url }, opts);
   }
 
-  /**
-   * Журнал последних доставок (до 50, новые первыми). `POST /v1/webhooks/deliveries`
-   *
-   * ⚠ ЛОМАЮЩЕЕ изменение в v1.2.0: метод отдаёт МАССИВ `Delivery[]`, а не `{ deliveries }` —
-   * конверт разворачивается, как в `sandbox.listWebhooks()` и `payoutLinks.list()`.
-   */
-  async deliveries(): Promise<Delivery[]> {
-    const res = await this.http.request<{ deliveries: Delivery[] }>("/v1/webhooks/deliveries", {});
-    return res.deliveries ?? [];
+  /** `POST /v1/webhooks/rotate-secret` — new secret; the old one keeps verifying until `previous_secret_valid_until`. Payout key. */
+  rotateSecret(opts?: RequestOptions): Promise<WebhookSecretRotated> {
+    return this.call<WebhookSecretRotated>("POST /v1/webhooks/rotate-secret", undefined, opts);
   }
 
-  /** Пробный вебхук платежа. `POST /v1/test-webhook/payment` */
-  testPayment(params: {
-    url_callback: string;
-    status?: string;
-    currency?: string;
-    network?: string;
-    uuid?: string;
-    order_id?: string;
-  }): Promise<{ result: boolean; status_code: number }> {
-    return this.http.request("/v1/test-webhook/payment", params);
+  /** `POST /v1/webhooks/deliveries` — delivery log, newest first. */
+  deliveries(
+    params: RequestBodies["POST /v1/webhooks/deliveries"] = {},
+    opts?: RequestOptions,
+  ): PagePromise<WebhookDelivery> {
+    return this.page<WebhookDelivery>("POST /v1/webhooks/deliveries", params, opts);
   }
 
-  /** Пробный вебхук кошелька. `POST /v1/test-webhook/wallet` */
-  testWallet(params: {
-    url_callback: string;
-    status?: string;
-    currency?: string;
-    network?: string;
-    uuid?: string;
-    order_id?: string;
-  }): Promise<{ result: boolean; status_code: number }> {
-    return this.http.request("/v1/test-webhook/wallet", params);
+  /** `POST /v1/test-webhook/{payment|payout|wallet}` — deliver a sample event of that kind to `url_callback`, signed like a real one. */
+  test(
+    kind: WebhookKind,
+    params: WebhookTestParams,
+    opts?: RequestOptions,
+  ): Promise<WebhookTestResult> {
+    const key = `POST /v1/test-webhook/${kind}` as const;
+    return this.call<WebhookTestResult>(key, params, opts);
   }
 
-  /** Пробный вебхук выплаты. `POST /v1/test-webhook/payout` */
-  testPayout(params: {
-    url_callback: string;
-    status?: string;
-    currency?: string;
-    network?: string;
-    uuid?: string;
-    order_id?: string;
-  }): Promise<{ result: boolean; status_code: number }> {
-    return this.http.request("/v1/test-webhook/payout", params);
+  /** `POST /v1/payment/testing-webhook` — the older rehearsal door (payment events only). */
+  testLegacy(
+    params: RequestBodies["POST /v1/payment/testing-webhook"],
+    opts?: RequestOptions,
+  ): Promise<WebhookTestResult> {
+    return this.call<WebhookTestResult>("POST /v1/payment/testing-webhook", params, opts);
   }
 }

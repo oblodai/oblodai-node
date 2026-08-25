@@ -1,0 +1,27 @@
+{
+ "route": "POST /v1/refund/batch",
+ "status": 200,
+ "request": {
+  "on_error": "continue",
+  "refunds": [
+   {
+    "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+    "amount": "1",
+    "reference": "sdk-ref-2",
+    "uuid": "e1f9be61-b20d-42c0-91a2-03f36878dab1"
+   }
+  ]
+ },
+ "response": {
+  "result": {
+   "batch_id": "9dd011e5-3ae9-49d1-912d-1df57f818864",
+   "count": 1,
+   "kind": "refund",
+   "status": "pending"
+  },
+  "state": 0
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

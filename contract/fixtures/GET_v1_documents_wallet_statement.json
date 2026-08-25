@@ -1,0 +1,15 @@
+{
+ "route": "GET /v1/documents/wallet/statement",
+ "status": 404,
+ "response": {
+  "error": {
+   "code": "document.disabled",
+   "message": "documents are not enabled on this deployment",
+   "retryable": false,
+   "request_id": "f4f56d12-127a-4558-8672-1f053b9e9e2e"
+  }
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

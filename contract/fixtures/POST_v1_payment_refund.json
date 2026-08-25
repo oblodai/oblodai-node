@@ -1,0 +1,39 @@
+{
+ "route": "POST /v1/payment/refund",
+ "status": 200,
+ "request": {
+  "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+  "amount": "5",
+  "reference": "sdk-ref-1",
+  "uuid": "e1f9be61-b20d-42c0-91a2-03f36878dab1"
+ },
+ "response": {
+  "result": {
+   "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+   "amount": "5.000000",
+   "approval_required": false,
+   "commission": "0.000000",
+   "created_at": "2026-08-25T21:01:23Z",
+   "currency": "USDT",
+   "document_url": "",
+   "fee_bearer": "gateway",
+   "is_final": false,
+   "is_refund": true,
+   "memo": "",
+   "network": "tron",
+   "order_id": null,
+   "payer_amount": "5.000000",
+   "payment_order_id": "sdk-inv-1",
+   "refund_for": "e1f9be61-b20d-42c0-91a2-03f36878dab1",
+   "source": "api",
+   "status": "approved",
+   "txid": "",
+   "updated_at": "2026-08-25T21:01:23Z",
+   "uuid": "dd6454d6-4841-4af4-8fe6-1e2be0674b1f"
+  },
+  "state": 0
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

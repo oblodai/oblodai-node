@@ -1,0 +1,18 @@
+{
+ "route": "POST /v1/payment/link/toggle",
+ "status": 200,
+ "request": {
+  "active": false,
+  "link_id": "541e87c6-1222-4404-832f-ff002d29c35e"
+ },
+ "response": {
+  "result": {
+   "active": false,
+   "link_id": "541e87c6-1222-4404-832f-ff002d29c35e"
+  },
+  "state": 0
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

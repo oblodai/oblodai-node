@@ -1,0 +1,112 @@
+{
+ "route": "POST /v1/webhooks/deliveries",
+ "status": 200,
+ "request": {
+  "limit": 10,
+  "offset": 0
+ },
+ "response": {
+  "result": {
+   "items": [
+    {
+     "attempts": 0,
+     "created_at": "2026-08-25T21:01:23Z",
+     "event_type": "payout.approved",
+     "id": "b546dcbe-1d41-45ae-992b-f927fa59fa4b",
+     "last_error": "",
+     "sequence": 20,
+     "status": "pending",
+     "updated_at": "2026-08-25T21:01:23Z",
+     "url": "http://127.0.0.1:36207/hook"
+    },
+    {
+     "attempts": 0,
+     "created_at": "2026-08-25T21:01:23Z",
+     "event_type": "payout.approved",
+     "id": "d5c5c10f-5634-417b-8292-df04b49af29c",
+     "last_error": "",
+     "sequence": 19,
+     "status": "pending",
+     "updated_at": "2026-08-25T21:01:23Z",
+     "url": "http://127.0.0.1:36207/hook"
+    },
+    {
+     "attempts": 0,
+     "created_at": "2026-08-25T21:01:23Z",
+     "event_type": "payout.approved",
+     "id": "c31dedbe-29d7-400c-9b86-3f307f79d4c3",
+     "last_error": "",
+     "sequence": 18,
+     "status": "pending",
+     "updated_at": "2026-08-25T21:01:23Z",
+     "url": "http://127.0.0.1:36207/hook"
+    },
+    {
+     "attempts": 0,
+     "created_at": "2026-08-25T21:01:23Z",
+     "event_type": "payout.cancelled",
+     "id": "3d7ebb91-b071-473b-900c-1acb335c2bc7",
+     "last_error": "",
+     "sequence": 17,
+     "status": "pending",
+     "updated_at": "2026-08-25T21:01:23Z",
+     "url": "http://127.0.0.1:36207/hook"
+    },
+    {
+     "attempts": 0,
+     "created_at": "2026-08-25T21:01:23Z",
+     "event_type": "payout.approved",
+     "id": "adc05184-bead-45af-9dd1-b04151f2ebea",
+     "last_error": "",
+     "sequence": 16,
+     "status": "pending",
+     "updated_at": "2026-08-25T21:01:23Z",
+     "url": "http://127.0.0.1:36207/hook"
+    },
+    {
+     "attempts": 0,
+     "created_at": "2026-08-25T21:01:23Z",
+     "event_type": "payout.approved",
+     "id": "ea9ef037-16ae-44a8-81cc-281fc2d33bc5",
+     "last_error": "",
+     "sequence": 15,
+     "status": "pending",
+     "updated_at": "2026-08-25T21:01:23Z",
+     "url": "http://127.0.0.1:36207/hook"
+    },
+    {
+     "attempts": 0,
+     "created_at": "2026-08-25T21:01:23Z",
+     "event_type": "invoice.paid",
+     "id": "5bf38a51-3f17-479b-a7e2-e8e1922e420b",
+     "last_error": "",
+     "sequence": 14,
+     "status": "pending",
+     "updated_at": "2026-08-25T21:01:23Z",
+     "url": "http://127.0.0.1:36207/hook"
+    },
+    {
+     "attempts": 0,
+     "created_at": "2026-08-25T21:01:23Z",
+     "event_type": "invoice.created",
+     "id": "ceaebda0-9ce2-4af2-812d-98d9b1d2b818",
+     "last_error": "",
+     "sequence": 13,
+     "status": "pending",
+     "updated_at": "2026-08-25T21:01:23Z",
+     "url": "http://127.0.0.1:36207/hook"
+    }
+   ],
+   "paginate": {
+    "has_pages": false,
+    "offset": 0,
+    "per_page": 10,
+    "total": 8
+   }
+  },
+  "state": 0
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

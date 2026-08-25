@@ -1,68 +1,137 @@
-import { BaseResource } from "./base.js";
+import type { RequestBodies } from "../contract/requests.js";
 import type {
-  CreatePaymentLinkParams,
-  PaymentLinkCreated,
+  BatchElement,
+  ClaimPreview,
+  ClaimResult,
   PaymentLink,
-  PaymentLinkInfo,
-  LinkCheckoutParams,
-  Payment,
-} from "../models.js";
+  PaymentLinkCreated,
+  PaymentLinkToggled,
+  PayoutLink,
+  PublicPayment,
+  PublicPaymentLink,
+} from "../contract/models/index.js";
+import type { PagePromise } from "../core/pagination.js";
+import { Resource, type FileResult, type RequestOptions } from "./base.js";
 
-/**
- * Платёжные ссылки (v1.1.0): переиспользуемая ссылка, по которой платят многие —
- * каждый платёж порождает свой инвойс со своим адресом. Единственный способ принимать
- * платежи вообще без бэкенда (Tilda, Wix и т.п.).
- *
- * Management-методы (create/list/info/toggle) подписываются платёжным ключом; заголовок
- * `Idempotency-Key` на них не действует (эндпоинты им не обёрнуты). `publicGet`/`checkout` —
- * публичные, без подписи (для кода на стороне плательщика).
- */
-export class Links extends BaseResource {
-  /**
-   * Создать платёжную ссылку. `POST /v1/payment/link`
-   * `expires_in` — в СЕКУНДАХ; 0/отсутствие = бессрочная. Ответ: `{ link_id, url }`.
-   */
-  create(params: CreatePaymentLinkParams): Promise<PaymentLinkCreated> {
-    return this.http.request<PaymentLinkCreated>("/v1/payment/link", params);
+export type CreatePayoutLinkParams = RequestBodies["POST /v1/payout/link"];
+export type PayoutLinkBatchParams = RequestBodies["POST /v1/payout/link/batch"];
+export type ClaimParams = RequestBodies["POST /v1/claim/{token}"];
+
+/** Payout links (cheques): funds reserved now, claimed later by whoever holds the token. Payout key. */
+export class PayoutLinks extends Resource {
+  /** `POST /v1/payout/link` — reserve funds and mint a claim token. */
+  create(params: CreatePayoutLinkParams, opts?: RequestOptions): Promise<PayoutLink> {
+    return this.call<PayoutLink>("POST /v1/payout/link", params, opts);
   }
 
-  /** Список ссылок мерчанта. `POST /v1/payment/link/list` */
-  async list(params: { limit?: number; offset?: number } = {}): Promise<PaymentLink[]> {
-    const res = await this.http.request<{ items: PaymentLink[] }>("/v1/payment/link/list", params);
-    return res.items;
+  /** `POST /v1/payout/link/info`. */
+  info(linkId: string, opts?: RequestOptions): Promise<PayoutLink> {
+    return this.call<PayoutLink>("POST /v1/payout/link/info", { link_id: linkId }, opts);
   }
 
-  /** Ссылка + платежи по ней. `POST /v1/payment/link/info` */
-  info(linkId: string): Promise<PaymentLinkInfo> {
-    return this.http.request<PaymentLinkInfo>("/v1/payment/link/info", { link_id: linkId });
+  /** `POST /v1/payout/link/list`. */
+  list(
+    params: RequestBodies["POST /v1/payout/link/list"] = {},
+    opts?: RequestOptions,
+  ): PagePromise<PayoutLink> {
+    return this.page<PayoutLink>("POST /v1/payout/link/list", params, opts);
   }
 
-  /** Включить/выключить ссылку. `POST /v1/payment/link/toggle` */
-  toggle(linkId: string, active: boolean): Promise<{ link_id: string; active: boolean }> {
-    return this.http.request("/v1/payment/link/toggle", { link_id: linkId, active });
+  /** `POST /v1/payout/link/cancel` — release the reserved funds of an unclaimed link. */
+  cancel(linkId: string, opts?: RequestOptions): Promise<PayoutLink> {
+    return this.call<PayoutLink>("POST /v1/payout/link/cancel", { link_id: linkId }, opts);
   }
 
-  /**
-   * Публичные детали ссылки. `GET /v1/link/{id}` — БЕЗ подписи (можно дергать со страницы
-   * плательщика). Неактивная/истёкшая ссылка → `paylink.not_found` (404).
-   */
-  publicGet(linkId: string): Promise<PaymentLink> {
-    return this.http.requestPublic<PaymentLink>(
-      `/v1/link/${encodeURIComponent(linkId)}`,
-      {},
-      "GET",
-    );
-  }
-
-  /**
-   * Публичный чекаут по ссылке: порождает обычный инвойс. `POST /v1/link/{id}/checkout` —
-   * БЕЗ подписи. Закреплённые в ссылке валюта/сеть побеждают переданные. Лимит: 30 инвойсов/мин
-   * на ссылку (`paylink.rate_limited`). Ответ — обычный объект платежа (`uuid` + `url`).
-   */
-  checkout(linkId: string, params: LinkCheckoutParams = {}): Promise<Payment> {
-    return this.http.requestPublic<Payment>(
-      `/v1/link/${encodeURIComponent(linkId)}/checkout`,
+  /** `POST /v1/payout/link/batch` — many links in one signed call; per-element outcomes. */
+  batch(
+    params: PayoutLinkBatchParams,
+    opts?: RequestOptions,
+  ): Promise<{ items: BatchElement<PayoutLink>[] }> {
+    return this.call<{ items: BatchElement<PayoutLink>[] }>(
+      "POST /v1/payout/link/batch",
       params,
+      opts,
     );
+  }
+
+  /** `POST /v1/payout/link/cheque` — printable PDF cheque for a claim token. */
+  cheque(
+    params: RequestBodies["POST /v1/payout/link/cheque"],
+    opts?: RequestOptions,
+  ): Promise<FileResult> {
+    return this.file("POST /v1/payout/link/cheque", { ...opts, body: params });
+  }
+
+  // --- recipient side (public, unsigned) ---
+
+  /** `GET /v1/claim/{token}` — what the recipient sees before claiming. */
+  claimPreview(token: string, opts?: RequestOptions): Promise<ClaimPreview> {
+    return this.call<ClaimPreview>("GET /v1/claim/{token}", undefined, {
+      ...opts,
+      pathParams: { token },
+    });
+  }
+
+  /** `POST /v1/claim/{token}` — claim to an address (and passcode when the link has one). */
+  claim(token: string, params: ClaimParams, opts?: RequestOptions): Promise<ClaimResult> {
+    return this.call<ClaimResult>("POST /v1/claim/{token}", params, {
+      ...opts,
+      pathParams: { token },
+    });
+  }
+}
+
+export type CreatePaymentLinkParams = RequestBodies["POST /v1/payment/link"];
+export type PaymentLinkCheckoutParams = RequestBodies["POST /v1/link/{id}/checkout"];
+
+/** Reusable payment links (tip jars, price tags): each checkout spawns an invoice. */
+export class PaymentLinks extends Resource {
+  /** `POST /v1/payment/link`. */
+  create(params: CreatePaymentLinkParams, opts?: RequestOptions): Promise<PaymentLinkCreated> {
+    return this.call<PaymentLinkCreated>("POST /v1/payment/link", params, opts);
+  }
+
+  /** `POST /v1/payment/link/info` — includes the invoices spawned by the link. */
+  info(linkId: string, opts?: RequestOptions): Promise<PaymentLink> {
+    return this.call<PaymentLink>("POST /v1/payment/link/info", { link_id: linkId }, opts);
+  }
+
+  /** `POST /v1/payment/link/list`. */
+  list(
+    params: RequestBodies["POST /v1/payment/link/list"] = {},
+    opts?: RequestOptions,
+  ): PagePromise<PaymentLink> {
+    return this.page<PaymentLink>("POST /v1/payment/link/list", params, opts);
+  }
+
+  /** `POST /v1/payment/link/toggle` — enable or disable a link. */
+  toggle(linkId: string, active: boolean, opts?: RequestOptions): Promise<PaymentLinkToggled> {
+    return this.call<PaymentLinkToggled>(
+      "POST /v1/payment/link/toggle",
+      { link_id: linkId, active },
+      opts,
+    );
+  }
+
+  // --- payer side (public, unsigned) ---
+
+  /** `GET /v1/link/{id}` — the link as the payer sees it. */
+  publicView(linkId: string, opts?: RequestOptions): Promise<PublicPaymentLink> {
+    return this.call<PublicPaymentLink>("GET /v1/link/{id}", undefined, {
+      ...opts,
+      pathParams: { id: linkId },
+    });
+  }
+
+  /** `POST /v1/link/{id}/checkout` — spawn an invoice from the link (rate-capped per IP). */
+  checkout(
+    linkId: string,
+    params: PaymentLinkCheckoutParams = {},
+    opts?: RequestOptions,
+  ): Promise<PublicPayment> {
+    return this.call<PublicPayment>("POST /v1/link/{id}/checkout", params, {
+      ...opts,
+      pathParams: { id: linkId },
+    });
   }
 }

@@ -1,0 +1,24 @@
+{
+ "route": "POST /v1/payment/link",
+ "status": 200,
+ "request": {
+  "amount_fixed": "10",
+  "amount_mode": "fixed",
+  "currency": "USDT",
+  "description": "Tip jar",
+  "expires_in_seconds": 86400,
+  "pinned_network": "tron",
+  "title": "Support"
+ },
+ "response": {
+  "result": {
+   "document_url": "",
+   "link_id": "541e87c6-1222-4404-832f-ff002d29c35e",
+   "url": ""
+  },
+  "state": 0
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

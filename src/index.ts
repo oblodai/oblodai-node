@@ -1,122 +1,83 @@
-/**
- * Oblodai SDK — TypeScript/Node.js клиент для платёжного шлюза Oblodai.
- *
- * @packageDocumentation
- */
+export { Oblodai, SDK_VERSION } from "./client.js";
+export type { ClientOptions } from "./config.js";
+export { DEFAULT_BASE_URL } from "./config.js";
 
-// Клиент
-export { OblodaiClient } from "./client.js";
-
-// Вебхуки: проверка входящих
-export {
-  verifyWebhook,
-  constructWebhookEvent,
-  type WebhookHeaders,
-  type VerifyWebhookOptions,
-} from "./webhooks.js";
-
-// Низкоуровневая подпись (на случай кастомного транспорта)
-export { signRequest, type SignedRequest } from "./signing.js";
-
-// Песочница: проверка «тестовости» ключа (префикс public_id `test_`)
-export { isTestKey } from "./resources/sandbox.js";
-
-// Ошибки
+// Errors
 export {
   OblodaiError,
-  OblodaiApiError,
-  OblodaiConnectionError,
-  OblodaiTimeoutError,
-  OblodaiSignatureError,
-} from "./errors.js";
+  ApiError,
+  TransportError,
+  ValidationError,
+  AuthenticationError,
+  PermissionError,
+  NotFoundError,
+  ConflictError,
+  IdempotencyConflictError,
+  RateLimitError,
+  UnavailableError,
+  InternalError,
+  ContractError,
+  SignatureError,
+} from "./core/errors.js";
+export type { ErrorDetail } from "./core/errors.js";
 
-// Типы конфигурации и общие
-export type {
-  OblodaiConfig,
-  OblodaiLogger,
-  RetryOptions,
-  PaymentStatus,
-  PayoutStatus,
-  Network,
-  Paginate,
-  Envelope,
-  ErrorEnvelope,
-} from "./types.js";
+// Transport-level types
+export type { Page, PlainList, Paginate } from "./core/envelope.js";
+export { PagePromise } from "./core/pagination.js";
+export type { RetryOptions } from "./core/retry.js";
+export type { Logger, LogFields } from "./core/logger.js";
+export { consoleLogger } from "./core/logger.js";
+export type { FetchLike } from "./core/transport.js";
+export type { RequestOptions, FileResult } from "./resources/base.js";
+export { signRequest, canonicalString } from "./core/signing.js";
+export { newIdempotencyKey } from "./core/idempotency.js";
 
-// Модели объектов и параметры
+// Contract: enums, routes, models, request DTOs
+export * from "./contract/enums.js";
+export { ROUTES } from "./contract/routes.js";
+export type { RouteKey } from "./contract/routes.js";
+export type { RouteSpec } from "./contract/types.js";
+export type { RequestBodies } from "./contract/requests.js";
+export * from "./contract/models/index.js";
+export { CONTRACT_CORE_COMMIT, CONTRACT_EXPORTED_AT, CONTRACT_HASH } from "./contract/version.js";
+
+// Resource param aliases
 export type {
-  Payment,
-  PaymentRefundEntry,
   CreatePaymentParams,
-  Lookup,
-  HistoryParams,
-  PaymentList,
-  ServiceMethod,
-  Wallet,
-  CreateWalletParams,
-  BlockWalletParams,
-  BlockedRefundParams,
-  Balance,
-  ReferralInfo,
-  Payout,
+  PaymentLookup,
+  PaymentHistoryParams,
+  SelectPaymentMethodParams,
+} from "./resources/payments.js";
+export type { RefundParams, ResolveParams, RefundBatchParams } from "./resources/refunds.js";
+export type {
   CreatePayoutParams,
-  MassPayoutItem,
+  PayoutLookup,
+  PayoutHistoryParams,
   CalculatePayoutParams,
-  PayoutCalculation,
-  RefundParams,
-  ExchangeRate,
-  Currency,
-  CurrencyNetwork,
-  WebhookEvent,
-  WebhookRegistration,
-  Delivery,
-  AcceptedMethod,
-  AutoWithdrawRule,
-  // v1.1.0: батчи
-  BatchOnError,
-  BatchOptions,
-  BatchStatus,
-  BatchSubmitResult,
-  BatchItem,
-  BatchInfo,
-  RefundBatchItem,
-  // v1.1.0: платёжные ссылки
-  PaymentLinkAmountMode,
-  CreatePaymentLinkParams,
-  PaymentLinkCreated,
-  PaymentLink,
-  PaymentLinkInfo,
-  LinkCheckoutParams,
-  // v1.1.0: сплиты
-  CreateSplitRuleParams,
-  SplitRule,
-  SplitConfig,
-  // v1.1.0: счёт на e-mail и resolve
-  SendEmailParams,
-  SendEmailResult,
-  ResolveParams,
-  ResolveResult,
-  // v1.1.0: payout-ссылки (крипто-чеки)
-  PayoutLinkStatus,
-  CreatePayoutLinkParams,
-  PayoutLink,
-  PayoutLinkCreated,
-  PayoutLinkBatchItem,
-  PayoutLinkBatchResult,
-  PayoutLinkClaimInfo,
-  PayoutLinkClaimResult,
-  // v1.2.0: песочница разработчика
-  SandboxDepositParams,
-  SandboxDeposit,
-  SandboxFaucetParams,
-  SandboxFaucetResult,
-  SandboxResetResult,
-  SandboxDelivery,
-  SandboxReplayResult,
-  // v1.2.0: переводы пользователям платформы и публичный чекаут
-  TransferToUserItem,
+  MassPayoutParams,
+  PayoutBatchParams,
+} from "./resources/payouts.js";
+export type {
+  TransferToPersonalParams,
   TransferToUserParams,
-  TransferToUserResult,
-  PublicPayment,
-  PaySelectParams,
-} from "./models.js";
+  TransferBatchParams,
+} from "./resources/batches.js";
+export type {
+  CreatePayoutLinkParams,
+  PayoutLinkBatchParams,
+  ClaimParams,
+  CreatePaymentLinkParams,
+  PaymentLinkCheckoutParams,
+} from "./resources/links.js";
+export type { CreateWalletParams } from "./resources/wallets.js";
+export type { WebhookTestParams } from "./resources/webhooks.js";
+export type { DocumentQuery, PeriodQuery } from "./resources/documents.js";
+export type { CreateSplitRuleParams } from "./resources/splits.js";
+
+// Helpers
+export * from "./helpers/status.js";
+export * from "./helpers/money.js";
+
+// Webhook verification is also available from the "@oblodai/sdk/webhooks" subpath.
+export { verifyWebhook, parseWebhook, isStaleEvent } from "./webhooks.js";
+export type { VerifyWebhookOptions, WebhookHeaders } from "./webhooks.js";

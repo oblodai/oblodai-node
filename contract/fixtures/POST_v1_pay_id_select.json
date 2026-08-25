@@ -1,0 +1,44 @@
+{
+ "route": "POST /v1/pay/{id}/select",
+ "status": 200,
+ "request": {
+  "currency": "USDT",
+  "network": "tron"
+ },
+ "response": {
+  "result": {
+   "address": "sandbox:182fe959-fc6b-4f01-91ca-4af3717e7c7c",
+   "address_muxed": "",
+   "address_qr_code": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAABlBMVEX///8AAABVwtN+AAAB+UlEQVR42uyZP7LzIAzE10NByRE4Cjfzn5txFI5AScGw30j4S0gm1auMxyqe35BfCiyx0hI88cQTf4uNJIuPcEn+NSSrkzXeCwCwFMBkwDKS3OHi+cE8gCGPAjD7gxkVntVFMk0IeF0qjoZpxbxAhW+QWktLvSOgNelpMlYr2QR+Fe3VgVMfqkurzcEUf/wWkEsDPXw8Wdj0U9IvDmxAOHRbCVYfi258zOYdAGas8h6crMorafLXcp8LYNyoKVyKi7BsJocGPxUAbaXaWDe+kjUW5RRAdbLNAHgWBBYs1bG9Ve4mABlFQCr8rmLuWx+I9pmATaS7nABZbdqqi2PRTgF0feA5ivbxgA2eMwHQbSJUJ0cqwurJuh0gB2gV35A9dWSVUxWWMnbeCQDDuJT/LSmYgtVkLEyTAdKAEMSQFog+7KIPw8maAQCzztXy6FZu7wnDrYANXS6qk/wFcT8VH9mcAdDVfgeySE2SVODds2YBdptE7I6ucjIQsYxz0PWBjTkcRU6WtKTBHdwLGLzeqeBSk/zI5vWBl++WiVTtw1Fd/HgPMwB9f+FtH2Sb4yw3BdDvo6j3Ud0dfA05NwJU/5rYB6s60gb7MBMg+mAZxT4oMI5JEwCvmvTtvOJl/h5Zrw90fehDzvkLiH5luxXwxBNPfMa/AAAA//86O561D/HK7QAAAABJRU5ErkJggg==",
+   "address_xaddress": "",
+   "amount": "10.000000",
+   "amount_paid": "0.000000",
+   "amount_remaining": "10.000000",
+   "confirmations": 0,
+   "created_at": "2026-08-25T21:01:23Z",
+   "currency": "USDT",
+   "destination_tag": "",
+   "expired_at": "2026-08-25T22:01:23Z",
+   "is_final": false,
+   "is_multi": false,
+   "memo": "",
+   "network": "tron",
+   "order_id": "sdk-inv-3",
+   "payer_amount": "10.000000",
+   "payer_currency": "USDT",
+   "rate_expires_at": "2026-08-25T21:06:23Z",
+   "required_confirmations": 20,
+   "status": "created",
+   "txid": "",
+   "updated_at": "2026-08-25T21:01:23Z",
+   "url": "",
+   "url_return": "",
+   "url_success": "",
+   "uuid": "182fe959-fc6b-4f01-91ca-4af3717e7c7c"
+  },
+  "state": 0
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

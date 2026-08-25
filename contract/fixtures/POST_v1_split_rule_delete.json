@@ -1,0 +1,16 @@
+{
+ "route": "POST /v1/split/rule/delete",
+ "status": 200,
+ "request": {
+  "rule_id": "820641ae-f6bf-4181-8afd-44985540cf6e"
+ },
+ "response": {
+  "result": {
+   "ok": true
+  },
+  "state": 0
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

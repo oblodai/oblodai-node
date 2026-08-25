@@ -1,0 +1,15 @@
+{
+ "route": "GET /v1/documents/batch",
+ "status": 404,
+ "response": {
+  "error": {
+   "code": "document.disabled",
+   "message": "documents are not enabled on this deployment",
+   "retryable": false,
+   "request_id": "06b1764f-7493-4b09-a1f6-f170cf9196fd"
+  }
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

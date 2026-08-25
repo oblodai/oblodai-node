@@ -1,0 +1,18 @@
+{
+ "route": "POST /v1/webhooks",
+ "status": 201,
+ "request": {
+  "url": "http://127.0.0.1:36207/hook"
+ },
+ "response": {
+  "result": {
+   "endpoint_id": "2b5e464a-4008-4527-b7fb-efb1c0cb13f9",
+   "url": "http://127.0.0.1:36207/hook",
+   "secret": "8a3a51815c70d4dc535aada1901af0f060e2a665ea1aba7f0641bd17a4caa237"
+  },
+  "state": 0
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

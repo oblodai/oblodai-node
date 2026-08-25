@@ -1,4 +1,9 @@
-dist/
-node_modules/
-CHANGELOG.md
+dist
+node_modules
+coverage
+contract/fixtures
+contract/errors
+contract/webhook-samples.json
+contract/contract.json
 package-lock.json
+CHANGELOG.md

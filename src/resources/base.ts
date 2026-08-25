@@ -1,6 +1,120 @@
-import type { HttpClient } from "../http.js";
+import { ROUTES, type RouteKey } from "../contract/routes.js";
+import type { RequestBodies } from "../contract/requests.js";
+import { asPage, asPlainList, type Page, type PlainList } from "../core/envelope.js";
+import { PagePromise, type PageParams } from "../core/pagination.js";
+import type { Query } from "../core/request.js";
+import type { CallOptions, RawResponse, Transport } from "../core/transport.js";
 
-/** Базовый класс группы методов. Держит ссылку на транспорт. */
-export abstract class BaseResource {
-  constructor(protected readonly http: HttpClient) {}
+/** Per-call options every resource method accepts as its last argument. */
+export interface RequestOptions {
+  /** Your own idempotency key; generated automatically on create routes when omitted. */
+  idempotencyKey?: string;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+/** Body type for a route: the generated DTO when the core documents one, otherwise free-form. */
+export type BodyOf<K extends RouteKey> = K extends keyof RequestBodies
+  ? RequestBodies[K]
+  : Record<string, unknown> | undefined;
+
+/** A binary response (PDF/CSV documents). */
+export interface FileResult {
+  bytes: Uint8Array;
+  contentType: string;
+  filename?: string;
+}
+
+export abstract class Resource {
+  constructor(protected readonly transport: Transport) {}
+
+  /** Call an envelope route; `T` is the `result` type. */
+  protected call<T, K extends RouteKey = RouteKey>(
+    key: K,
+    body?: BodyOf<K>,
+    opts: RequestOptions & { pathParams?: Record<string, string | number>; query?: Query } = {},
+  ): Promise<T> {
+    return this.transport.call<T>(ROUTES[key], this.callOptions(body, opts));
+  }
+
+  /** Call a paged list route (`{items, paginate}`); returns a PagePromise. */
+  protected page<T, K extends RouteKey = RouteKey>(
+    key: K,
+    params: PageParams & Record<string, unknown> = {},
+    opts: RequestOptions & {
+      pathParams?: Record<string, string | number>;
+      viaQuery?: boolean;
+    } = {},
+  ): PagePromise<T> {
+    const { limit, offset, ...rest } = params;
+    const route = ROUTES[key];
+    return new PagePromise<T>(
+      async (p) => {
+        const useQuery = route.method === "GET" || opts.viaQuery;
+        const result = await this.transport.call<unknown>(
+          route,
+          this.callOptions(useQuery ? undefined : { ...rest, ...p }, {
+            ...opts,
+            query: useQuery ? { ...(rest as Query), ...p } : undefined,
+          }),
+        );
+        return asPage<T>(result);
+      },
+      { limit, offset },
+    );
+  }
+
+  /** Call a plain list route (`{items}` without paginate). */
+  protected async plainList<T, K extends RouteKey = RouteKey>(
+    key: K,
+    body?: BodyOf<K>,
+    opts: RequestOptions = {},
+  ): Promise<PlainList<T> & Record<string, unknown>> {
+    const result = await this.transport.call<unknown>(ROUTES[key], this.callOptions(body, opts));
+    return asPlainList<T>(result) as PlainList<T> & Record<string, unknown>;
+  }
+
+  /** Call a bare (binary) route. */
+  protected async file<K extends RouteKey = RouteKey>(
+    key: K,
+    opts: RequestOptions & {
+      pathParams?: Record<string, string | number>;
+      query?: Query;
+      body?: unknown;
+    } = {},
+  ): Promise<FileResult> {
+    const raw: RawResponse = await this.transport.callRaw(
+      ROUTES[key],
+      this.callOptions(opts.body, opts),
+    );
+    return {
+      bytes: raw.body,
+      contentType: raw.contentType ?? "application/octet-stream",
+      filename: filenameFrom(raw.headers.get("content-disposition")),
+    };
+  }
+
+  private callOptions(
+    body: unknown,
+    opts: RequestOptions & { pathParams?: Record<string, string | number>; query?: Query },
+  ): CallOptions {
+    return {
+      body,
+      pathParams: opts.pathParams,
+      query: opts.query,
+      idempotencyKey: opts.idempotencyKey,
+      signal: opts.signal,
+      timeoutMs: opts.timeoutMs,
+    };
+  }
+}
+
+export type { Page, PlainList };
+
+function filenameFrom(disposition: string | null): string | undefined {
+  if (!disposition) return undefined;
+  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  if (utf8?.[1]) return decodeURIComponent(utf8[1]);
+  const plain = /filename="?([^";]+)"?/i.exec(disposition);
+  return plain?.[1];
 }

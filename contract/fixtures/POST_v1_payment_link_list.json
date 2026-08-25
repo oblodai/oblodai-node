@@ -1,0 +1,38 @@
+{
+ "route": "POST /v1/payment/link/list",
+ "status": 200,
+ "request": {
+  "limit": 10,
+  "offset": 0
+ },
+ "response": {
+  "result": {
+   "items": [
+    {
+     "active": true,
+     "amount_fixed": "10",
+     "amount_mode": "fixed",
+     "created_at": "2026-08-25T21:01:23Z",
+     "currency": "USDT",
+     "description": "Tip jar",
+     "document_url": "",
+     "expires_at": "2026-08-26T21:01:23Z",
+     "link_id": "541e87c6-1222-4404-832f-ff002d29c35e",
+     "pinned_network": "tron",
+     "title": "Support",
+     "url": ""
+    }
+   ],
+   "paginate": {
+    "has_pages": false,
+    "offset": 0,
+    "per_page": 10,
+    "total": 1
+   }
+  },
+  "state": 0
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

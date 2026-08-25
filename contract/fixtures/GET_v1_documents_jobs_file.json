@@ -1,0 +1,15 @@
+{
+ "route": "GET /v1/documents/jobs/file",
+ "status": 404,
+ "response": {
+  "error": {
+   "code": "document.jobs_disabled",
+   "message": "background document generation is not enabled on this deployment",
+   "retryable": false,
+   "request_id": "b2240f9c-34c0-45e3-8d41-8e52babe19ab"
+  }
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

@@ -1,0 +1,28 @@
+{
+ "route": "POST /v1/payout/batch",
+ "status": 200,
+ "request": {
+  "on_error": "continue",
+  "payouts": [
+   {
+    "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+    "amount": "1",
+    "currency": "USDT",
+    "network": "tron",
+    "order_id": "sdk-batch-po-1"
+   }
+  ]
+ },
+ "response": {
+  "result": {
+   "batch_id": "73998ae6-2bd0-4aa3-9a8e-5cb781a3899d",
+   "count": 1,
+   "kind": "payout",
+   "status": "pending"
+  },
+  "state": 0
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}
