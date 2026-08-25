@@ -21,8 +21,8 @@ export interface Payout {
   payer_amount: Money;
   commission: Money;
   fee_bearer: FeeBearerResult;
-  /** Balance the payout was funded from. */
-  source: "business" | "personal" | (string & {});
+  /** How the payout was initiated: `api` (this SDK / API key) or `manual` (cabinet). */
+  source: "api" | "manual" | (string & {});
   approval_required: boolean;
   is_refund: boolean;
   /** For refunds: the invoice being refunded. */
