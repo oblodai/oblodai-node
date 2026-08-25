@@ -228,8 +228,8 @@ export interface ServiceMethod {
   currency: string;
   network: Network | (string & {});
   is_available: boolean;
-  /** Limits are null when the asset cannot be priced right now. */
-  limit: { currency?: string; min_amount: Money | null; max_amount: Money | null };
+  /** Limits and fee figures are null or "" when the asset cannot be priced right now. */
+  limit: { currency?: string; min_amount: Money | null | ""; max_amount: Money | null | "" };
   commission: {
     currency: string;
     fee_amount: Money | null;
