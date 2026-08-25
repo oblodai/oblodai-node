@@ -95,7 +95,8 @@ export const ClaimPreviewKeys = defineKeys<ClaimPreview>()(
 export interface ClaimResult {
   /** The payout that pays the recipient (`payouts.info({ uuid: payout_id })`). */
   payout_id: string;
-  status: PayoutStatus;
+  /** The LINK's status after the claim (`claimed`), not the payout's. */
+  status: PayoutLinkStatus;
   address: string;
   amount: Money;
   currency: string;
