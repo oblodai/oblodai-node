@@ -2,28 +2,52 @@
  "route": "POST /v1/batch/info",
  "status": 200,
  "request": {
-  "batch_id": "5bf7d108-d01e-4273-b35d-a03f395fbc26",
+  "batch_id": "f276dc82-65d3-4662-a08c-d3a4f8469fe4",
   "limit": 100,
   "offset": 0
  },
  "response": {
   "result": {
-   "batch_id": "5bf7d108-d01e-4273-b35d-a03f395fbc26",
-   "created_at": "2026-08-25T21:46:42Z",
+   "batch_id": "f276dc82-65d3-4662-a08c-d3a4f8469fe4",
+   "created_at": "2026-08-25T22:03:16Z",
    "failed": 0,
    "items": [
     {
      "idx": 0,
+     "ok": true,
      "order_id": "sdk-batch-po-1",
-     "status": "pending"
+     "result": {
+      "memo": "",
+      "txid": "",
+      "uuid": "d5051c03-f4ec-4e61-a592-e1811c8e7b50",
+      "amount": "1.000000",
+      "source": "api",
+      "status": "approved",
+      "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+      "network": "tron",
+      "currency": "USDT",
+      "is_final": false,
+      "order_id": "sdk-batch-po-1",
+      "is_refund": false,
+      "commission": "0.000000",
+      "created_at": "2026-08-25T22:03:16Z",
+      "fee_bearer": "gateway",
+      "refund_for": null,
+      "updated_at": "2026-08-25T22:03:16Z",
+      "document_url": "http://127.0.0.1:44661/v1/documents/payout/d5051c03-f4ec-4e61-a592-e1811c8e7b50?exp=1787698996\u0026sig=412672686cb743a2e0a139687f12dcce69c737ec584c74216a4b0ffeb4b06706",
+      "payer_amount": "1.000000",
+      "payment_order_id": null,
+      "approval_required": false
+     },
+     "status": "done"
     }
    ],
    "kind": "payout",
    "on_error": "continue",
-   "status": "pending",
-   "succeeded": 0,
+   "status": "completed",
+   "succeeded": 1,
    "total": 1,
-   "updated_at": "2026-08-25T21:46:42Z"
+   "updated_at": "2026-08-25T22:03:16Z"
   },
   "state": 0
  },

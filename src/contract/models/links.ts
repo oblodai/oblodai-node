@@ -182,6 +182,7 @@ export interface PaymentLinkToggled {
   link_id: string;
   active: boolean;
 }
+export const PaymentLinkToggledKeys = defineKeys<PaymentLinkToggled>()("link_id", "active");
 
 /** `GET /v1/link/{id}` — the payer-facing view. */
 export interface PublicPaymentLink {

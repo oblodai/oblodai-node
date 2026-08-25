@@ -34,9 +34,11 @@ export interface Payout {
   updated_at: Timestamp;
   error?: string | null;
   error_code?: string | null;
+  /** Set on refunds of blocked static-wallet deposits. */
+  wallet_uuid?: string;
 }
 
-export const PayoutKeys = defineKeys<Omit<Payout, "error" | "error_code">>()(
+export const PayoutKeys = defineKeys<Omit<Payout, "error" | "error_code" | "wallet_uuid">>()(
   "uuid",
   "order_id",
   "status",
@@ -105,28 +107,65 @@ export const PayoutValidationKeys = defineKeys<Omit<PayoutValidation, "funded_by
   "maturity_note",
 );
 
-/** `/v1/transfer/to-personal` and `/v1/transfer/to-user`. */
-export interface Transfer {
+/** `/v1/transfer/to-personal`: business → the owner's personal balance. */
+export interface TransferToPersonal {
   uuid: string;
   currency: string;
   amount: Money;
-  direction?: string;
-  personal_balance?: Money;
-  business_balance?: Money;
+  direction: "to_personal";
+  /** Personal balance after the transfer. */
+  personal_balance: Money;
   document_url: string;
-  to_user_id?: string;
 }
+export const TransferToPersonalKeys = defineKeys<TransferToPersonal>()(
+  "uuid",
+  "currency",
+  "amount",
+  "direction",
+  "personal_balance",
+  "document_url",
+);
+/** `/v1/transfer/to-user`: business → another user's personal balance. */
+export interface TransferToUser {
+  uuid: string;
+  currency: string;
+  amount: Money;
+  to_user_id: string;
+  document_url: string;
+}
+export const TransferToUserKeys = defineKeys<TransferToUser>()(
+  "uuid",
+  "currency",
+  "amount",
+  "to_user_id",
+  "document_url",
+);
+export type Transfer = TransferToPersonal | TransferToUser;
 
 /** `/v1/payout/fee-config/*`, `/v1/payout/refund-fee-config/*`, `/v1/payment/fee-config/*`. */
 export interface PayoutFeeConfig {
   fee_on_recipient: boolean;
+  /** `get` only. */
   configured?: boolean;
 }
+export const PayoutFeeConfigKeys = defineKeys<Required<PayoutFeeConfig>>()(
+  "fee_on_recipient",
+  "configured",
+);
 export interface RefundFeeConfig {
   fee_on_customer: boolean;
   configured?: boolean;
 }
+export const RefundFeeConfigKeys = defineKeys<Required<RefundFeeConfig>>()(
+  "fee_on_customer",
+  "configured",
+);
 export interface PaymentFeeConfig {
   payer_pays_percent: number;
+  /** `get` only. */
   enabled?: boolean;
 }
+export const PaymentFeeConfigKeys = defineKeys<Required<PaymentFeeConfig>>()(
+  "payer_pays_percent",
+  "enabled",
+);

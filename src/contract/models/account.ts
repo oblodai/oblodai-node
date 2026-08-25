@@ -36,6 +36,7 @@ export const ReferralInfoKeys = defineKeys<ReferralInfo>()(
 export interface VrcsStatus {
   enabled: boolean;
 }
+export const VrcsStatusKeys = defineKeys<VrcsStatus>()("enabled");
 
 /** Static (permanent) deposit wallet — `/v1/wallet`. */
 export interface Wallet {
@@ -57,10 +58,17 @@ export const WalletKeys = defineKeys<
   Omit<Wallet, "destination_tag" | "memo" | "address_xaddress" | "address_muxed">
 >()("uuid", "address", "network", "currency", "order_id", "url", "document_url");
 
+/** `/v1/wallet/block`. */
 export interface WalletBlocked {
-  uuid?: string;
+  uuid: string;
   address: string;
   blocked: boolean;
+}
+export const WalletBlockedKeys = defineKeys<WalletBlocked>()("uuid", "address", "blocked");
+
+/** `/v1/wallet/qr` — the address QR as a data URI. */
+export interface WalletQr {
+  image: string;
 }
 
 /** `/v1/auto-withdraw/*` entry. */
@@ -100,11 +108,20 @@ export interface AccuracyConfig {
   enabled: boolean;
   accuracy_percent: number;
 }
+export const AccuracyConfigKeys = defineKeys<AccuracyConfig>()("enabled", "accuracy_percent");
+
 export interface AutoRefundConfig {
   overpay: boolean;
   underpay: boolean;
+  /** `get` only: whether the merchant ever set it. */
   configured?: boolean;
 }
+export const AutoRefundConfigKeys = defineKeys<Required<AutoRefundConfig>>()(
+  "overpay",
+  "underpay",
+  "configured",
+);
+
 export interface AcceptedMethod {
   currency: string;
   network: Network | (string & {});
@@ -112,6 +129,11 @@ export interface AcceptedMethod {
   /** Why it is unavailable, when it is. */
   reason?: string;
 }
+export const AcceptedMethodKeys = defineKeys<Omit<AcceptedMethod, "reason">>()(
+  "currency",
+  "network",
+  "available",
+);
 
 /** `/v1/split/rule` and `/v1/split/rule/list` items. */
 export interface SplitRule {
@@ -135,12 +157,19 @@ export const SplitRuleKeys = defineKeys<Required<Omit<SplitRule, "merchant_id">>
   "note",
   "reversible",
 );
+/** `POST /v1/split/rule` answers with the id and percent only. */
+export const SplitRuleCreatedKeys = defineKeys<Pick<SplitRule, "rule_id" | "percent">>()(
+  "rule_id",
+  "percent",
+);
 export interface SplitConfig {
   refund_hold_seconds: number;
 }
+export const SplitConfigKeys = defineKeys<SplitConfig>()("refund_hold_seconds");
 export interface SplitOptIn {
   enabled: boolean;
 }
+export const SplitOptInKeys = defineKeys<SplitOptIn>()("enabled");
 
 /** `/v1/documents/jobs` and `/jobs/info`. */
 export interface DocumentJob {
@@ -148,13 +177,23 @@ export interface DocumentJob {
   kind: string;
   format: string;
   lang: string;
-  status: "queued" | "processing" | "ready" | "failed" | (string & {});
+  status: "queued" | "processing" | "done" | "failed" | (string & {});
   period: { from: string; to: string };
-  /** Hint, seconds, while queued. */
-  ready_within?: number;
-  /** Set once ready; download with `documents.jobFile`. */
-  file?: Record<string, unknown>;
+  /** Human hint while queued (e.g. "15s"). */
+  ready_within?: string;
+  /** Set once done; `download_url` is a signed link, or use `documents.jobFile`. */
+  file?: { download_url: string; expires_at: Timestamp; rows: number; size_bytes: number };
   error?: string | null;
   created_at: Timestamp;
   updated_at: Timestamp;
 }
+export const DocumentJobKeys = defineKeys<Omit<DocumentJob, "ready_within" | "file" | "error">>()(
+  "job_id",
+  "kind",
+  "format",
+  "lang",
+  "status",
+  "period",
+  "created_at",
+  "updated_at",
+);

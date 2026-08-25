@@ -203,6 +203,13 @@ export interface ResolutionAccepted {
 }
 /** `/v1/payment/resolve` with `action: "refund"` — the underpayment was sent back; the body is the refund payout. */
 export type ResolutionRefunded = Payout & { resolution: "refunded" };
+export const ResolutionAcceptedKeys = defineKeys<ResolutionAccepted>()(
+  "resolution",
+  "payment_uuid",
+  "order_id",
+  "currency",
+  "amount_kept",
+);
 export type Resolution = ResolutionAccepted | ResolutionRefunded;
 
 /** `/v1/payment/send-email`. */
@@ -211,6 +218,7 @@ export interface EmailSent {
   email: string;
   uuid: string;
 }
+export const EmailSentKeys = defineKeys<EmailSent>()("ok", "email", "uuid");
 
 /** Item of `/v1/payment/services` and `/v1/payout/services`. */
 export interface ServiceMethod {

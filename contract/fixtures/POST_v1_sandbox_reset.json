@@ -5,7 +5,7 @@
  "response": {
   "result": {
    "balances_zeroed": 1,
-   "invoices_cancelled": 2
+   "invoices_cancelled": 3
   },
   "state": 0
  },

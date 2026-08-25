@@ -1,15 +1,9 @@
 {
  "route": "GET /v1/documents/ledger",
- "status": 404,
- "response": {
-  "error": {
-   "code": "document.disabled",
-   "message": "documents are not enabled on this deployment",
-   "retryable": false,
-   "request_id": "987189ed-3295-462e-9096-3caf7f3ae783"
-  }
- },
+ "status": 200,
  "headers": {
-  "Content-Type": "application/json"
+  "Content-Disposition": "inline; filename=\"oblodai-ledger-efae6625.pdf\"",
+  "Content-Length": "46",
+  "Content-Type": "application/pdf"
  }
 }

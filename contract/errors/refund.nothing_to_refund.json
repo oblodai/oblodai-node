@@ -3,14 +3,14 @@
  "status": 400,
  "request": {
   "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
-  "uuid": ""
+  "uuid": "554f1ca1-9b1e-41ff-ae8b-e82a39008a18"
  },
  "response": {
   "error": {
-   "code": "wallet.bad_uuid",
-   "message": "invalid wallet uuid",
+   "code": "refund.nothing_to_refund",
+   "message": "no funds received on this wallet",
    "retryable": false,
-   "request_id": "ddf1b931-adcb-4eb2-a141-4bf4b2868f37"
+   "request_id": "400c4949-ffb1-4951-8e63-c5b35396fc5b"
   }
  },
  "headers": {

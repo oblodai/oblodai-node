@@ -1,18 +1,21 @@
 {
  "route": "POST /v1/transfer/to-personal",
- "status": 404,
+ "status": 200,
  "request": {
   "amount": "1",
   "currency": "USDT",
   "order_id": "sdk-tr-1"
  },
  "response": {
-  "error": {
-   "code": "merchant.no_personal_wallet",
-   "message": "this merchant has no linked personal wallet",
-   "retryable": false,
-   "request_id": "a1f126f1-4627-4ebf-a074-2f12d52a513b"
-  }
+  "result": {
+   "amount": "1.000000",
+   "currency": "USDT",
+   "direction": "to_personal",
+   "document_url": "http://127.0.0.1:44661/v1/documents/transfer/aa1af247-3ebc-44c6-87a5-57919b53acb4?exp=1787698996\u0026sig=374f64ce25bd4066f7af8b15effd35be315cd7a754e21f9a1610414f5a77fe31",
+   "personal_balance": "1.000000",
+   "uuid": "aa1af247-3ebc-44c6-87a5-57919b53acb4"
+  },
+  "state": 0
  },
  "headers": {
   "Content-Type": "application/json"

@@ -1,6 +1,6 @@
 {
  "route": "POST /v1/documents/jobs",
- "status": 404,
+ "status": 200,
  "request": {
   "format": "csv",
   "from": "2026-01-01",
@@ -9,12 +9,21 @@
   "to": "2026-08-25"
  },
  "response": {
-  "error": {
-   "code": "document.jobs_disabled",
-   "message": "background document generation is not enabled on this deployment",
-   "retryable": false,
-   "request_id": "77d9d98d-2a97-4d28-a7c5-5d720bbca009"
-  }
+  "result": {
+   "created_at": "2026-08-25T22:03:16Z",
+   "format": "csv",
+   "job_id": "55006e34-d238-4b86-b517-6a9d476de529",
+   "kind": "statement",
+   "lang": "en",
+   "period": {
+    "from": "2026-01-01",
+    "to": "2026-08-25"
+   },
+   "ready_within": "24h",
+   "status": "queued",
+   "updated_at": "2026-08-25T22:03:16Z"
+  },
+  "state": 0
  },
  "headers": {
   "Content-Type": "application/json"

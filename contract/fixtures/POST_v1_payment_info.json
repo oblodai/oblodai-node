@@ -2,26 +2,26 @@
  "route": "POST /v1/payment/info",
  "status": 200,
  "request": {
-  "uuid": "8eec426e-cece-4688-ad9d-a5d1aea6a8f4"
+  "uuid": "3c000292-299b-4a08-83c9-82828514c3b1"
  },
  "response": {
   "result": {
    "additional_data": "sdk-contract",
-   "address": "sandbox:8eec426e-cece-4688-ad9d-a5d1aea6a8f4",
+   "address": "sandbox:3c000292-299b-4a08-83c9-82828514c3b1",
    "address_muxed": "",
-   "address_qr_code": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAABlBMVEX///8AAABVwtN+AAAB9ElEQVR42uyYPbLkIAyERREQcgSOws38czOOwhEICSj3VgvPjt++iTYauaxgPLa/RJYQ3cgTTzzxf7ECQBdBS4dEDEkYkc9wL0BEXOe/hB6L72kfsZwv7AAe2HsqaGkH4MnGAlSLACTWFU14N+wCvqW9R0io7paA9mTiI8fv0MV9atpvB3Q+pDJiXULLc2X9HiBfDsxIvF25qkL9ONK/HGDLcVbrJc7cmGa9F8Chx9/Bb9AEMyRcqmkBAIoDCpo4tOw1v+wuaVoA1hHLMtNkT44AoGUAmykALe9AmSohz5WVj6uWuwXgmyyh5vfOC63vZc8yAIhnmjWPiEOLqlrOvatpAniniS2wGesiCsAUMCJ2rRDfQNMUubbcPYD5HcS3tAUUdFk8iuuymgJGLOtUQZzpvqfNNzkkbbYAyZtIphO9miCYAhi6jiKOME0QWj6mursPcLZepn6YW9K/A8QE4Cl/qrx6cjpWCT+GuQEA2IICq6aJfbxUgiGApemnCVJ3cJo73Ao4vV7hzqsyvLqhl9US8D481JXlUTnej0s1TQDzDARjniHSPsw0bQHn4eE57CRwTOC6sd4L+Ksf6PWO8OsQ1QYgslBGsJrckj5V84uBlxOVNO0DvVCGNeCczHQHuqoSRY5cWu4WwBNPPPEz/gQAAP//egdIXJmM+zgAAAAASUVORK5CYII=",
+   "address_qr_code": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAABlBMVEX///8AAABVwtN+AAACAUlEQVR42uyZMa70IAyEJ6JIyRE4CjfbJDfjKByBksLK/LLJkzarVH8VR7H0isd+DWszzLB46623/q8WkuyJgfWj/88ViLrGZwEApp4Km7IFwAexHB/4AQK5dWRB2ueWRddiIatDIBXECiBjrpN4BWD7m0n9eyRgMwmQ3Ow4pf1qaO8ODH0oEutnbjn0tMmVgNwbGJXIljY2CNImF5J+c2AJLAtrVqADoVuzpp74LEBUvgG2xB6LABPtgK2eAMi4khB1KQfy52T5AELTmVRd07so0PY39bR6AhYgsyOTqg8INK0+y+ATgMCCWU+WjaZZOj1ZJwG5PWD+09TAhIE9rYGF3oDQ8orE0PR+zYevVnl3BfDQalboyHUsErl/6cMjAMsMs+aGtJrxTusIQasnQLu5kcVUfBhvsuwnMb8/sEgsH5iXO2zdDmsWPAGqzhsrRpTD0axdD9iTAN38bsmHalmDXbmZX17OA2BXKSvMkcah4uf44ALQmZxpVrSrCzIztH+JuQdAZWDpiTJUjqP2c2L1DxxZTwUEQJa5TgJ8f1EegL/crW20NxB76nEHjLBwNImhQ7dpYcITMN6jEJpBgj92fSAwsp7qiOq6TalHgFD/0DR3b/KbkhwAx+OhjBCkli40XDyB3hs4fgFhs/bozaQqdzY5/oG33nrrXP8CAAD//+BPT3BCvU7+AAAAAElFTkSuQmCC",
    "address_xaddress": "",
    "amount": "25.000000",
    "amount_paid": "25.000000",
    "amount_remaining": "0.000000",
    "commission": "0.675000",
    "confirmations": 20,
-   "created_at": "2026-08-25T21:46:42Z",
+   "created_at": "2026-08-25T22:03:15Z",
    "currency": "USDT",
    "destination_tag": "",
-   "document_url": "",
+   "document_url": "http://127.0.0.1:44661/v1/documents/payment/3c000292-299b-4a08-83c9-82828514c3b1?exp=1787698996\u0026sig=8fcf887d070b5f15b05cffab313df9d3e3a36bf4a402fd1d05e577df3097db07",
    "exchange_rate": "1",
-   "expired_at": "2026-08-25T22:46:42Z",
+   "expired_at": "2026-08-25T23:03:15Z",
    "is_final": true,
    "is_multi": false,
    "is_test": true,
@@ -29,24 +29,51 @@
    "merchant_amount": "24.325000",
    "network": "tron",
    "order_id": "sdk-inv-1",
-   "paid_at": null,
-   "payer_address": "TqmEE4m4ShR898RHnTvKyci8ZwCqQ6HLjj",
+   "paid_at": "2026-08-25T22:03:15Z",
+   "payer_address": "Th47Ygh4aQjsRRLaGCUCEFSschHST1hSJ3",
    "payer_address_is_refundable": true,
    "payer_amount": "25.000000",
    "payer_currency": "USDT",
    "payer_email": "buyer@example.com",
-   "rate_expires_at": "2026-08-25T21:51:42Z",
-   "refund_status": "none",
-   "refunds": [],
+   "rate_expires_at": "2026-08-25T22:08:15Z",
+   "refund_status": "partial",
+   "refunds": [
+    {
+     "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+     "amount": "1.000000",
+     "created_at": "2026-08-25T22:03:16Z",
+     "is_final": true,
+     "status": "confirmed",
+     "txid": "sandboxtx_fecec445e13c627484f23ca4b7f48e63",
+     "uuid": "5d62d232-aeb4-45db-b74f-8aa899f6b85c"
+    },
+    {
+     "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+     "amount": "5.000000",
+     "created_at": "2026-08-25T22:03:16Z",
+     "is_final": true,
+     "status": "confirmed",
+     "txid": "sandboxtx_8c87dc3d7b9801cfee813c3d7a4005db",
+     "uuid": "4ffb26a3-76e7-4f62-a370-2df14555fc78"
+    }
+   ],
    "required_confirmations": 20,
    "status": "paid",
-   "tx_list": [],
+   "tx_list": [
+    {
+     "amount": "25.000000",
+     "created_at": "2026-08-25T22:03:15Z",
+     "height": 0,
+     "network": "tron",
+     "txid": "sandbox:sdk-tx-1"
+    }
+   ],
    "txid": "sandbox:sdk-tx-1",
-   "updated_at": "2026-08-25T21:46:42Z",
-   "url": "",
+   "updated_at": "2026-08-25T22:03:15Z",
+   "url": "http://127.0.0.1:44661/pay/3c000292-299b-4a08-83c9-82828514c3b1",
    "url_return": "https://shop.example/back",
    "url_success": "https://shop.example/ok",
-   "uuid": "8eec426e-cece-4688-ad9d-a5d1aea6a8f4"
+   "uuid": "3c000292-299b-4a08-83c9-82828514c3b1"
   },
   "state": 0
  },

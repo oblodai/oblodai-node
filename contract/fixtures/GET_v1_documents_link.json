@@ -1,15 +1,9 @@
 {
  "route": "GET /v1/documents/link",
- "status": 404,
- "response": {
-  "error": {
-   "code": "document.disabled",
-   "message": "documents are not enabled on this deployment",
-   "retryable": false,
-   "request_id": "30410b3a-126d-435c-870f-a48318390983"
-  }
- },
+ "status": 200,
  "headers": {
-  "Content-Type": "application/json"
+  "Content-Disposition": "inline; filename=\"oblodai-paylink-report-c7aeabe9.pdf\"",
+  "Content-Length": "46",
+  "Content-Type": "application/pdf"
  }
 }

@@ -1,15 +1,9 @@
 {
  "route": "GET /v1/documents/balance",
- "status": 404,
- "response": {
-  "error": {
-   "code": "document.disabled",
-   "message": "documents are not enabled on this deployment",
-   "retryable": false,
-   "request_id": "88d74abf-707f-487d-8ebe-5313cb802097"
-  }
- },
+ "status": 200,
  "headers": {
-  "Content-Type": "application/json"
+  "Content-Disposition": "inline; filename=\"oblodai-balance-efae6625.pdf\"",
+  "Content-Length": "46",
+  "Content-Type": "application/pdf"
  }
 }
