@@ -7,13 +7,17 @@ import type { Payout } from "./payouts.js";
 export interface WebhookEndpoint {
   endpoint_id: string;
   url: string;
-  /** Shown once at registration and at rotation. */
-  secret: string;
+  /** Shown once: at first registration and at rotation. Absent when only the URL was changed. */
+  secret?: string;
 }
-export const WebhookEndpointKeys = defineKeys<WebhookEndpoint>()("endpoint_id", "url", "secret");
+export const WebhookEndpointKeys = defineKeys<Required<WebhookEndpoint>>()(
+  "endpoint_id",
+  "url",
+  "secret",
+);
 
 /** `POST /v1/webhooks/rotate-secret`. */
-export interface WebhookSecretRotated extends WebhookEndpoint {
+export interface WebhookSecretRotated extends Required<WebhookEndpoint> {
   /** Until then deliveries also carry `X-Webhook-Signature-Prev` signed with the old secret. */
   previous_secret_valid_until: Timestamp;
 }
@@ -24,15 +28,14 @@ export const WebhookSecretRotatedKeys = defineKeys<WebhookSecretRotated>()(
   "previous_secret_valid_until",
 );
 
-/** Item of `/v1/webhooks/deliveries` and `GET /v1/sandbox/webhooks` (which adds `payload`). */
+/** Item of `/v1/webhooks/deliveries` and `GET /v1/sandbox/webhooks` (which adds `payload`, drops `sequence`). */
 export interface WebhookDelivery {
   id: string;
   url: string;
-  event_type: EventType | string;
+  event_type: EventType | (string & {});
   status: DeliveryStatus;
   attempts: number;
   last_error: string;
-  /** Absent in the sandbox inspector listing. */
   sequence?: number;
   created_at: Timestamp;
   updated_at: Timestamp;
@@ -54,7 +57,9 @@ export const WebhookDeliveryKeys = defineKeys<Required<Omit<WebhookDelivery, "pa
 export interface WebhookTestResult {
   ok: boolean;
   signed: boolean;
-  status_code: number;
+  /** Absent when the receiver could not be reached (see `error`). */
+  status_code?: number;
+  error?: string;
   url?: string;
   duration_ms?: number;
 }
@@ -62,11 +67,12 @@ export interface WebhookTestResult {
 /** Fields every delivered event carries. */
 interface EventBase {
   uuid: string;
-  order_id: string;
+  /** Null on refund payouts. */
+  order_id: string | null;
   is_final: boolean;
   /** When the state change was committed — order events by this, or by `sequence`. */
   event_at: Timestamp;
-  /** Monotonic per merchant; a lower sequence arriving later is stale. */
+  /** Global, increasing (gaps are normal); a lower sequence arriving later is stale. */
   sequence: number;
   txid: string;
 }
@@ -77,7 +83,7 @@ export interface PaymentEvent extends EventBase {
   status: PaymentStatus;
   amount: Money;
   currency: string;
-  network: Network | string;
+  network: Network | (string & {});
   payer_amount: Money;
   payer_currency: string;
   /** What actually landed on the address, in `payer_currency`. */
@@ -142,10 +148,10 @@ export const PayoutEventKeys = defineKeys<PayoutEvent>()(
 /** `wallet.paid` — a deposit landed on a static wallet. */
 export interface WalletEvent extends EventBase {
   type: "wallet";
-  status: string;
+  status: "paid";
   address: string;
   currency: string;
-  network: Network | string;
+  network: Network | (string & {});
   payer_currency: string;
   payment_amount: Money;
 }

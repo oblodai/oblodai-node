@@ -1,6 +1,6 @@
 {
- "core_commit": "fd2c36d11f7cbeed555709bd70046173c59168ef",
- "exported_at": "2026-08-25T21:01:23Z",
+ "core_commit": "2338d0ff701ef5726718ffc9e5296f7835401bce",
+ "exported_at": "2026-08-25T21:46:42Z",
  "signing": {
   "algorithm": "HMAC-SHA256, lowercase hex",
   "canonical": "ts\\nMETHOD\\nrequest_uri\\nidempotency_key\\nbody",
@@ -74,7 +74,20 @@
    "auth": "payout",
    "idempotent": false,
    "bare": false,
-   "list": "plain"
+   "list": "plain",
+   "request_schema": {
+    "properties": {
+     "cidr": {
+      "description": "IP или подсеть в CIDR (203.0.113.7 или 203.0.113.0/24).",
+      "example": "203.0.113.0/24",
+      "type": "string"
+     }
+    },
+    "required": [
+     "cidr"
+    ],
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -82,7 +95,20 @@
    "auth": "payout",
    "idempotent": false,
    "bare": false,
-   "list": "plain"
+   "list": "plain",
+   "request_schema": {
+    "properties": {
+     "enabled": {
+      "description": "true — принимать API-вызовы только с адресов из списка; false — список хранится, но не применяется.",
+      "example": true,
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "enabled"
+    ],
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -98,14 +124,40 @@
    "auth": "payout",
    "idempotent": false,
    "bare": false,
-   "list": "plain"
+   "list": "plain",
+   "request_schema": {
+    "properties": {
+     "cidr": {
+      "description": "IP или подсеть в CIDR (203.0.113.7 или 203.0.113.0/24).",
+      "example": "203.0.113.0/24",
+      "type": "string"
+     }
+    },
+    "required": [
+     "cidr"
+    ],
+    "type": "object"
+   }
   },
   {
    "method": "POST",
    "path": "/v1/auto-withdraw/delete",
    "auth": "payout",
    "idempotent": false,
-   "bare": false
+   "bare": false,
+   "request_schema": {
+    "properties": {
+     "currency": {
+      "description": "Актив, автовывод которого выключить.",
+      "example": "USDT",
+      "type": "string"
+     }
+    },
+    "required": [
+     "currency"
+    ],
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -120,7 +172,37 @@
    "path": "/v1/auto-withdraw/set",
    "auth": "payout",
    "idempotent": false,
-   "bare": false
+   "bare": false,
+   "request_schema": {
+    "properties": {
+     "address": {
+      "description": "Адрес назначения (внешний кошелёк мерчанта).",
+      "example": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+      "type": "string"
+     },
+     "currency": {
+      "description": "Актив, который выводить автоматически.",
+      "example": "USDT",
+      "type": "string"
+     },
+     "min_amount": {
+      "description": "Порог: вывод срабатывает, когда доступный баланс актива не меньше этой суммы; пусто — сетевой минимум.",
+      "example": "100",
+      "type": "string"
+     },
+     "network": {
+      "description": "Сеть адреса назначения.",
+      "example": "tron",
+      "type": "string"
+     }
+    },
+    "required": [
+     "currency",
+     "network",
+     "address"
+    ],
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -1465,14 +1547,60 @@
    "auth": "payment",
    "idempotent": false,
    "bare": false,
-   "list": "paged"
+   "list": "paged",
+   "request_schema": {
+    "properties": {
+     "limit": {
+      "description": "Размер страницы, 1–100; вне диапазона — 25.",
+      "example": 25,
+      "type": "integer"
+     },
+     "offset": {
+      "description": "Смещение от начала списка.",
+      "example": 0,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   }
   },
   {
    "method": "POST",
    "path": "/v1/payment/accepted/set",
    "auth": "payment",
    "idempotent": false,
-   "bare": false
+   "bare": false,
+   "request_schema": {
+    "properties": {
+     "accepted": {
+      "description": "Полный список пар валюта+сеть, которыми разрешено платить; пустой список — принимать всё из каталога.",
+      "items": {
+       "properties": {
+        "currency": {
+         "description": "Код актива.",
+         "example": "USDT",
+         "type": "string"
+        },
+        "network": {
+         "description": "Сеть актива.",
+         "example": "tron",
+         "type": "string"
+        }
+       },
+       "required": [
+        "currency",
+        "network"
+       ],
+       "type": "object"
+      },
+      "type": "array"
+     }
+    },
+    "required": [
+     "accepted"
+    ],
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -1900,7 +2028,22 @@
    "auth": "payment",
    "idempotent": false,
    "bare": false,
-   "list": "paged"
+   "list": "paged",
+   "request_schema": {
+    "properties": {
+     "limit": {
+      "description": "Размер страницы, 1–100; вне диапазона — 25.",
+      "example": 25,
+      "type": "integer"
+     },
+     "offset": {
+      "description": "Смещение от начала списка.",
+      "example": 0,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -1965,7 +2108,32 @@
    "auth": "payment",
    "idempotent": false,
    "bare": false,
-   "list": "paged"
+   "list": "paged",
+   "request_schema": {
+    "properties": {
+     "kind": {
+      "description": "Только для /v1/payout/history: payout — обычные выплаты, refund — возвраты; пусто — всё.",
+      "example": "payout",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Размер страницы, 1–100; вне диапазона — 25.",
+      "example": 25,
+      "type": "integer"
+     },
+     "offset": {
+      "description": "Смещение от начала списка (новые сверху).",
+      "example": 0,
+      "type": "integer"
+     },
+     "status": {
+      "description": "Фильтр по статусу (точное значение из словаря статусов); пусто — все.",
+      "example": "paid",
+      "type": "string"
+     }
+    },
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -2284,21 +2452,25 @@
    "bare": false,
    "request_schema": {
     "properties": {
-     "document_url": {
-      "description": "Подписанная ссылка на PDF-плакат с QR оплаты (печать на кассу). Пусто, если генерация документов не включена.",
-      "type": "string"
+     "limit": {
+      "description": "Размер страницы платежей по ссылке, 1–100; вне диапазона — 25.",
+      "example": 25,
+      "type": "integer"
      },
      "link_id": {
-      "description": "Идентификатор ссылки",
+      "description": "Идентификатор платёжной ссылки.",
       "example": "5d3f2a71-9c84-4b0e-8d17-3e6a2c9f1b40",
       "type": "string"
      },
-     "url": {
-      "description": "Публичный URL страницы оплаты — его вы даёте покупателю: кнопкой, в письме, QR-кодом",
-      "example": "https://pay.oblodai.com/link/5d3f2a71-9c84-4b0e-8d17-3e6a2c9f1b40",
-      "type": "string"
+     "offset": {
+      "description": "Смещение страницы платежей.",
+      "example": 0,
+      "type": "integer"
      }
     },
+    "required": [
+     "link_id"
+    ],
     "type": "object"
    }
   },
@@ -2308,14 +2480,48 @@
    "auth": "payment",
    "idempotent": false,
    "bare": false,
-   "list": "paged"
+   "list": "paged",
+   "request_schema": {
+    "properties": {
+     "limit": {
+      "description": "Размер страницы, 1–100; вне диапазона — 25.",
+      "example": 25,
+      "type": "integer"
+     },
+     "offset": {
+      "description": "Смещение от начала списка.",
+      "example": 0,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   }
   },
   {
    "method": "POST",
    "path": "/v1/payment/link/toggle",
    "auth": "payment",
    "idempotent": false,
-   "bare": false
+   "bare": false,
+   "request_schema": {
+    "properties": {
+     "active": {
+      "description": "true — ссылка принимает оплату; false — выключена (страница покажет, что ссылка неактивна).",
+      "example": false,
+      "type": "boolean"
+     },
+     "link_id": {
+      "description": "Идентификатор платёжной ссылки.",
+      "example": "5d3f2a71-9c84-4b0e-8d17-3e6a2c9f1b40",
+      "type": "string"
+     }
+    },
+    "required": [
+     "link_id",
+     "active"
+    ],
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -2511,7 +2717,22 @@
    "auth": "payment",
    "idempotent": false,
    "bare": false,
-   "list": "paged"
+   "list": "paged",
+   "request_schema": {
+    "properties": {
+     "limit": {
+      "description": "Размер страницы, 1–100; вне диапазона — 25.",
+      "example": 25,
+      "type": "integer"
+     },
+     "offset": {
+      "description": "Смещение от начала списка.",
+      "example": 0,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -2826,7 +3047,35 @@
    "path": "/v1/payout/calculate",
    "auth": "payout",
    "idempotent": false,
-   "bare": false
+   "bare": false,
+   "request_schema": {
+    "properties": {
+     "amount": {
+      "description": "Сумма выплаты, строкой.",
+      "example": "10",
+      "type": "string"
+     },
+     "currency": {
+      "description": "Актив выплаты (USDT, BTC, …).",
+      "example": "USDT",
+      "type": "string"
+     },
+     "is_subtract": {
+      "description": "true — комиссия списывается с баланса поверх суммы (получатель получит ровно amount); false — из суммы выплаты.",
+      "type": "boolean"
+     },
+     "network": {
+      "description": "Сеть выплаты; обязательна, если актив живёт в нескольких сетях.",
+      "example": "tron",
+      "type": "string"
+     }
+    },
+    "required": [
+     "amount",
+     "currency"
+    ],
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -2880,7 +3129,32 @@
    "auth": "payout",
    "idempotent": false,
    "bare": false,
-   "list": "paged"
+   "list": "paged",
+   "request_schema": {
+    "properties": {
+     "kind": {
+      "description": "Только для /v1/payout/history: payout — обычные выплаты, refund — возвраты; пусто — всё.",
+      "example": "payout",
+      "type": "string"
+     },
+     "limit": {
+      "description": "Размер страницы, 1–100; вне диапазона — 25.",
+      "example": 25,
+      "type": "integer"
+     },
+     "offset": {
+      "description": "Смещение от начала списка (новые сверху).",
+      "example": 0,
+      "type": "integer"
+     },
+     "status": {
+      "description": "Фильтр по статусу (точное значение из словаря статусов); пусто — все.",
+      "example": "paid",
+      "type": "string"
+     }
+    },
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -3343,7 +3617,22 @@
    "auth": "payout",
    "idempotent": false,
    "bare": false,
-   "list": "paged"
+   "list": "paged",
+   "request_schema": {
+    "properties": {
+     "limit": {
+      "description": "Размер страницы, 1–100; вне диапазона — 25.",
+      "example": 25,
+      "type": "integer"
+     },
+     "offset": {
+      "description": "Смещение от начала списка.",
+      "example": 0,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -3690,7 +3979,20 @@
    "path": "/v1/split/rule/delete",
    "auth": "payout",
    "idempotent": false,
-   "bare": false
+   "bare": false,
+   "request_schema": {
+    "properties": {
+     "rule_id": {
+      "description": "Идентификатор правила из POST /v1/split/rule или списка.",
+      "example": "9f4c1a2b-77de-4a55-9c1f-0e2b3d4a5f60",
+      "type": "string"
+     }
+    },
+    "required": [
+     "rule_id"
+    ],
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -3698,7 +4000,22 @@
    "auth": "payout",
    "idempotent": false,
    "bare": false,
-   "list": "paged"
+   "list": "paged",
+   "request_schema": {
+    "properties": {
+     "limit": {
+      "description": "Размер страницы, 1–100; вне диапазона — 25.",
+      "example": 25,
+      "type": "integer"
+     },
+     "offset": {
+      "description": "Смещение от начала списка.",
+      "example": 0,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -3945,7 +4262,17 @@
    "path": "/v1/vrcs",
    "auth": "payment",
    "idempotent": false,
-   "bare": false
+   "bare": false,
+   "request_schema": {
+    "properties": {
+     "enabled": {
+      "description": "true — включить автоконвертацию волатильных поступлений в USDT, false — выключить; без поля — только прочитать текущее состояние.",
+      "example": true,
+      "type": "boolean"
+     }
+    },
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -4139,7 +4466,22 @@
    "auth": "payment",
    "idempotent": false,
    "bare": false,
-   "list": "paged"
+   "list": "paged",
+   "request_schema": {
+    "properties": {
+     "limit": {
+      "description": "Размер страницы, 1–100; вне диапазона — 25.",
+      "example": 25,
+      "type": "integer"
+     },
+     "offset": {
+      "description": "Смещение от начала списка.",
+      "example": 0,
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   }
   },
   {
    "method": "POST",
@@ -4612,7 +4954,9 @@
   "request.conflicting_field",
   "request.control_char",
   "request.duplicate_field",
+  "request.method_not_allowed",
   "request.missing_field",
+  "request.not_found",
   "request.nul_byte",
   "request.rate_limited",
   "request.reference_invalid",
@@ -4626,8 +4970,6 @@
   "resolution.chain_ambiguous",
   "resolution.disabled",
   "resolution.not_underpaid",
-  "route.method_not_allowed",
-  "route.not_found",
   "routing.awaiting_settle",
   "routing.onramp_check_failed",
   "routing.refund_in_flight",

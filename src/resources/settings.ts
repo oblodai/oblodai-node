@@ -101,7 +101,7 @@ export class Settings extends Resource {
   }
 
   /** `POST /v1/api-allowlist/list` — source IPs allowed to use the API keys. Payout key. */
-  getApiAllowlist(opts?: RequestOptions): Promise<ApiAllowlist> {
+  listApiAllowlist(opts?: RequestOptions): Promise<ApiAllowlist> {
     return this.call<ApiAllowlist>("POST /v1/api-allowlist/list", undefined, opts);
   }
   /** `POST /v1/api-allowlist/add`. */

@@ -8,6 +8,7 @@ export interface Balance {
 }
 export interface BalanceEntry {
   currency: string;
+  /** Available (spendable) balance. */
   balance: Money;
 }
 export const BalanceKeys = defineKeys<Balance>()("balance");
@@ -16,6 +17,7 @@ export const BalanceKeys = defineKeys<Balance>()("balance");
 export interface ReferralInfo {
   code: string;
   link: string;
+  /** Referral tiers, basis points. */
   tier_bps: number[];
   referred_count: number;
   earnings_by_asset: Record<string, Money>;
@@ -30,6 +32,7 @@ export const ReferralInfoKeys = defineKeys<ReferralInfo>()(
   "week",
 );
 
+/** `/v1/vrcs` — volatility risk control (auto-convert volatile deposits to USDT). */
 export interface VrcsStatus {
   enabled: boolean;
 }
@@ -38,23 +41,24 @@ export interface VrcsStatus {
 export interface Wallet {
   uuid: string;
   address: string;
-  network: Network | string;
+  network: Network | (string & {});
   currency: string;
   order_id: string;
+  /** Hosted page showing the address and QR. */
   url: string;
   document_url: string;
+  /** XRP destination tag / TON and Stellar memo, when the network needs one. */
+  destination_tag?: string;
+  memo?: string;
+  address_xaddress?: string;
+  address_muxed?: string;
 }
-export const WalletKeys = defineKeys<Wallet>()(
-  "uuid",
-  "address",
-  "network",
-  "currency",
-  "order_id",
-  "url",
-  "document_url",
-);
+export const WalletKeys = defineKeys<
+  Omit<Wallet, "destination_tag" | "memo" | "address_xaddress" | "address_muxed">
+>()("uuid", "address", "network", "currency", "order_id", "url", "document_url");
 
 export interface WalletBlocked {
+  uuid?: string;
   address: string;
   blocked: boolean;
 }
@@ -62,7 +66,7 @@ export interface WalletBlocked {
 /** `/v1/auto-withdraw/*` entry. */
 export interface AutoWithdrawRule {
   currency: string;
-  network: Network | string;
+  network: Network | (string & {});
   address: string;
   min_amount: Money;
 }
@@ -82,7 +86,8 @@ export const ApiAllowlistKeys = defineKeys<ApiAllowlist>()("enabled", "items");
 
 export interface DiscountRule {
   currency: string;
-  network: Network | string;
+  network: Network | (string & {});
+  /** Positive = discount for the payer, negative = markup. */
   discount_percent: number;
 }
 export const DiscountRuleKeys = defineKeys<DiscountRule>()(
@@ -102,21 +107,26 @@ export interface AutoRefundConfig {
 }
 export interface AcceptedMethod {
   currency: string;
-  network: Network | string;
+  network: Network | (string & {});
   available: boolean;
+  /** Why it is unavailable, when it is. */
+  reason?: string;
 }
 
 /** `/v1/split/rule` and `/v1/split/rule/list` items. */
 export interface SplitRule {
   rule_id: string;
+  /** Share of every payment, percent, as a decimal string. */
   percent: string;
   active?: boolean;
   address?: string;
-  network?: Network | string;
+  network?: Network | (string & {});
+  /** Set for on-platform partner rules (reversible on refund). */
+  merchant_id?: string;
   note?: string;
   reversible?: boolean;
 }
-export const SplitRuleKeys = defineKeys<Required<SplitRule>>()(
+export const SplitRuleKeys = defineKeys<Required<Omit<SplitRule, "merchant_id">>>()(
   "rule_id",
   "percent",
   "active",
@@ -138,10 +148,13 @@ export interface DocumentJob {
   kind: string;
   format: string;
   lang: string;
-  status: string;
-  from: string;
-  to: string;
-  period: string;
+  status: "queued" | "processing" | "ready" | "failed" | (string & {});
+  period: { from: string; to: string };
+  /** Hint, seconds, while queued. */
+  ready_within?: number;
+  /** Set once ready; download with `documents.jobFile`. */
+  file?: Record<string, unknown>;
+  error?: string | null;
   created_at: Timestamp;
   updated_at: Timestamp;
 }

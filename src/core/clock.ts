@@ -1,8 +1,8 @@
 /**
  * Injectable clock for signing. The core rejects timestamps more than ±300 s from its own time;
  * a host with a drifting clock would get `merchant.bad_signature` on every call. The transport
- * learns the server's time from the `Date` header of every response and, when a 401 arrives
- * while the measured offset is large, re-signs once with the corrected timestamp.
+ * learns the server's time from the `Date` header of a signature-failure response, re-signs once,
+ * and keeps the offset only if that re-signed attempt got past authentication.
  */
 export interface Clock {
   /** Current unix time in seconds. */
@@ -12,6 +12,9 @@ export interface Clock {
 export const systemClock: Clock = {
   now: () => Math.floor(Date.now() / 1000),
 };
+
+/** Offsets beyond this are implausible clock drift and are ignored (a broken proxy `Date`). */
+export const MAX_PLAUSIBLE_OFFSET_SECONDS = 24 * 3600;
 
 export class SkewCorrectingClock implements Clock {
   private offsetSec = 0;
@@ -27,16 +30,20 @@ export class SkewCorrectingClock implements Clock {
     return this.offsetSec;
   }
 
-  /** Feed a response `Date` header; returns the measured offset or undefined when unparsable. */
+  /** Measure the offset from a response `Date` header; undefined when absent, unparsable or implausible. */
   observeServerDate(dateHeader: string | null | undefined): number | undefined {
     if (!dateHeader) return undefined;
     const serverMs = Date.parse(dateHeader);
     if (Number.isNaN(serverMs)) return undefined;
-    return Math.round(serverMs / 1000) - this.base.now();
+    const offset = Math.round(serverMs / 1000) - this.base.now();
+    return Math.abs(offset) > MAX_PLAUSIBLE_OFFSET_SECONDS ? undefined : offset;
   }
 
-  /** Apply an offset measured by observeServerDate. */
   correct(offsetSec: number): void {
     this.offsetSec = offsetSec;
+  }
+
+  reset(): void {
+    this.offsetSec = 0;
   }
 }

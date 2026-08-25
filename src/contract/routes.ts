@@ -1,4 +1,4 @@
-// GENERATED FILE — do not edit. Source: contract/contract.json (core fd2c36d11f7c).
+// GENERATED FILE — do not edit. Source: contract/contract.json (core 2338d0ff701e).
 // Regenerate with: npm run codegen
 import type { RouteSpec } from "./types.js";
 
@@ -102,7 +102,7 @@ export const ROUTES = {
   "POST /v1/transfer/batch": { method: "POST", path: "/v1/transfer/batch", auth: "payout", idempotent: true, safe: false, bare: false },
   "POST /v1/transfer/to-personal": { method: "POST", path: "/v1/transfer/to-personal", auth: "payout", idempotent: true, safe: false, bare: false },
   "POST /v1/transfer/to-user": { method: "POST", path: "/v1/transfer/to-user", auth: "payout", idempotent: true, safe: false, bare: false },
-  "POST /v1/vrcs": { method: "POST", path: "/v1/vrcs", auth: "payment", idempotent: false, safe: true, bare: false },
+  "POST /v1/vrcs": { method: "POST", path: "/v1/vrcs", auth: "payment", idempotent: false, safe: false, bare: false },
   "POST /v1/wallet": { method: "POST", path: "/v1/wallet", auth: "payment", idempotent: false, safe: false, bare: false },
   "POST /v1/wallet/block": { method: "POST", path: "/v1/wallet/block", auth: "payment", idempotent: false, safe: false, bare: false },
   "POST /v1/wallet/blocked-address-refund": { method: "POST", path: "/v1/wallet/blocked-address-refund", auth: "payout", idempotent: false, safe: false, bare: false },

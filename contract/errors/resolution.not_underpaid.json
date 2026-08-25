@@ -3,14 +3,14 @@
  "status": 409,
  "request": {
   "action": "accept",
-  "uuid": "d193d420-7f8a-4bf6-a633-caaeb4bfaa49"
+  "uuid": "57155fd6-16da-4bad-a010-5bd959396070"
  },
  "response": {
   "error": {
    "code": "resolution.not_underpaid",
    "message": "only an underpaid (wrong_amount) payment can be resolved; this one is confirm_check",
    "retryable": false,
-   "request_id": "8d71fa78-e278-42ca-a4ab-736dc2854a60"
+   "request_id": "e50b6ad3-a183-4586-b38c-b9b3730babc8"
   }
  },
  "headers": {

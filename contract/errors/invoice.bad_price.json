@@ -10,7 +10,7 @@
    "code": "invoice.bad_price",
    "message": "price must be positive",
    "retryable": false,
-   "request_id": "a0c62cee-afb0-483b-88b8-1710a39f22a7"
+   "request_id": "9764ca01-1196-41d6-83e5-ba93348bc617"
   }
  },
  "headers": {

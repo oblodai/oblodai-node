@@ -30,6 +30,10 @@ computed signatures yourself, use `signRequest` from the package instead.
 | `client.links.*`                                 | `client.paymentLinks.*`                                                                                              |
 | `client.idempotency.*`                           | pass `{ idempotencyKey }` as the last argument of any method                                                         |
 
+## Renamed in the review pass
+
+`documents.get/balance/fees/batch/link/split/referrals` → `download/balanceCertificate/feeSchedule/batchReport/linkReport/splitReport/referralsReport`; `wallets.refundBlocked` → `refundBlockedDeposit`; `settings.getApiAllowlist` → `listApiAllowlist`; `Resolution.resolution` is `"accepted" | "refunded"`.
+
 ## New
 
 `payments.cancel`, `payouts.cancel`, `payouts.validate`, `payments.batch`, `refunds.resolve`,

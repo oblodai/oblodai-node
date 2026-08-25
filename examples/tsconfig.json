@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "paths": {
+      "@oblodai-npm/sdk": ["../src/index.ts"],
+      "@oblodai-npm/sdk/webhooks": ["../src/webhooks.ts"]
+    }
+  },
+  "include": ["./*.ts", "../src/**/*"]
+}

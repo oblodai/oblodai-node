@@ -2,7 +2,7 @@
  "route": "POST /v1/payout/cancel",
  "status": 200,
  "request": {
-  "uuid": "57521f9b-d7e6-463b-867b-be3bc3b9fce2"
+  "uuid": "9e8b70f8-2693-466d-a5f0-0d2c74dcf5b7"
  },
  "response": {
   "result": {
@@ -10,7 +10,7 @@
    "amount": "1.000000",
    "approval_required": false,
    "commission": "0.000000",
-   "created_at": "2026-08-25T21:01:23Z",
+   "created_at": "2026-08-25T21:46:42Z",
    "currency": "USDT",
    "document_url": "",
    "fee_bearer": "gateway",
@@ -25,8 +25,8 @@
    "source": "api",
    "status": "cancelled",
    "txid": "",
-   "updated_at": "2026-08-25T21:01:23Z",
-   "uuid": "57521f9b-d7e6-463b-867b-be3bc3b9fce2"
+   "updated_at": "2026-08-25T21:46:42Z",
+   "uuid": "9e8b70f8-2693-466d-a5f0-0d2c74dcf5b7"
   },
   "state": 0
  },

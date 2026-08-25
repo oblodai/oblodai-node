@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isStaleEvent, parseWebhook, verifyWebhook } from "../../src/webhooks.js";
+import {
+  isStaleEvent,
+  parseWebhook,
+  verifyWebhook,
+  verifyWebhookDelivery,
+} from "../../src/webhooks.js";
 import { SignatureError } from "../../src/core/errors.js";
 import { signWebhook } from "../../src/core/signing.js";
 import { loadWebhookSamples, resultOf } from "../support/fixtures.js";
@@ -12,10 +17,22 @@ const secret = resultOf<{ secret: string }>("POST /v1/webhooks/rotate-secret").s
 describe("verifyWebhook against real deliveries", () => {
   for (const s of samples) {
     it(`verifies ${s.headers["X-Webhook-Event"]}`, () => {
-      const raw = JSON.stringify(s.body); // recorder stored the raw bytes as JSON; re-encoding is byte-identical for Go's compact output
+      const raw = s.raw ?? JSON.stringify(s.body); // the recorder keeps the exact delivered bytes
       const ts = Number(s.headers["X-Webhook-Timestamp"]);
-      const event = verifyWebhook(raw, s.headers, { secret, now: () => ts });
+      const { event, id, eventType } = verifyWebhookDelivery(raw, s.headers, {
+        secret,
+        now: () => ts,
+      });
       expect(event.uuid).toBe(s.body.uuid);
+      expect(id).toBe(s.headers["X-Webhook-Id"]);
+      expect(eventType).toBe(s.headers["X-Webhook-Event"]);
+      expect(() =>
+        verifyWebhook(raw, s.headers, {
+          secret: "some-other-secret",
+          previousSecret: "another",
+          now: () => ts,
+        }),
+      ).toThrow(/does not match/);
       expect(event.type).toBe(s.body.type);
       expect(typeof event.sequence).toBe("number");
       expect(s.headers["X-Webhook-Event"]).toMatch(/^(invoice|payout|wallet)\./);

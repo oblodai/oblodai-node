@@ -12,14 +12,16 @@ export interface CurrencyInfo {
   networks: CurrencyNetwork[];
 }
 export interface CurrencyNetwork {
-  network: Network | string;
-  /** `native` | `token`. */
-  kind: string;
+  network: Network | (string & {});
+  kind: "native" | "token" | (string & {});
+  /** Token contract address, for tokens. */
   contract?: string;
   min_confirmations: number;
+  /** Deposits and payouts both possible right now. */
   available: boolean;
   deposit_available: boolean;
   payout_available: boolean;
+  /** The network offered first on the pay page. */
   default_offer: boolean;
 }
 export interface PricingCurrency {
@@ -38,7 +40,7 @@ export const CurrencyNetworkKeys = defineKeys<Omit<CurrencyNetwork, "contract">>
   "default_offer",
 );
 
-/** `/v1/exchange-rate/list` item. */
+/** `/v1/exchange-rate/list` item: 1 `from` = `course` `to`. */
 export interface ExchangeRate {
   from: string;
   to: string;

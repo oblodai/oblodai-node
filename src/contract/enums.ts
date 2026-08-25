@@ -1,4 +1,4 @@
-// GENERATED FILE — do not edit. Source: contract/contract.json (core fd2c36d11f7c).
+// GENERATED FILE — do not edit. Source: contract/contract.json (core 2338d0ff701e).
 // Regenerate with: npm run codegen
 
 export const PAYMENT_STATUSES = [
@@ -81,6 +81,9 @@ export const ERROR_KINDS = [
   "internal",
 ] as const;
 export type ErrorKind = (typeof ERROR_KINDS)[number];
+
+export const AMOUNT_MODES = ["fixed", "open", "range"] as const;
+export type AmountMode = (typeof AMOUNT_MODES)[number];
 
 /** Webhook event types: `invoice.<status>`, `payout.<status>`, `wallet.paid`. */
 export const EVENT_TYPES = [
@@ -197,11 +200,11 @@ export const ERROR_CODES = [
   "refund.exceeds_refundable", "refund.fence_check", "refund.no_address", "refund.nothing_to_refund",
   "refund.paid_internally", "refund.reference_collision", "refund.too_many_attempts", "report.too_large",
   "request.bad_id", "request.bad_json", "request.body_read", "request.conflicting_field",
-  "request.control_char", "request.duplicate_field", "request.missing_field", "request.nul_byte",
-  "request.rate_limited", "request.reference_invalid", "request.reference_too_long", "request.too_deep",
-  "request.unknown_currency", "request.unreadable", "resolution.already_refunded", "resolution.already_resolved",
-  "resolution.bad_action", "resolution.chain_ambiguous", "resolution.disabled", "resolution.not_underpaid",
-  "route.method_not_allowed", "route.not_found", "routing.awaiting_settle", "routing.onramp_check_failed",
+  "request.control_char", "request.duplicate_field", "request.method_not_allowed", "request.missing_field",
+  "request.not_found", "request.nul_byte", "request.rate_limited", "request.reference_invalid",
+  "request.reference_too_long", "request.too_deep", "request.unknown_currency", "request.unreadable",
+  "resolution.already_refunded", "resolution.already_resolved", "resolution.bad_action", "resolution.chain_ambiguous",
+  "resolution.disabled", "resolution.not_underpaid", "routing.awaiting_settle", "routing.onramp_check_failed",
   "routing.refund_in_flight", "routing.refund_payer_unresolved", "routing.share_payout_check_failed", "routing.share_reattempts_exhausted",
   "routing.underpay_unresolved", "sandbox.amount_too_large", "sandbox.bad_amount", "sandbox.bad_asset",
   "sandbox.bad_delivery", "sandbox.bad_invoice", "sandbox.convert_not_available", "sandbox.delivery_not_found",

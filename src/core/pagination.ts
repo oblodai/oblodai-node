@@ -55,20 +55,27 @@ export async function collectPages<T>(
 }
 
 /**
- * What a list method returns: `await` it for the first page, or `for await` it to walk every
- * item across pages (each page fetched lazily). One object, both shapes — no second method.
+ * What a list method returns: `await` it (or `.then/.catch/.finally`) for the first page, or
+ * `for await` it to walk every item across pages. Nothing is requested until it is consumed, and
+ * the first page is requested once however many ways it is consumed.
  */
-export class PagePromise<T> implements PromiseLike<Page<T>>, AsyncIterable<T> {
-  private readonly first: Promise<Page<T>>;
+export class PagePromise<T> implements Promise<Page<T>>, AsyncIterable<T> {
+  private firstPage?: Promise<Page<T>>;
+  readonly [Symbol.toStringTag] = "PagePromise";
 
   constructor(
     private readonly fetchPage: PageFetcher<T>,
     private readonly params: PageParams,
-  ) {
-    this.first = fetchPage({
-      limit: params.limit ?? DEFAULT_PAGE_LIMIT,
-      offset: params.offset ?? 0,
-    });
+  ) {}
+
+  private get first(): Promise<Page<T>> {
+    if (!this.firstPage) {
+      this.firstPage = this.fetchPage({
+        limit: this.params.limit ?? DEFAULT_PAGE_LIMIT,
+        offset: this.params.offset ?? 0,
+      });
+    }
+    return this.firstPage;
   }
 
   then<R1 = Page<T>, R2 = never>(
@@ -78,17 +85,27 @@ export class PagePromise<T> implements PromiseLike<Page<T>>, AsyncIterable<T> {
     return this.first.then(onfulfilled, onrejected);
   }
 
-  /** Iterate every item, reusing the already-requested first page. */
+  catch<R = never>(
+    onrejected?: ((reason: unknown) => R | PromiseLike<R>) | null,
+  ): Promise<Page<T> | R> {
+    return this.first.catch(onrejected);
+  }
+
+  finally(onfinally?: (() => void) | null): Promise<Page<T>> {
+    return this.first.finally(onfinally);
+  }
+
+  /** Iterate every item, reusing the first page when it was already requested. */
   [Symbol.asyncIterator](): AsyncIterator<T> {
     const limit = this.params.limit ?? DEFAULT_PAGE_LIMIT;
-    let pagePromise: Promise<Page<T>> | undefined = this.first;
-    let offset = this.params.offset ?? 0;
+    const offset = this.params.offset ?? 0;
+    let pending: Promise<Page<T>> | undefined = this.first;
     const fetchPage = this.fetchPage;
     return iteratePages<T>(
       (p) => {
-        const pending = pagePromise;
-        pagePromise = undefined;
-        return pending ?? fetchPage(p);
+        const reuse = pending;
+        pending = undefined;
+        return reuse ?? fetchPage(p);
       },
       { limit, offset },
     );

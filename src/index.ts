@@ -28,8 +28,8 @@ export type { RetryOptions } from "./core/retry.js";
 export type { Logger, LogFields } from "./core/logger.js";
 export { consoleLogger } from "./core/logger.js";
 export type { FetchLike } from "./core/transport.js";
-export type { RequestOptions, FileResult } from "./resources/base.js";
-export { signRequest, canonicalString } from "./core/signing.js";
+export type { RequestOptions, FileResult, Ref } from "./resources/base.js";
+export { signRequest, canonicalString, signWebhook } from "./core/signing.js";
 export { newIdempotencyKey } from "./core/idempotency.js";
 
 // Contract: enums, routes, models, request DTOs
@@ -54,6 +54,7 @@ export type {
   PayoutLookup,
   PayoutHistoryParams,
   CalculatePayoutParams,
+  ValidatePayoutParams,
   MassPayoutParams,
   PayoutBatchParams,
 } from "./resources/payouts.js";
@@ -71,13 +72,13 @@ export type {
 } from "./resources/links.js";
 export type { CreateWalletParams } from "./resources/wallets.js";
 export type { WebhookTestParams } from "./resources/webhooks.js";
-export type { DocumentQuery, PeriodQuery } from "./resources/documents.js";
+export type { DocumentQuery, FormatQuery, PeriodQuery } from "./resources/documents.js";
 export type { CreateSplitRuleParams } from "./resources/splits.js";
 
 // Helpers
 export * from "./helpers/status.js";
 export * from "./helpers/money.js";
 
-// Webhook verification is also available from the "@oblodai/sdk/webhooks" subpath.
-export { verifyWebhook, parseWebhook, isStaleEvent } from "./webhooks.js";
-export type { VerifyWebhookOptions, WebhookHeaders } from "./webhooks.js";
+// Webhook verification is also available from the "@oblodai-npm/sdk/webhooks" subpath.
+export { verifyWebhook, verifyWebhookDelivery, parseWebhook, isStaleEvent } from "./webhooks.js";
+export type { VerifyWebhookOptions, WebhookHeaders, WebhookDeliveryInfo } from "./webhooks.js";

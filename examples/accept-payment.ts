@@ -1,5 +1,5 @@
 // Create an invoice, show the payer the address/URL, then poll until it is final.
-import { Oblodai, isPaymentFinal, isPaymentPaid } from "@oblodai-npm/sdk";
+import { Oblodai, isPaymentFinal, isPaymentPaid, isPaymentUnderpaid } from "@oblodai-npm/sdk";
 
 const oblodai = new Oblodai(); // OBLODAI_PUBLIC_ID / OBLODAI_SECRET from the environment
 

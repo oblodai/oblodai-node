@@ -171,6 +171,6 @@ describe("transport", () => {
     const { fetch } = mockFetch([ok({ currencies: [], pricing_currencies: [] })]);
     const ob = new Oblodai({ baseUrl: "https://api.test", fetch });
     await expect(ob.catalog.currencies()).resolves.toBeTruthy();
-    await expect(ob.account.balance()).rejects.toMatchObject({ code: "sdk.bad_envelope" });
+    await expect(ob.account.balance()).rejects.toMatchObject({ code: "sdk.missing_credentials" });
   });
 });

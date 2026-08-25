@@ -2,7 +2,7 @@
  "route": "POST /v1/split/rule/delete",
  "status": 200,
  "request": {
-  "rule_id": "820641ae-f6bf-4181-8afd-44985540cf6e"
+  "rule_id": "3c96808c-59f3-4a4e-b4aa-ef75bd8380bc"
  },
  "response": {
   "result": {
