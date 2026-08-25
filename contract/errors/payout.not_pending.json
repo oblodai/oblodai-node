@@ -2,14 +2,14 @@
  "route": "POST /v1/payout/approve",
  "status": 409,
  "request": {
-  "uuid": "fc5c597c-7a3f-4a84-9510-fcbd5d2099c3"
+  "uuid": "6f72258e-9858-4e3e-afaa-2db034f3a711"
  },
  "response": {
   "error": {
    "code": "payout.not_pending",
    "message": "only a pending payout can be approved",
    "retryable": false,
-   "request_id": "3d8b2912-5e21-42f5-a0ad-2a5bc9d5fb3f"
+   "request_id": "ef025312-6c2c-4e01-8085-8b893dd2f35b"
   }
  },
  "headers": {

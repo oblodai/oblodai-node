@@ -1,6 +1,6 @@
 {
- "core_commit": "2338d0ff701ef5726718ffc9e5296f7835401bce",
- "exported_at": "2026-08-25T22:03:13Z",
+ "core_commit": "7b8eb828b9ec3bbaff44755ad784881e533ec4fb",
+ "exported_at": "2026-08-25T22:08:54Z",
  "signing": {
   "algorithm": "HMAC-SHA256, lowercase hex",
   "canonical": "ts\\nMETHOD\\nrequest_uri\\nidempotency_key\\nbody",
@@ -431,6 +431,9 @@
       "type": "string"
      }
     },
+    "required": [
+     "kind"
+    ],
     "type": "object"
    }
   },
@@ -455,6 +458,9 @@
       "type": "string"
      }
     },
+    "required": [
+     "job_id"
+    ],
     "type": "object"
    }
   },
@@ -3460,6 +3466,9 @@
       "type": "string"
      }
     },
+    "required": [
+     "claim_token"
+    ],
     "type": "object"
    }
   },

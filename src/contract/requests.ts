@@ -1,4 +1,4 @@
-// GENERATED FILE — do not edit. Source: contract/contract.json (core 2338d0ff701e).
+// GENERATED FILE — do not edit. Source: contract/contract.json (core 7b8eb828b9ec).
 // Regenerate with: npm run codegen
 import type {
   AmountMode,
@@ -48,7 +48,7 @@ export interface RequestBodies {
   };
   "POST /v1/claim/{token}": {
     /** Recipient address in the payout network. */
-    address?: string;
+    address: string;
     /** Memo/tag — only for networks where it is required. */
     memo?: string;
     /** Claim code — if the sender set one on the link. After 10 incorrect attempts the link is locked. */
@@ -60,7 +60,7 @@ export interface RequestBodies {
     /** Start of the period, YYYY-MM-DD (defaults to the first day of the current month). Example: "2025-01-01". */
     from?: string;
     /** Report type: statement (operations), fees (commissions) or ledger (balance movements). Example: "statement". */
-    kind?: string;
+    kind: string;
     /** Document language (default en). Example: "ru". */
     lang?: string;
     /** End of the period, inclusive, YYYY-MM-DD (defaults to today). The period may span up to two years. Example: "2026-08-19". */
@@ -68,7 +68,7 @@ export interface RequestBodies {
   };
   "POST /v1/documents/jobs/info": {
     /** Job id from the creation response. Example: "6f1c…". */
-    job_id?: string;
+    job_id: string;
   };
   "POST /v1/exchange-rate/list": {
     /** Currency code. If set, only its rate is returned. If empty or the body is {}, rates for all currencies are returned. Example: "ETH". */
@@ -91,6 +91,12 @@ export interface RequestBodies {
     order_id?: string;
     /** Buyer email — the cheque is sent there automatically after payment. Example: "buyer@example.com". */
     payer_email?: string;
+  };
+  "POST /v1/merchants": {
+    /** Owner email; must be unique across merchants. Example: "owner@shop.example". */
+    email: string;
+    /** Display name of the merchant. Example: "Acme". */
+    name?: string;
   };
   "POST /v1/pay/{id}/select": {
     /** Selected payment currency. Example: "USDT". */
@@ -181,7 +187,7 @@ export interface RequestBodies {
       /** Settlement network (e.g. tron, ethereum). Optional — see the currency and network selection modes. Example: "tron". */
       network?: Network | (string & {});
       /** Merchant reference; idempotency key. Strongly recommended. Example: "order-1". */
-      order_id?: string;
+      order_id: string;
       /** Payer email. If set, a cheque is sent there automatically after payment; it is also the default recipient for POST /v1/payment/send-email. */
       payer_email?: string;
       /** Deprecated: % of the network markup charged to the payer (0–100); payer-facing markups are configured via discount. */
@@ -469,7 +475,7 @@ export interface RequestBodies {
       /** Claim code — a second factor for the link: "auto" — we generate it and return it ONCE in the response, or your own (6–64 visible characters), empty — no code. Pass the code to the recipient over a channel SEPARATE from the link (it is not put into the email); after 10 incorrect attempts the link is locked. Example: "auto". */
       passcode?: string;
       /** Your deduplication key, unique per merchant; the Idempotency-Key header has no effect on this endpoint. Example: "bonus-42". */
-      reference?: string;
+      reference: string;
       /** Title — shown to the recipient on the claim page. Example: "Бонус". */
       title?: string;
     }>;
@@ -480,7 +486,7 @@ export interface RequestBodies {
   };
   "POST /v1/payout/link/cheque": {
     /** Claim secret from the payout link creation response. Stored only as a hash and never reissued — the cheque can be printed only while you still hold the token. Example: "nUqx1yG3…". */
-    claim_token?: string;
+    claim_token: string;
     /** Document language — one of the 41 supported codes (en by default); the full list is in the document.unknown_lang error. Example: "ru". */
     lang?: string;
   };
@@ -567,7 +573,7 @@ export interface RequestBodies {
       /** Your order reference for the payment. Either uuid or order_id is required. Example: "order-1". */
       order_id?: string;
       /** Optional refund idempotency key: distinguishes two different refunds with the same (payment, address, amount); a repeat with the same value is deduplicated. This is not order_id. */
-      reference?: string;
+      reference: string;
       /** Payment id. Either uuid or order_id is required. */
       uuid?: string;
     }>;
@@ -672,11 +678,11 @@ export interface RequestBodies {
     /** Array of 1 to 5000 items — the same fields as POST /v1/transfer/to-user; every item requires order_id (idempotency key) and to_user_id (user UUID). */
     transfers?: Array<{
       /** Transfer amount in currency. Example: "50". */
-      amount?: Money;
+      amount: Money;
       /** Currency code (cryptocurrency). Example: "USDT". */
-      currency?: string;
+      currency: string;
       /** Idempotency key: a repeat with the same order_id is a no-op; required in a transfer batch. */
-      order_id?: string;
+      order_id: string;
       /** Platform user id of the recipient (UUID, not username); a username is resolved to an id via the cabinet public profile /public/users/{username}. */
       to_user_id: string;
     }>;
@@ -691,9 +697,9 @@ export interface RequestBodies {
   };
   "POST /v1/transfer/to-user": {
     /** Transfer amount in currency. Example: "50". */
-    amount?: Money;
+    amount: Money;
     /** Currency code (cryptocurrency). Example: "USDT". */
-    currency?: string;
+    currency: string;
     /** Idempotency key: a repeat with the same order_id is a no-op; required in a transfer batch. */
     order_id?: string;
     /** Platform user id of the recipient (UUID, not username); a username is resolved to an id via the cabinet public profile /public/users/{username}. */

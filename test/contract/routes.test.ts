@@ -138,16 +138,15 @@ const COVERAGE: Record<RouteKey, Call> = {
   "POST /v1/webhooks/rotate-secret": (ob) => ob.webhooks.rotateSecret(),
   "POST /v1/documents/jobs": (ob) => ob.documents.createJob({ kind: "statement" }),
   "POST /v1/documents/jobs/info": (ob) => ob.documents.jobInfo("j1"),
+  "POST /v1/merchants": (ob) => ob.merchants.create({ email: "a@b.c", name: "A" }),
+  "POST /v1/merchants/{id}/sandbox": (ob) => ob.merchants.createSandbox("m1"),
 };
 
 describe("route registry", () => {
   const contract = loadContract();
   const declared = new Set(
     contract.routes
-      .filter(
-        (r) =>
-          r.auth !== "onboard" && !/^\/(healthz|readyz|docs|openapi\.json|internal)/.test(r.path),
-      )
+      .filter((r) => !/^\/(healthz|readyz|docs|openapi\.json|internal)/.test(r.path))
       .map((r) => `${r.method} ${r.path}`),
   );
 
@@ -174,6 +173,7 @@ describe("route registry", () => {
         secret: "s",
         payoutPublicId: "wk",
         payoutSecret: "s2",
+        adminToken: "adm",
         baseUrl: "https://api.test",
         fetch,
       });
@@ -185,7 +185,10 @@ describe("route registry", () => {
       const pattern = new RegExp("^" + spec.path.replace(/\{[a-z]+\}/g, "[^/]+") + "$");
       expect(url.pathname).toMatch(pattern);
       if (spec.auth === "public") expect(call.headers["x-signature"]).toBeUndefined();
-      else expect(call.headers["x-public-id"]).toBe(spec.auth === "payout" ? "wk" : "pk");
+      else if (spec.auth === "onboard") {
+        expect(call.headers["x-signature"]).toBeUndefined();
+        expect(call.headers["x-admin-token"]).toBe("adm");
+      } else expect(call.headers["x-public-id"]).toBe(spec.auth === "payout" ? "wk" : "pk");
       if (spec.idempotent) expect(call.headers["idempotency-key"]).toBeDefined();
       else expect(call.headers["idempotency-key"]).toBeUndefined();
     });

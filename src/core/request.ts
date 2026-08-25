@@ -79,7 +79,7 @@ export function buildRequest(input: BuildInput): BuiltRequest {
   if (hasBody) headers["Content-Type"] = "application/json";
   if (input.idempotencyKey) headers[HEADER_IDEMPOTENCY_KEY] = input.idempotencyKey;
 
-  if (route.auth !== "public") {
+  if (route.auth !== "public" && route.auth !== "onboard") {
     if (!input.credentials) {
       throw new ConfigError(
         "sdk.missing_credentials",
