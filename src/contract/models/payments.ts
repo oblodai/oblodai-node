@@ -182,7 +182,10 @@ export const PublicPaymentKeys = defineKeys<PublicPayment>()(
   "updated_at",
 );
 
-/** `/v1/payment/qr`, `/v1/wallet/qr`, `GET /v1/pay/{id}/qr`. */
+/**
+ * `/v1/payment/qr` and `GET /v1/pay/{id}/qr`. All fields are empty while the invoice has no real
+ * address: sandbox invoices (synthetic `sandbox:` address) and `select` invoices awaiting a network.
+ */
 export interface QrCode {
   /** `data:image/png;base64,…` */
   image: string;
