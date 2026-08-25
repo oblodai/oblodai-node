@@ -436,6 +436,10 @@
     },
     "POST /v1/vrcs": {
       "enabled": "true — enable auto-conversion of volatile deposits to USDT, false — disable; omit to read the current state."
+    },
+    "POST /v1/merchants": {
+      "email": "Owner email; must be unique across merchants.",
+      "name": "Display name of the merchant."
     }
   },
   "response": {

@@ -33,9 +33,7 @@ function isSafe(r) {
 
 // --- routes.ts -------------------------------------------------------------------------------
 const routes = contract.routes
-  .filter(
-    (r) => r.auth !== "onboard" && !/^\/(healthz|readyz|docs|openapi\.json|internal)/.test(r.path),
-  )
+  .filter((r) => !/^\/(healthz|readyz|docs|openapi\.json|internal)/.test(r.path))
   .sort((a, b) =>
     a.path === b.path ? a.method.localeCompare(b.method) : a.path.localeCompare(b.path),
   );
@@ -125,6 +123,17 @@ const ROUTE_FIELD_ENUMS = {
   "POST /v1/payment/testing-webhook#status": "PaymentStatus",
 };
 const MONEY_FIELD = /(^|_)(amount|min_amount|max_amount|amount_fixed)$/;
+// Fields the handler requires although the shared DTO marks them optional (batch items reuse the
+// single-create DTO, where the core backfills the key from the Idempotency-Key header).
+const REQUIRED_OVERRIDES = {
+  "POST /v1/payment/batch": ["payments.order_id"],
+  "POST /v1/payout/batch": ["payouts.order_id"],
+  "POST /v1/refund/batch": ["refunds.reference"],
+  "POST /v1/transfer/batch": ["transfers.order_id", "transfers.amount", "transfers.currency"],
+  "POST /v1/payout/link/batch": ["items.reference"],
+  "POST /v1/transfer/to-user": ["amount", "currency"],
+  "POST /v1/claim/{token}": ["address"],
+};
 
 function tsType(schema, indent, ctx) {
   if (!schema || typeof schema !== "object") return "unknown";
@@ -154,6 +163,10 @@ function tsType(schema, indent, ctx) {
 }
 function objectType(schema, indent, ctx) {
   const req = new Set(schema.required ?? []);
+  for (const f of REQUIRED_OVERRIDES[ctx.route] ?? []) {
+    if (f.startsWith(ctx.prefix) && !f.slice(ctx.prefix.length).includes("."))
+      req.add(f.slice(ctx.prefix.length));
+  }
   const pad = "  ".repeat(indent + 1);
   const names = Object.keys(schema.properties).sort();
   if (names.length === 0) return "Record<string, never>";

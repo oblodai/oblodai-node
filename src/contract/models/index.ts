@@ -6,3 +6,4 @@ export * from "./account.js";
 export * from "./catalog.js";
 export * from "./webhooks.js";
 export * from "./sandbox.js";
+export * from "./merchants.js";

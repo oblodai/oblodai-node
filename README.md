@@ -72,6 +72,7 @@ A call with the wrong kind is a 403 `merchant.wrong_key_kind`.
 | `settings`              | setDiscount · listDiscounts · get/setAccuracy · get/setAutoRefund · listAccepted · setAccepted · get/setPaymentFeeConfig · list/set/deleteAutoWithdraw · list/add/remove/enableApiAllowlist |
 | `account` / `catalog`   | balance · referral · vrcs · currencies · exchangeRates                                                                                                                                      |
 | `sandbox`               | faucet · deposit · webhooks · replay · reset                                                                                                                                                |
+| `merchants`             | create · createSandbox (provisioning; `adminToken` on a self-hosted gateway)                                                                                                                |
 
 Every method takes an optional last argument `{ idempotencyKey, signal, timeoutMs, deadlineMs }`.
 Lookups accept a bare uuid or an object: `payments.info("uuid")`, `payments.info({ order_id: "…" })`.

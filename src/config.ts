@@ -29,6 +29,8 @@ export interface ClientOptions {
   logger?: Logger;
   /** Extra headers on every request. */
   headers?: Record<string, string>;
+  /** Admin token of a self-hosted gateway; only the merchant-provisioning routes use it. Falls back to `OBLODAI_ADMIN_TOKEN`. */
+  adminToken?: string;
   /** Permit plain http:// base URLs (local core, CI). Default false. */
   allowInsecureBaseUrl?: boolean;
 }
@@ -43,6 +45,7 @@ export interface ResolvedConfig {
   retry?: Partial<RetryOptions>;
   logger?: Logger;
   headers?: Record<string, string>;
+  adminToken?: string;
 }
 
 /** Merge explicit options with the environment and validate what can be validated up front. */
@@ -90,6 +93,7 @@ export function resolveConfig(
     retry: opts.retry,
     logger,
     headers: opts.headers,
+    adminToken: opts.adminToken ?? env.OBLODAI_ADMIN_TOKEN,
   };
 }
 

@@ -2,26 +2,26 @@
  "route": "POST /v1/payment/info",
  "status": 200,
  "request": {
-  "uuid": "3c000292-299b-4a08-83c9-82828514c3b1"
+  "uuid": "c65b4740-6f19-4d56-a314-8c151b8a3f83"
  },
  "response": {
   "result": {
    "additional_data": "sdk-contract",
-   "address": "sandbox:3c000292-299b-4a08-83c9-82828514c3b1",
+   "address": "sandbox:c65b4740-6f19-4d56-a314-8c151b8a3f83",
    "address_muxed": "",
-   "address_qr_code": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAABlBMVEX///8AAABVwtN+AAACAUlEQVR42uyZMa70IAyEJ6JIyRE4CjfbJDfjKByBksLK/LLJkzarVH8VR7H0isd+DWszzLB46623/q8WkuyJgfWj/88ViLrGZwEApp4Km7IFwAexHB/4AQK5dWRB2ueWRddiIatDIBXECiBjrpN4BWD7m0n9eyRgMwmQ3Ow4pf1qaO8ODH0oEutnbjn0tMmVgNwbGJXIljY2CNImF5J+c2AJLAtrVqADoVuzpp74LEBUvgG2xB6LABPtgK2eAMi4khB1KQfy52T5AELTmVRd07so0PY39bR6AhYgsyOTqg8INK0+y+ATgMCCWU+WjaZZOj1ZJwG5PWD+09TAhIE9rYGF3oDQ8orE0PR+zYevVnl3BfDQalboyHUsErl/6cMjAMsMs+aGtJrxTusIQasnQLu5kcVUfBhvsuwnMb8/sEgsH5iXO2zdDmsWPAGqzhsrRpTD0axdD9iTAN38bsmHalmDXbmZX17OA2BXKSvMkcah4uf44ALQmZxpVrSrCzIztH+JuQdAZWDpiTJUjqP2c2L1DxxZTwUEQJa5TgJ8f1EegL/crW20NxB76nEHjLBwNImhQ7dpYcITMN6jEJpBgj92fSAwsp7qiOq6TalHgFD/0DR3b/KbkhwAx+OhjBCkli40XDyB3hs4fgFhs/bozaQqdzY5/oG33nrrXP8CAAD//+BPT3BCvU7+AAAAAElFTkSuQmCC",
+   "address_qr_code": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEAAQMAAABmvDolAAAABlBMVEX///8AAABVwtN+AAAB9UlEQVR42uyZMZLzIAyFn4fCJUfgKNws4JtxFI5AScHk/SNh7yb5U21leaxmh/XXgMTjScEdd9zxt0gk2QOHr1hbdB3L8PI/XgsAsPSgy5VlrNyGL/sHO4Ajtx6KawJwIGT4QlaDAOKYywFJllEgFMeaOqL8uSSgNYkoNwteuAe+FO3ZgakPZfj6UH0I21cBOTdwxPDMAFTwvor6qYEE3VTRnHnZcXYNz/VFq68AwLWY1xoFYAM7EgWosAWoPkgKpTyx1jQQ8bpNA0ACYkYokJs1cyY1+btNE8DUiBr5E0/4svSQLwZ4Puc5YG0YCKRaCVNAcg0LK1zDY5UvdSG59N8zMAGo/wzc7cFA2AZE5bIpAIh893Jkeb75hwsAkkZAjbeegyiHViktAYksabogKUR2PBzL0RaZAZwqONTL6ZMENQyvxtsAoPpcf7ycSkX89NX2AX1np1uYxpts8U1hLACSu9kESXmqC/IFH5b1/ABiluVekwjZURpSmAKGL/KUUt7XFqUJUqODawEzxAVJUo8qJZktAUffzRY2tjhWcvjyerNMAHN4WFwLss0x24f/JjlnB/ZWzrWwda+Wbh/tXhEoWoX7wEp7vWQPOPyDAMs03jQF7MNDN5VuF3NzwK4P0HE7nf4YcgjedYA77rjjPf4FAAD//4HmP/CyXTutAAAAAElFTkSuQmCC",
    "address_xaddress": "",
    "amount": "25.000000",
    "amount_paid": "25.000000",
    "amount_remaining": "0.000000",
    "commission": "0.675000",
    "confirmations": 20,
-   "created_at": "2026-08-25T22:03:15Z",
+   "created_at": "2026-08-25T22:08:56Z",
    "currency": "USDT",
    "destination_tag": "",
-   "document_url": "http://127.0.0.1:44661/v1/documents/payment/3c000292-299b-4a08-83c9-82828514c3b1?exp=1787698996\u0026sig=8fcf887d070b5f15b05cffab313df9d3e3a36bf4a402fd1d05e577df3097db07",
+   "document_url": "http://127.0.0.1:39381/v1/documents/payment/c65b4740-6f19-4d56-a314-8c151b8a3f83?exp=1787699337\u0026sig=aacfa125d0bd8eaf5575e01843428123e985ae80275851a38e24aed7d714433f",
    "exchange_rate": "1",
-   "expired_at": "2026-08-25T23:03:15Z",
+   "expired_at": "2026-08-25T23:08:56Z",
    "is_final": true,
    "is_multi": false,
    "is_test": true,
@@ -29,32 +29,32 @@
    "merchant_amount": "24.325000",
    "network": "tron",
    "order_id": "sdk-inv-1",
-   "paid_at": "2026-08-25T22:03:15Z",
-   "payer_address": "Th47Ygh4aQjsRRLaGCUCEFSschHST1hSJ3",
+   "paid_at": "2026-08-25T22:08:56Z",
+   "payer_address": "TJA18hqYGuTACTb7UC3ZpAb4u5ogyUbwS5",
    "payer_address_is_refundable": true,
    "payer_amount": "25.000000",
    "payer_currency": "USDT",
    "payer_email": "buyer@example.com",
-   "rate_expires_at": "2026-08-25T22:08:15Z",
+   "rate_expires_at": "2026-08-25T22:13:56Z",
    "refund_status": "partial",
    "refunds": [
     {
      "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
      "amount": "1.000000",
-     "created_at": "2026-08-25T22:03:16Z",
+     "created_at": "2026-08-25T22:08:57Z",
      "is_final": true,
      "status": "confirmed",
-     "txid": "sandboxtx_fecec445e13c627484f23ca4b7f48e63",
-     "uuid": "5d62d232-aeb4-45db-b74f-8aa899f6b85c"
+     "txid": "sandboxtx_01bfc59e5c326b383ecc991cdc60ba40",
+     "uuid": "af491b5e-7835-4e10-9b6f-23a7d9c250ef"
     },
     {
      "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
      "amount": "5.000000",
-     "created_at": "2026-08-25T22:03:16Z",
+     "created_at": "2026-08-25T22:08:57Z",
      "is_final": true,
      "status": "confirmed",
-     "txid": "sandboxtx_8c87dc3d7b9801cfee813c3d7a4005db",
-     "uuid": "4ffb26a3-76e7-4f62-a370-2df14555fc78"
+     "txid": "sandboxtx_e620ad563245d5ca071da46e987cca7e",
+     "uuid": "ec907bbc-44e1-4226-8965-8c2a121f11d3"
     }
    ],
    "required_confirmations": 20,
@@ -62,18 +62,18 @@
    "tx_list": [
     {
      "amount": "25.000000",
-     "created_at": "2026-08-25T22:03:15Z",
+     "created_at": "2026-08-25T22:08:56Z",
      "height": 0,
      "network": "tron",
      "txid": "sandbox:sdk-tx-1"
     }
    ],
    "txid": "sandbox:sdk-tx-1",
-   "updated_at": "2026-08-25T22:03:15Z",
-   "url": "http://127.0.0.1:44661/pay/3c000292-299b-4a08-83c9-82828514c3b1",
+   "updated_at": "2026-08-25T22:08:56Z",
+   "url": "http://127.0.0.1:39381/pay/c65b4740-6f19-4d56-a314-8c151b8a3f83",
    "url_return": "https://shop.example/back",
    "url_success": "https://shop.example/ok",
-   "uuid": "3c000292-299b-4a08-83c9-82828514c3b1"
+   "uuid": "c65b4740-6f19-4d56-a314-8c151b8a3f83"
   },
   "state": 0
  },

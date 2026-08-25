@@ -20,15 +20,16 @@ shipped in `contract/contract.json` (also importable as `@oblodai-npm/sdk/contra
 
 ## Naming
 
-| intent            | call                                                                                                                         |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| fetch one         | `.info(uuid \| { order_id })` (alias `.get`)                                                                                 |
-| fetch many        | `.history(params)` on payments/payouts (alias `.list`), `.list(params)` elsewhere                                            |
-| create            | `.create(params)`; webhooks: `.register(url)`                                                                                |
-| many, synchronous | `payouts.mass`, `payoutLinks.batch` — ≤100, per-element `{ idx, ok, result, message }`                                       |
-| many, async       | `payments.batch`, `payouts.batch`, `refunds.batch`, `transfers.batch` — ≤5000, poll `batches.info`                           |
-| documents         | `documents.*Report / statement / feeSchedule / balanceCertificate` → `FileResult { bytes, contentType, filename }`           |
-| payer-facing      | `payments.publicView/select/publicQr`, `paymentLinks.publicView/checkout`, `payoutLinks.claimPreview/claim` — no credentials |
+| intent            | call                                                                                                                              |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| fetch one         | `.info(uuid \| { order_id })` (alias `.get`)                                                                                      |
+| fetch many        | `.history(params)` on payments/payouts (alias `.list`), `.list(params)` elsewhere                                                 |
+| create            | `.create(params)`; webhooks: `.register(url)`                                                                                     |
+| many, synchronous | `payouts.mass`, `payoutLinks.batch` — ≤100, per-element `{ idx, ok, result, message }`                                            |
+| many, async       | `payments.batch`, `payouts.batch`, `refunds.batch`, `transfers.batch` — ≤5000, poll `batches.info`                                |
+| documents         | `documents.*Report / statement / feeSchedule / balanceCertificate` → `FileResult { bytes, contentType, filename }`                |
+| provisioning      | `merchants.create({ email, name })`, `merchants.createSandbox(merchantId)` — no HMAC; `adminToken` option on self-hosted gateways |
+| payer-facing      | `payments.publicView/select/publicQr`, `paymentLinks.publicView/checkout`, `payoutLinks.claimPreview/claim` — no credentials      |
 
 ## Errors
 

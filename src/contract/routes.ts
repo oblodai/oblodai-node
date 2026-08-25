@@ -1,4 +1,4 @@
-// GENERATED FILE — do not edit. Source: contract/contract.json (core 2338d0ff701e).
+// GENERATED FILE — do not edit. Source: contract/contract.json (core 7b8eb828b9ec).
 // Regenerate with: npm run codegen
 import type { RouteSpec } from "./types.js";
 
@@ -33,6 +33,8 @@ export const ROUTES = {
   "POST /v1/exchange-rate/list": { method: "POST", path: "/v1/exchange-rate/list", auth: "public", idempotent: false, safe: true, bare: false, list: "paged" },
   "GET /v1/link/{id}": { method: "GET", path: "/v1/link/{id}", auth: "public", idempotent: false, safe: true, bare: false },
   "POST /v1/link/{id}/checkout": { method: "POST", path: "/v1/link/{id}/checkout", auth: "public", idempotent: false, safe: false, bare: false },
+  "POST /v1/merchants": { method: "POST", path: "/v1/merchants", auth: "onboard", idempotent: false, safe: false, bare: false },
+  "POST /v1/merchants/{id}/sandbox": { method: "POST", path: "/v1/merchants/{id}/sandbox", auth: "onboard", idempotent: false, safe: false, bare: false },
   "GET /v1/pay/{id}": { method: "GET", path: "/v1/pay/{id}", auth: "public", idempotent: false, safe: true, bare: false },
   "GET /v1/pay/{id}/qr": { method: "GET", path: "/v1/pay/{id}/qr", auth: "public", idempotent: false, safe: true, bare: false },
   "POST /v1/pay/{id}/select": { method: "POST", path: "/v1/pay/{id}/select", auth: "public", idempotent: false, safe: false, bare: false },

@@ -74,6 +74,7 @@ export type { CreateWalletParams } from "./resources/wallets.js";
 export type { WebhookTestParams } from "./resources/webhooks.js";
 export type { DocumentQuery, FormatQuery, PeriodQuery } from "./resources/documents.js";
 export type { CreateSplitRuleParams } from "./resources/splits.js";
+export type { OnboardParams } from "./resources/merchants.js";
 
 // Helpers
 export * from "./helpers/status.js";

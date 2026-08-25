@@ -13,6 +13,7 @@ import { Settings } from "./resources/settings.js";
 import { Splits } from "./resources/splits.js";
 import { Wallets } from "./resources/wallets.js";
 import { Webhooks } from "./resources/webhooks.js";
+import { Merchants } from "./resources/merchants.js";
 
 export const SDK_VERSION = "1.3.0";
 
@@ -40,6 +41,7 @@ export class Oblodai {
   readonly account: Account;
   readonly catalog: Catalog;
   readonly sandbox: Sandbox;
+  readonly merchants: Merchants;
 
   /** The transport, exposed for advanced use (custom routes, tests). */
   readonly transport: Transport;
@@ -56,6 +58,7 @@ export class Oblodai {
       retry: cfg.retry,
       logger: cfg.logger,
       headers: cfg.headers,
+      adminToken: cfg.adminToken,
       userAgent: `oblodai-node/${SDK_VERSION} (contract ${CONTRACT_HASH.slice(0, 12)}; node ${typeof process !== "undefined" ? (process.versions?.node ?? "?") : "?"})`,
     });
     this.payments = new Payments(this.transport);
@@ -73,5 +76,6 @@ export class Oblodai {
     this.account = new Account(this.transport);
     this.catalog = new Catalog(this.transport);
     this.sandbox = new Sandbox(this.transport);
+    this.merchants = new Merchants(this.transport);
   }
 }

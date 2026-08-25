@@ -39,6 +39,8 @@ export interface TransportOptions {
   userAgent: string;
   /** Extra headers on every request (e.g. a platform token). Never signed material. */
   headers?: Record<string, string>;
+  /** Sent as `X-Admin-Token` on `onboard` routes only. */
+  adminToken?: string;
 }
 
 export interface CallOptions {
@@ -155,7 +157,10 @@ export class Transport {
         idempotencyKey,
         ts: this.clock.now(),
         userAgent: this.opts.userAgent,
-        extraHeaders: this.opts.headers,
+        extraHeaders:
+          route.auth === "onboard" && this.opts.adminToken
+            ? { ...this.opts.headers, "X-Admin-Token": this.opts.adminToken }
+            : this.opts.headers,
       });
       this.logger.debug("request", { route: label, attempt, idempotencyKey });
 

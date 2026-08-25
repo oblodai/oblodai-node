@@ -1,4 +1,4 @@
-// GENERATED FILE — do not edit. Source: contract/contract.json (core 2338d0ff701e).
+// GENERATED FILE — do not edit. Source: contract/contract.json (core 7b8eb828b9ec).
 // Regenerate with: npm run codegen
 
 export const PAYMENT_STATUSES = [
