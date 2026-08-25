@@ -27,7 +27,7 @@ export interface FeeInfo {
 export type BatchKind =
   "payment" | "payout" | "refund" | "transfer" | "payout_link" | (string & {});
 /** Lifecycle of an asynchronous batch. */
-export type BatchStatus = "queued" | "processing" | "done" | "stopped" | (string & {});
+export type BatchStatus = "queued" | "processing" | "completed" | "stopped" | (string & {});
 
 export interface OkResult {
   ok: boolean;
