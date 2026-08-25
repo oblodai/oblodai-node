@@ -11,7 +11,7 @@ import { Resource, type RequestOptions } from "./base.js";
 
 export type WebhookTestParams = RequestBodies["POST /v1/test-webhook/payment"];
 
-/** Webhook endpoint management and delivery inspection. Verification lives in `@oblodai/sdk/webhooks`. */
+/** Webhook endpoint management and delivery inspection. Verification lives in `@oblodai-npm/sdk/webhooks`. */
 export class Webhooks extends Resource {
   /** `POST /v1/webhooks` — register (or replace) the merchant's endpoint; returns the signing secret once. */
   register(url: string, opts?: RequestOptions): Promise<WebhookEndpoint> {
@@ -41,7 +41,8 @@ export class Webhooks extends Resource {
     return this.call<WebhookTestResult>(key, params, opts);
   }
 
-  /** `POST /v1/payment/testing-webhook` — the older rehearsal door (payment events only). */
+  /** `POST /v1/payment/testing-webhook` — the older rehearsal door (payment events only).
+   * @deprecated use `test("payment", …)`. */
   testLegacy(
     params: RequestBodies["POST /v1/payment/testing-webhook"],
     opts?: RequestOptions,

@@ -2,7 +2,7 @@
  "route": "POST /v1/payout/link/cheque",
  "status": 404,
  "request": {
-  "claim_token": "WxUGpxFtPC00lJqh68wZ4g2X6yzykJp6NjfwTKWqAQk",
+  "claim_token": "7QhAhzPNnW6odfN-RpIYqoxZ7nRBs1cRwke7SS11nNg",
   "lang": "en"
  },
  "response": {
@@ -10,7 +10,7 @@
    "code": "document.disabled",
    "message": "documents are not enabled on this deployment",
    "retryable": false,
-   "request_id": "fb07ea1e-6e0d-4e8a-9002-166c49391ce2"
+   "request_id": "7de58eea-084a-419d-8aee-2a95d923ddca"
   }
  },
  "headers": {

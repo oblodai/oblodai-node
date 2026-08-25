@@ -30,7 +30,7 @@
       "amount": "1.000000",
       "approval_required": false,
       "commission": "0.000000",
-      "created_at": "2026-08-25T21:01:23Z",
+      "created_at": "2026-08-25T21:46:42Z",
       "currency": "USDT",
       "document_url": "",
       "fee_bearer": "gateway",
@@ -45,8 +45,8 @@
       "source": "api",
       "status": "approved",
       "txid": "",
-      "updated_at": "2026-08-25T21:01:23Z",
-      "uuid": "8889ac81-7f8d-4b83-a609-69570480a972"
+      "updated_at": "2026-08-25T21:46:42Z",
+      "uuid": "d8724270-2c59-4936-8b57-f5dc8d4156da"
      }
     },
     {

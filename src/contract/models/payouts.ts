@@ -1,4 +1,4 @@
-import type { FeeBearer, FeeBearerResult, Network, PayoutStatus } from "../enums.js";
+import type { FeeBearerResult, Network, PayoutStatus } from "../enums.js";
 import { defineKeys } from "../keys.js";
 import type { Money, Timestamp } from "./common.js";
 
@@ -8,20 +8,21 @@ import type { Money, Timestamp } from "./common.js";
  */
 export interface Payout {
   uuid: string;
-  order_id: string;
+  /** Merchant reference; null for refunds (they are keyed by `reference`/`refund_for`). */
+  order_id: string | null;
   status: PayoutStatus;
   is_final: boolean;
   amount: Money;
   currency: string;
-  network: Network | string;
+  network: Network | (string & {});
   address: string;
   memo: string;
   /** Total debited from the balance (amount plus commission when the merchant bears the fee). */
   payer_amount: Money;
   commission: Money;
   fee_bearer: FeeBearerResult;
-  /** `business` or `personal` balance the payout was funded from. */
-  source: string;
+  /** Balance the payout was funded from. */
+  source: "business" | "personal" | (string & {});
   approval_required: boolean;
   is_refund: boolean;
   /** For refunds: the invoice being refunded. */
@@ -63,10 +64,10 @@ export const PayoutKeys = defineKeys<Omit<Payout, "error" | "error_code">>()(
 export interface PayoutCalculation {
   amount: Money | null;
   currency: string;
-  network: Network | string;
+  network: Network | (string & {});
   commission: Money | null;
   payer_amount: Money | null;
-  fee_bearer: FeeBearer;
+  fee_bearer: FeeBearerResult;
   fee_type: string;
 }
 export const PayoutCalculationKeys = defineKeys<PayoutCalculation>()(
@@ -84,14 +85,16 @@ export interface PayoutValidation {
   valid: boolean;
   amount: Money;
   currency: string;
-  network: Network | string;
+  network: Network | (string & {});
   commission: Money;
   payer_amount: Money;
-  fee_bearer: FeeBearer;
+  fee_bearer: FeeBearerResult;
+  /** Which balance would fund it (`business`/`personal`), when reported. */
+  funded_by?: string;
   /** Non-empty when part of the balance is still maturing (reorg window). */
   maturity_note: string;
 }
-export const PayoutValidationKeys = defineKeys<PayoutValidation>()(
+export const PayoutValidationKeys = defineKeys<Omit<PayoutValidation, "funded_by">>()(
   "valid",
   "amount",
   "currency",
@@ -107,9 +110,9 @@ export interface Transfer {
   uuid: string;
   currency: string;
   amount: Money;
-  direction: string;
-  personal_balance: Money;
-  business_balance: Money;
+  direction?: string;
+  personal_balance?: Money;
+  business_balance?: Money;
   document_url: string;
   to_user_id?: string;
 }

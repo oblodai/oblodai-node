@@ -1,12 +1,13 @@
-import type { Network, PaymentStatus } from "../enums.js";
+import type { BatchOnError, Network, PaymentStatus, PayoutStatus } from "../enums.js";
+import type { Payout } from "./payouts.js";
 import { defineKeys } from "../keys.js";
-import type { Money, Timestamp } from "./common.js";
+import type { BatchKind, BatchStatus, Money, Timestamp } from "./common.js";
 
 /** One on-chain deposit attributed to an invoice. */
 export interface PaymentTx {
   txid: string;
   amount: Money;
-  network: Network | string;
+  network: Network | (string & {});
   height: number;
   created_at: Timestamp;
 }
@@ -16,7 +17,7 @@ export interface PaymentRefund {
   uuid: string;
   address: string;
   amount: Money;
-  status: string;
+  status: PayoutStatus;
   is_final: boolean;
   txid: string;
   created_at: Timestamp;
@@ -35,7 +36,7 @@ export interface Payment {
   amount: Money;
   currency: string;
   /** Settlement network; empty until the payer selects one on a multi-network invoice. */
-  network: Network | string;
+  network: Network | (string & {});
   /** Amount due in the payer asset (`payer_currency`). */
   payer_amount: Money;
   payer_currency: string;
@@ -192,14 +193,17 @@ export interface QrCode {
 }
 export const QrCodeKeys = defineKeys<QrCode>()("image", "payload", "is_uri", "address");
 
-/** `/v1/payment/resolve` — how an underpaid invoice was settled. */
-export interface Resolution {
+/** `/v1/payment/resolve` with `action: "accept"` — the underpayment was kept as full settlement. */
+export interface ResolutionAccepted {
+  resolution: "accepted";
   payment_uuid: string;
   order_id: string;
-  resolution: "accept" | "refund";
   currency: string;
   amount_kept: Money;
 }
+/** `/v1/payment/resolve` with `action: "refund"` — the underpayment was sent back; the body is the refund payout. */
+export type ResolutionRefunded = Payout & { resolution: "refunded" };
+export type Resolution = ResolutionAccepted | ResolutionRefunded;
 
 /** `/v1/payment/send-email`. */
 export interface EmailSent {
@@ -211,10 +215,16 @@ export interface EmailSent {
 /** Item of `/v1/payment/services` and `/v1/payout/services`. */
 export interface ServiceMethod {
   currency: string;
-  network: Network | string;
+  network: Network | (string & {});
   is_available: boolean;
-  limit: { currency?: string; min_amount: Money; max_amount: Money };
-  commission: { currency: string; fee_amount: Money; percent: string; fee_type: string };
+  /** Limits are null when the asset cannot be priced right now. */
+  limit: { currency?: string; min_amount: Money | null; max_amount: Money | null };
+  commission: {
+    currency: string;
+    fee_amount: Money | null;
+    percent: string | null;
+    fee_type: string;
+  };
 }
 export const ServiceMethodKeys = defineKeys<ServiceMethod>()(
   "currency",
@@ -227,8 +237,8 @@ export const ServiceMethodKeys = defineKeys<ServiceMethod>()(
 /** `/v1/payment/batch`, `/v1/refund/batch`, `/v1/payout/batch`, `/v1/transfer/batch` acknowledgement. */
 export interface BatchSubmitted {
   batch_id: string;
-  kind: string;
-  status: string;
+  kind: BatchKind;
+  status: BatchStatus;
   count: number;
 }
 export const BatchSubmittedKeys = defineKeys<BatchSubmitted>()(
@@ -241,9 +251,9 @@ export const BatchSubmittedKeys = defineKeys<BatchSubmitted>()(
 /** `/v1/batch/info`. */
 export interface BatchInfo {
   batch_id: string;
-  kind: string;
-  status: string;
-  on_error: string;
+  kind: BatchKind;
+  status: BatchStatus;
+  on_error: BatchOnError;
   total: number;
   succeeded: number;
   failed: number;
@@ -253,6 +263,7 @@ export interface BatchInfo {
 }
 export interface BatchInfoItem {
   idx: number;
+  ok?: boolean;
   order_id?: string;
   status: string;
   result?: Record<string, unknown>;

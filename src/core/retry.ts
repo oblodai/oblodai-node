@@ -1,14 +1,18 @@
 import { OblodaiError, TransportError } from "./errors.js";
 
 /**
- * Retry policy. The decision is driven by the core's `retryable` flag (carried on every
- * OblodaiError), never by the HTTP status alone, and by whether re-sending is safe:
+ * Retry policy. Two questions decide every retry:
  *
- * - an API error is retried only when `retryable` is true;
- * - a transport error (no response) is retried only when the request is safe to repeat — a
- *   read-only route, or a write carrying an Idempotency-Key the core will deduplicate on;
- * - `Retry-After` / `retry_after` always wins over the computed backoff;
- * - otherwise: exponential backoff with full jitter, capped.
+ * 1. Can it succeed? — the core's `retryable` flag (authoritative when the core wrote the envelope),
+ *    or a transient status for answers that carry no envelope.
+ * 2. Is repeating safe? — only for read-only routes and for writes the core deduplicates by
+ *    Idempotency-Key. A write the core does not deduplicate is never re-sent once it MAY have
+ *    reached the core: a transport error or a proxy 503 after the request left the socket could
+ *    mean the payout already happened.
+ *
+ * An envelope error on an unsafe write is still retried when `retryable` — the core answered, so it
+ * did not perform the operation (429/503/frozen/maturing all fail before any effect).
+ * `Retry-After` always wins over the computed backoff; otherwise exponential backoff with jitter.
  */
 export interface RetryOptions {
   /** Maximum number of retries after the first attempt. Default 2. */
@@ -38,10 +42,10 @@ export interface RetryContext {
 export function shouldRetry(err: unknown, ctx: RetryContext, opts: RetryOptions): boolean {
   if (ctx.attempt >= opts.maxRetries) return false;
   if (!(err instanceof OblodaiError)) return false;
-  if (err instanceof TransportError) return err.retryable && ctx.safeToRepeat;
   if (!err.retryable) return false;
-  // A retryable API error on an unsafe write: the core has answered, so it has NOT performed the
-  // operation (429/503/frozen/maturing all fail before any effect) — repeating is fine.
+  if (err instanceof TransportError) return ctx.safeToRepeat;
+  // No core envelope: something in front of the core answered; the core may have done the work.
+  if (err.synthetic) return ctx.safeToRepeat;
   return true;
 }
 
@@ -56,5 +60,6 @@ export function retryDelayMs(
     return Math.min(err.retryAfter * 1000, opts.maxRetryAfterMs);
   }
   const exp = Math.min(opts.maxDelayMs, opts.baseDelayMs * 2 ** ctx.attempt);
-  return Math.floor(random() * exp);
+  // Full jitter with a floor so a burst of retries never lands in the same instant.
+  return Math.max(Math.floor(exp / 4), Math.floor(random() * exp));
 }

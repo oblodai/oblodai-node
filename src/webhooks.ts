@@ -1,10 +1,12 @@
 import type { WebhookEvent } from "./contract/models/webhooks.js";
-import { SignatureError } from "./core/errors.js";
+import { OblodaiError, SignatureError } from "./core/errors.js";
 import { signWebhook } from "./core/signing.js";
 import { constantTimeEqual, headerValue, isRecord } from "./core/util.js";
 
+export { SignatureError, OblodaiError };
+
 /**
- * Webhook verification — usable on its own (`import { verifyWebhook } from "@oblodai/sdk/webhooks"`),
+ * Webhook verification — usable on its own (`import { verifyWebhook } from "@oblodai-npm/sdk/webhooks"`),
  * no client or API key required. Deliveries are signed as:
  *
  *   X-Webhook-Timestamp: <unix seconds>
@@ -21,12 +23,28 @@ export type WebhookHeaders = Headers | Record<string, string | string[] | undefi
 export interface VerifyWebhookOptions {
   /** The endpoint secret from `webhooks.register` / `rotateSecret`. */
   secret: string;
-  /** During a rotation you may keep the outgoing secret here until `previous_secret_valid_until`. */
+  /**
+   * During a rotation keep the outgoing secret here. Deliveries queued before the rotation stay
+   * signed with it for their whole retry life (~26 h), so keep it at least that long after rotating.
+   */
   previousSecret?: string;
   /** Reject deliveries whose timestamp is older/newer than this, seconds. Default 300; 0 disables. */
   toleranceSec?: number;
   /** Injectable clock (unix seconds) for tests. */
   now?: () => number;
+}
+
+/** A verified delivery: the event plus the advisory headers worth keeping. */
+export interface WebhookDeliveryInfo {
+  event: WebhookEvent;
+  /** `X-Webhook-Id` — stable across retries of the same delivery; use it as your idempotency key. */
+  id?: string;
+  /** `X-Webhook-Event` — `invoice.<status>` | `payout.<status>` | `wallet.paid`. */
+  eventType?: string;
+  /** `X-Webhook-Event-Time` — unix seconds when the state change committed. */
+  eventTime?: number;
+  /** `X-Webhook-Timestamp` — unix seconds when this attempt was sent. */
+  sentAt: number;
 }
 
 export const HEADER_WEBHOOK_TIMESTAMP = "X-Webhook-Timestamp";
@@ -42,6 +60,15 @@ export function verifyWebhook(
   headers: WebhookHeaders,
   options: VerifyWebhookOptions,
 ): WebhookEvent {
+  return verifyWebhookDelivery(rawBody, headers, options).event;
+}
+
+/** Like `verifyWebhook`, and also returns the delivery id, event type and times from the headers. */
+export function verifyWebhookDelivery(
+  rawBody: string | Uint8Array,
+  headers: WebhookHeaders,
+  options: VerifyWebhookOptions,
+): WebhookDeliveryInfo {
   const tsRaw = headerValue(headers, HEADER_WEBHOOK_TIMESTAMP);
   const sig = headerValue(headers, HEADER_WEBHOOK_SIGNATURE);
   if (!tsRaw || !sig) {
@@ -79,7 +106,14 @@ export function verifyWebhook(
   );
   if (!ok) throw new SignatureError("webhook.bad_signature", "signature does not match the body");
 
-  return parseWebhook(rawBody);
+  const eventTimeRaw = headerValue(headers, HEADER_WEBHOOK_EVENT_TIME);
+  return {
+    event: parseWebhook(rawBody),
+    id: headerValue(headers, HEADER_WEBHOOK_ID),
+    eventType: headerValue(headers, HEADER_WEBHOOK_EVENT),
+    eventTime: eventTimeRaw && /^\d+$/.test(eventTimeRaw) ? Number(eventTimeRaw) : undefined,
+    sentAt: ts,
+  };
 }
 
 /** Parse a (previously verified) delivery body into a typed event, discriminated by `type`. */

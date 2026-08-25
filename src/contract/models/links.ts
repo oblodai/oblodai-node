@@ -1,4 +1,11 @@
-import type { FeeBearer, Network, PayoutLinkStatus } from "../enums.js";
+import type {
+  AmountMode,
+  FeeBearer,
+  Network,
+  PaymentStatus,
+  PayoutLinkStatus,
+  PayoutStatus,
+} from "../enums.js";
 import { defineKeys } from "../keys.js";
 import type { Money, Timestamp } from "./common.js";
 
@@ -8,9 +15,10 @@ export interface PayoutLink {
   status: PayoutLinkStatus;
   amount: Money;
   currency: string;
-  network: Network | string;
-  commission: Money;
-  payer_amount: Money;
+  network: Network | (string & {});
+  /** Null while the asset cannot be priced. */
+  commission: Money | null;
+  payer_amount: Money | null;
   fee_bearer: FeeBearer;
   fee_type: string;
   reference: string;
@@ -23,9 +31,18 @@ export interface PayoutLink {
   claim_token?: string;
   claim_url?: string;
   batch_id?: string;
+  /** Set once claimed: the payout that paid the recipient. */
+  payout_id?: string;
+  claim_address?: string;
+  email?: string;
+  /** The generated passcode, shown once on create when `passcode: "auto"` was requested. */
+  passcode?: string;
 }
 export const PayoutLinkKeys = defineKeys<
-  Omit<PayoutLink, "claim_token" | "claim_url" | "batch_id">
+  Omit<
+    PayoutLink,
+    "claim_token" | "claim_url" | "batch_id" | "payout_id" | "claim_address" | "email" | "passcode"
+  >
 >()(
   "link_id",
   "status",
@@ -50,9 +67,9 @@ export interface ClaimPreview {
   claimable: boolean;
   amount: Money;
   currency: string;
-  network: Network | string;
-  commission: Money;
-  payer_amount: Money;
+  network: Network | (string & {});
+  commission: Money | null;
+  payer_amount: Money | null;
   fee_bearer: FeeBearer;
   fee_type: string;
   title: string;
@@ -76,14 +93,15 @@ export const ClaimPreviewKeys = defineKeys<ClaimPreview>()(
 
 /** `POST /v1/claim/{token}` — the payout minted by a claim. */
 export interface ClaimResult {
+  /** The payout that pays the recipient (`payouts.info({ uuid: payout_id })`). */
   payout_id: string;
-  status: string;
+  status: PayoutStatus;
   address: string;
   amount: Money;
   currency: string;
-  network: Network | string;
-  commission: Money;
-  payer_amount: Money;
+  network: Network | (string & {});
+  commission: Money | null;
+  payer_amount: Money | null;
   fee_bearer: FeeBearer;
   fee_type: string;
 }
@@ -100,18 +118,23 @@ export const ClaimResultKeys = defineKeys<ClaimResult>()(
   "fee_type",
 );
 
-/** Payment link as `/v1/payment/link/info` and `/list` render it. */
+/** Payment link as `/v1/payment/link/info` and `/list` render it. Amount fields depend on `amount_mode`. */
 export interface PaymentLink {
   link_id: string;
   url: string;
   active: boolean;
   title: string;
   description: string;
-  amount_mode: "fixed" | "open" | "range" | string;
+  amount_mode: AmountMode;
   currency: string;
-  amount_fixed: Money;
-  pinned_network: Network | string;
-  expires_at: Timestamp;
+  /** `fixed` links. */
+  amount_fixed?: Money;
+  /** `range` links. */
+  min_amount?: Money;
+  max_amount?: Money;
+  pinned_currency?: string;
+  pinned_network?: Network | (string & {});
+  expires_at?: Timestamp;
   document_url: string;
   created_at: Timestamp;
   /** `info` only: invoices spawned by this link. */
@@ -119,12 +142,16 @@ export interface PaymentLink {
 }
 export interface PaymentLinkPayment {
   uuid: string;
+  order_id?: string;
   amount: Money;
   currency: string;
-  status: string;
+  status: PaymentStatus;
   created_at: Timestamp;
 }
-export const PaymentLinkKeys = defineKeys<Omit<PaymentLink, "payments">>()(
+/** Keys of a `fixed` link with a pinned network — the shape the golden body was recorded with. */
+export const PaymentLinkKeys = defineKeys<
+  Required<Omit<PaymentLink, "payments" | "min_amount" | "max_amount" | "pinned_currency">>
+>()(
   "link_id",
   "url",
   "active",
@@ -161,17 +188,14 @@ export interface PublicPaymentLink {
   link_id: string;
   title: string;
   description: string;
-  amount_mode: string;
+  amount_mode: AmountMode;
   currency: string;
-  amount_fixed: Money;
-  pinned_network: Network | string;
+  amount_fixed?: Money;
+  min_amount?: Money;
+  max_amount?: Money;
+  pinned_currency?: string;
+  pinned_network?: Network | (string & {});
 }
-export const PublicPaymentLinkKeys = defineKeys<PublicPaymentLink>()(
-  "link_id",
-  "title",
-  "description",
-  "amount_mode",
-  "currency",
-  "amount_fixed",
-  "pinned_network",
-);
+export const PublicPaymentLinkKeys = defineKeys<
+  Required<Omit<PublicPaymentLink, "min_amount" | "max_amount" | "pinned_currency">>
+>()("link_id", "title", "description", "amount_mode", "currency", "amount_fixed", "pinned_network");

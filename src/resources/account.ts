@@ -21,9 +21,13 @@ export class Account extends Resource {
     return this.call<ReferralInfo>("POST /v1/referral/info", undefined, opts);
   }
 
-  /** `POST /v1/vrcs` — whether volatility-risk conversion is enabled for the merchant. */
-  vrcs(opts?: RequestOptions): Promise<VrcsStatus> {
-    return this.call<VrcsStatus>("POST /v1/vrcs", undefined, opts);
+  /** `POST /v1/vrcs` — read (no argument) or set volatility-risk conversion (auto-convert volatile deposits to USDT). */
+  vrcs(enabled?: boolean, opts?: RequestOptions): Promise<VrcsStatus> {
+    return this.call<VrcsStatus>(
+      "POST /v1/vrcs",
+      enabled === undefined ? undefined : { enabled },
+      opts,
+    );
   }
 }
 

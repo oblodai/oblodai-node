@@ -10,7 +10,8 @@ Rewrite generated from the gateway's contract snapshot. See MIGRATION-1.3.md.
 - Added: `PagePromise` (await one page / iterate all), authoritative `retryable`-driven retries, automatic idempotency keys, clock-skew correction, dual key pairs.
 - Added: `@oblodai-npm/sdk/webhooks` entry with rotation-aware `verifyWebhook`, `parseWebhook`, `isStaleEvent`.
 - Added: contract tests against golden bodies and real signed webhook deliveries; `npm run check-drift`; live journey (`npm run test:live`).
-- Changed: zero runtime dependencies; Node ≥ 18.17; ESM + CJS with a `./webhooks` subpath export.
+- Changed: zero runtime dependencies; Node ≥ 18.17; ESM + CJS with a `./webhooks` subpath export and `./contract.json`.
+- Review pass (4 lenses: beginner, production, AI agents, core verification): safe-retry rules (no re-send of undeduplicated writes after proxy errors), idempotency keys rejected on non-deduplicated routes, clock-skew correction reverted when it does not help, lazy `PagePromise` with `catch/finally`, `Retry-After` header, call deadline, path-prefix base URLs, header collision guard, error `toJSON`, `verifyWebhookDelivery`, `get`/`list` aliases, `documents.*Report` names sending the ids the core reads, nullable money fields, `Network | (string & {})` unions, English field docs generated from the core.
 
 Значимые изменения этого пакета. Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версии — [SemVer](https://semver.org/lang/ru/).

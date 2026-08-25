@@ -3,14 +3,14 @@
  "status": 409,
  "request": {
   "email": "buyer@example.com",
-  "uuid": "e1f9be61-b20d-42c0-91a2-03f36878dab1"
+  "uuid": "8eec426e-cece-4688-ad9d-a5d1aea6a8f4"
  },
  "response": {
   "error": {
    "code": "email.disabled",
    "message": "email is not configured",
    "retryable": false,
-   "request_id": "e8396e18-4306-4862-8fb5-f9553cf5d799"
+   "request_id": "ce365ab9-7e9f-43e7-aa85-dccc807f0746"
   }
  },
  "headers": {

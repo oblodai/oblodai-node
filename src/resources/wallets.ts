@@ -25,7 +25,7 @@ export class Wallets extends Resource {
   }
 
   /** `POST /v1/wallet/blocked-address-refund` — send funds that landed on a blocked address back. Payout key. */
-  refundBlocked(
+  refundBlockedDeposit(
     params: RequestBodies["POST /v1/wallet/blocked-address-refund"],
     opts?: RequestOptions,
   ): Promise<Payout> {

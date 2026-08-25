@@ -9,7 +9,7 @@
    "code": "sandbox.bad_delivery",
    "message": "delivery_id must be a uuid",
    "retryable": false,
-   "request_id": "fbd5c00a-f3ce-43ea-b58d-5fde0b820a3e"
+   "request_id": "8b110c03-9254-46a6-847a-006a6061a998"
   }
  },
  "headers": {

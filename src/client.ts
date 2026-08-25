@@ -52,10 +52,11 @@ export class Oblodai {
       payoutCredentials: cfg.payoutCredentials,
       fetch: cfg.fetch,
       timeoutMs: cfg.timeoutMs,
+      deadlineMs: cfg.deadlineMs,
       retry: cfg.retry,
       logger: cfg.logger,
       headers: cfg.headers,
-      userAgent: `oblodai-node/${SDK_VERSION} (contract ${CONTRACT_HASH.slice(0, 12)}; node ${process.versions.node})`,
+      userAgent: `oblodai-node/${SDK_VERSION} (contract ${CONTRACT_HASH.slice(0, 12)}; node ${typeof process !== "undefined" ? (process.versions?.node ?? "?") : "?"})`,
     });
     this.payments = new Payments(this.transport);
     this.refunds = new Refunds(this.transport);

@@ -7,16 +7,24 @@ import type { CallOptions, RawResponse, Transport } from "../core/transport.js";
 
 /** Per-call options every resource method accepts as its last argument. */
 export interface RequestOptions {
-  /** Your own idempotency key; generated automatically on create routes when omitted. */
+  /** Your own idempotency key; generated automatically on create routes when omitted. Rejected on routes the core does not deduplicate. */
   idempotencyKey?: string;
   signal?: AbortSignal;
+  /** Per-attempt timeout, ms. */
   timeoutMs?: number;
+  /** Overall budget including retries, ms. */
+  deadlineMs?: number;
+  /** Sign with the payout key on a route that accepts either key kind (e.g. `batches.info` for payout batches). */
+  preferPayoutKey?: boolean;
 }
 
 /** Body type for a route: the generated DTO when the core documents one, otherwise free-form. */
 export type BodyOf<K extends RouteKey> = K extends keyof RequestBodies
   ? RequestBodies[K]
   : Record<string, unknown> | undefined;
+
+/** Either the object's id as a bare string or a lookup object. */
+export type Ref<T> = string | T;
 
 /** A binary response (PDF/CSV documents). */
 export interface FileResult {
@@ -38,15 +46,17 @@ export abstract class Resource {
   }
 
   /** Call a paged list route (`{items, paginate}`); returns a PagePromise. */
-  protected page<T, K extends RouteKey = RouteKey>(
+  protected page<T, K extends RouteKey = RouteKey, P extends PageParams = PageParams>(
     key: K,
-    params: PageParams & Record<string, unknown> = {},
+    params: P = {} as P,
     opts: RequestOptions & {
       pathParams?: Record<string, string | number>;
       viaQuery?: boolean;
     } = {},
   ): PagePromise<T> {
-    const { limit, offset, ...rest } = params;
+    const { limit, offset, ...rest } = params as PageParams & Record<string, unknown>;
+    // One key per page would be wrong on both sides: the core would replay page 1 forever.
+    const { idempotencyKey: _dropped, ...pageOpts } = opts;
     const route = ROUTES[key];
     return new PagePromise<T>(
       async (p) => {
@@ -54,7 +64,7 @@ export abstract class Resource {
         const result = await this.transport.call<unknown>(
           route,
           this.callOptions(useQuery ? undefined : { ...rest, ...p }, {
-            ...opts,
+            ...pageOpts,
             query: useQuery ? { ...(rest as Query), ...p } : undefined,
           }),
         );
@@ -103,8 +113,10 @@ export abstract class Resource {
       pathParams: opts.pathParams,
       query: opts.query,
       idempotencyKey: opts.idempotencyKey,
+      preferPayoutKey: opts.preferPayoutKey,
       signal: opts.signal,
       timeoutMs: opts.timeoutMs,
+      deadlineMs: opts.deadlineMs,
     };
   }
 }

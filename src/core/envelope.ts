@@ -29,8 +29,37 @@ export interface PlainList<T> {
 
 export type Decoded<T> = { ok: true; result: T } | { ok: false; error: ApiError };
 
+export interface DecodeContext {
+  /** `Retry-After` header value, if any. */
+  retryAfter?: string | null;
+  /** `Location` header value, for redirects. */
+  location?: string | null;
+}
+
 /** Interpret a response body. `text` is the raw body so non-JSON failures keep their evidence. */
-export function decodeEnvelope<T>(httpStatus: number, text: string): Decoded<T> {
+export function decodeEnvelope<T>(
+  httpStatus: number,
+  text: string,
+  ctx: DecodeContext = {},
+): Decoded<T> {
+  const retryAfterHeader = parseRetryAfter(ctx.retryAfter);
+
+  if (httpStatus >= 300 && httpStatus < 400) {
+    const where = ctx.location ? ` to ${ctx.location}` : "";
+    return {
+      ok: false,
+      error: apiErrorFrom(
+        httpStatus,
+        {
+          code: "internal",
+          message: `unexpected redirect (HTTP ${httpStatus})${where}; check baseUrl`,
+        },
+        text,
+        { synthetic: true },
+      ),
+    };
+  }
+
   let body: unknown;
   try {
     body = text.length ? JSON.parse(text) : undefined;
@@ -38,7 +67,12 @@ export function decodeEnvelope<T>(httpStatus: number, text: string): Decoded<T> 
     if (httpStatus >= 400) {
       return {
         ok: false,
-        error: apiErrorFrom(httpStatus, { code: "internal", message: nonJson(httpStatus) }, text),
+        error: apiErrorFrom(
+          httpStatus,
+          { code: "internal", message: noEnvelope(httpStatus, text) },
+          text,
+          { synthetic: true, retryAfterHeader },
+        ),
       };
     }
     throw new ContractError(`expected a JSON envelope, got ${describe(text)}`, httpStatus, text);
@@ -47,13 +81,20 @@ export function decodeEnvelope<T>(httpStatus: number, text: string): Decoded<T> 
   if (isRecord(body) && isRecord(body.error)) {
     return {
       ok: false,
-      error: apiErrorFrom(httpStatus, body.error as unknown as ErrorDetail, body),
+      error: apiErrorFrom(httpStatus, body.error as unknown as ErrorDetail, body, {
+        retryAfterHeader,
+      }),
     };
   }
   if (httpStatus >= 400) {
     return {
       ok: false,
-      error: apiErrorFrom(httpStatus, { code: "internal", message: nonJson(httpStatus) }, body),
+      error: apiErrorFrom(
+        httpStatus,
+        { code: "internal", message: noEnvelope(httpStatus, text) },
+        body,
+        { synthetic: true, retryAfterHeader },
+      ),
     };
   }
   if (isRecord(body) && body.state === 0 && "result" in body) {
@@ -66,8 +107,21 @@ export function decodeEnvelope<T>(httpStatus: number, text: string): Decoded<T> 
   );
 }
 
-function nonJson(status: number): string {
-  return `HTTP ${status} without an error envelope`;
+/** `Retry-After` as delta-seconds or an HTTP-date; undefined when absent or unparsable. */
+export function parseRetryAfter(
+  value: string | null | undefined,
+  now: number = Date.now(),
+): number | undefined {
+  if (!value) return undefined;
+  const v = value.trim();
+  if (/^\d+$/.test(v)) return Number(v);
+  const at = Date.parse(v);
+  if (Number.isNaN(at)) return undefined;
+  return Math.max(0, Math.ceil((at - now) / 1000));
+}
+
+function noEnvelope(status: number, text: string): string {
+  return `HTTP ${status} without an Oblodai error envelope (${describe(text)}) — the answer came from a proxy or load balancer, not the API`;
 }
 
 function describe(text: string): string {

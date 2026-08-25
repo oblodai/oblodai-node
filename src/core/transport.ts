@@ -1,9 +1,15 @@
 import type { RouteSpec } from "../contract/types.js";
 import { SkewCorrectingClock } from "./clock.js";
 import { decodeEnvelope } from "./envelope.js";
-import { ContractError, OblodaiError, TransportError, type ApiError } from "./errors.js";
+import {
+  ConfigError,
+  ContractError,
+  OblodaiError,
+  TransportError,
+  type ApiError,
+} from "./errors.js";
 import { assertIdempotencyKey, newIdempotencyKey } from "./idempotency.js";
-import { noopLogger, type Logger } from "./logger.js";
+import { noopLogger, redact, type Logger } from "./logger.js";
 import { buildRequest, serializeBody, type Credentials, type Query } from "./request.js";
 import { DEFAULT_RETRY, retryDelayMs, shouldRetry, type RetryOptions } from "./retry.js";
 import { SIGNATURE_SKEW_SECONDS } from "./signing.js";
@@ -23,7 +29,10 @@ export interface TransportOptions {
   /** Optional second key pair for `payout` routes (the core issues separate key kinds). */
   payoutCredentials?: Credentials;
   fetch?: FetchLike;
+  /** Per-attempt timeout, ms. Default 30000. */
   timeoutMs?: number;
+  /** Overall budget for a call including retries and pauses, ms. Default 90000. */
+  deadlineMs?: number;
   retry?: Partial<RetryOptions>;
   clock?: SkewCorrectingClock;
   logger?: Logger;
@@ -38,8 +47,11 @@ export interface CallOptions {
   pathParams?: Record<string, string | number>;
   /** Supply your own key to make the call idempotent across process restarts. */
   idempotencyKey?: string;
+  /** Prefer the payout key pair on an `any`-gated route. */
+  preferPayoutKey?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
+  deadlineMs?: number;
 }
 
 export interface RawResponse {
@@ -49,34 +61,50 @@ export interface RawResponse {
   contentType: string | null;
 }
 
+/** Error codes that mean the core rejected the signature because of the timestamp or MAC. */
+const SIGNATURE_FAILURE_CODES = new Set(["merchant.bad_signature", "auth.bad_timestamp"]);
+
 export class Transport {
   private readonly fetchImpl: FetchLike;
   private readonly retry: RetryOptions;
   private readonly clock: SkewCorrectingClock;
   private readonly logger: Logger;
   private readonly timeoutMs: number;
+  private readonly deadlineMs: number;
 
   constructor(private readonly opts: TransportOptions) {
     const f = opts.fetch ?? (globalThis.fetch as FetchLike | undefined);
     if (!f)
-      throw new ContractError(
-        "global fetch is unavailable; pass `fetch` in options (Node >= 18 required)",
-        0,
+      throw new ConfigError(
+        "sdk.bad_config",
+        "global fetch is unavailable; pass `fetch` in options (Node >= 18.17 required)",
       );
     this.fetchImpl = f;
     this.retry = { ...DEFAULT_RETRY, ...opts.retry };
     this.clock = opts.clock ?? new SkewCorrectingClock();
     this.logger = opts.logger ?? noopLogger;
     this.timeoutMs = opts.timeoutMs ?? 30_000;
+    this.deadlineMs = opts.deadlineMs ?? 90_000;
   }
 
   /** Call an envelope route and return its `result`. */
   async call<T>(route: RouteSpec, options: CallOptions = {}): Promise<T> {
     const raw = await this.execute(route, options);
-    const text = Buffer.from(raw.body).toString("utf8");
-    const decoded = decodeEnvelope<T>(raw.status, text);
-    if (decoded.ok) return decoded.result;
-    throw decoded.error; // unreachable: execute() already threw for error envelopes
+    const decoded = decodeEnvelope<T>(raw.status, Buffer.from(raw.body).toString("utf8"));
+    if (decoded.ok) {
+      // The core replays a cached response by Idempotency-Key; when the original was too large to
+      // cache it answers {ok, idempotent_replay: true, detail} instead of the object — surface that.
+      const r = decoded.result as { idempotent_replay?: unknown; detail?: unknown } | null;
+      if (r && typeof r === "object" && r.idempotent_replay === true) {
+        throw new ContractError(
+          `${route.method} ${route.path}: the request was already processed but its response was too large to replay — fetch the result by order_id/reference (${String(r.detail ?? "")})`,
+          raw.status,
+          r,
+        );
+      }
+      return decoded.result;
+    }
+    throw decoded.error; // unreachable: execute() already threw for error statuses
   }
 
   /** Call a `bare` route and return the response bytes (status already checked to be 2xx). */
@@ -84,20 +112,38 @@ export class Transport {
     return this.execute(route, options);
   }
 
-  private credentialsFor(route: RouteSpec): Credentials | undefined {
-    if (route.auth === "payout") return this.opts.payoutCredentials ?? this.opts.credentials;
+  /** Which key pair signs a route. `any` routes take the payment key unless told otherwise. */
+  private credentialsFor(route: RouteSpec, preferPayout: boolean): Credentials | undefined {
+    if (route.auth === "payout" || (route.auth === "any" && preferPayout)) {
+      return this.opts.payoutCredentials ?? this.opts.credentials;
+    }
     return this.opts.credentials;
   }
 
   private async execute(route: RouteSpec, options: CallOptions): Promise<RawResponse> {
     const body = serializeBody(options.body, route.method);
     let idempotencyKey = options.idempotencyKey;
-    if (idempotencyKey !== undefined) assertIdempotencyKey(idempotencyKey);
-    else if (route.idempotent) idempotencyKey = newIdempotencyKey();
-    const safeToRepeat = route.safe || idempotencyKey !== undefined;
+    if (idempotencyKey !== undefined) {
+      assertIdempotencyKey(idempotencyKey);
+      if (!route.idempotent) {
+        // The core ignores the header here, so a key would only make the SDK believe a re-send is
+        // deduplicated when it is not — the one belief that turns a lost response into a double spend.
+        throw new ConfigError(
+          "sdk.idempotency_unsupported",
+          `${route.method} ${route.path} does not deduplicate by Idempotency-Key; remove idempotencyKey from this call`,
+          "idempotencyKey",
+        );
+      }
+    } else if (route.idempotent) {
+      idempotencyKey = newIdempotencyKey();
+    }
+    const safeToRepeat = route.safe || (route.idempotent && idempotencyKey !== undefined);
+    const deadline = Date.now() + (options.deadlineMs ?? this.deadlineMs);
+    const label = `${route.method} ${route.path}`;
 
     let attempt = 0;
-    let skewCorrected = false;
+    let skewTried = false;
+    let skewBefore = 0;
     for (;;) {
       const req = buildRequest({
         baseUrl: this.opts.baseUrl,
@@ -105,20 +151,20 @@ export class Transport {
         pathParams: options.pathParams,
         query: options.query,
         body,
-        credentials: this.credentialsFor(route),
+        credentials: this.credentialsFor(route, options.preferPayoutKey ?? false),
         idempotencyKey,
         ts: this.clock.now(),
         userAgent: this.opts.userAgent,
         extraHeaders: this.opts.headers,
       });
-      this.logger.debug("request", { method: req.method, url: req.url, attempt, idempotencyKey });
+      this.logger.debug("request", { route: label, attempt, idempotencyKey });
 
       let raw: RawResponse;
       try {
-        raw = await this.send(req, options);
+        raw = await this.send(req, options, deadline);
       } catch (err) {
         if (shouldRetry(err, { attempt, safeToRepeat }, this.retry)) {
-          await this.pause(err, attempt, options.signal);
+          await this.pause(err, attempt, options.signal, deadline);
           attempt += 1;
           continue;
         }
@@ -128,25 +174,40 @@ export class Transport {
       if (raw.status >= 200 && raw.status < 300) return raw;
 
       const failure = this.classify(route, raw);
-      // Clock skew: the core saw a timestamp outside its window. Learn the server time from the
-      // `Date` header and re-sign once; this is a correction, not a retry, so it is free.
-      if (failure.httpStatus === 401 && !skewCorrected) {
-        const offset = this.clock.observeServerDate(raw.headers.get("date"));
-        if (
-          offset !== undefined &&
-          Math.abs(offset - this.clock.offset) > SIGNATURE_SKEW_SECONDS / 2
-        ) {
-          this.logger.warn("clock skew detected; re-signing with server time", {
-            offsetSec: offset,
-          });
-          this.clock.correct(offset);
-          skewCorrected = true;
-          continue;
+      this.logger.debug(
+        "response",
+        redact({
+          route: label,
+          status: raw.status,
+          code: failure.code,
+          requestId: failure.requestId,
+        }),
+      );
+
+      // Clock skew: the core rejected the timestamp/MAC. Learn its time from the `Date` header,
+      // re-sign once, and keep the offset only if that attempt got past authentication.
+      if (raw.status === 401 && SIGNATURE_FAILURE_CODES.has(failure.code)) {
+        if (!skewTried) {
+          const offset = this.clock.observeServerDate(raw.headers.get("date"));
+          if (
+            offset !== undefined &&
+            Math.abs(offset - this.clock.offset) > SIGNATURE_SKEW_SECONDS / 2
+          ) {
+            this.logger.warn("clock skew detected; re-signing with server time", {
+              route: label,
+              offsetSec: offset,
+            });
+            skewTried = true;
+            skewBefore = this.clock.offset;
+            this.clock.correct(offset);
+            continue;
+          }
+        } else {
+          this.clock.correct(skewBefore); // the corrected timestamp did not help: it was not skew
         }
       }
       if (shouldRetry(failure, { attempt, safeToRepeat }, this.retry)) {
-        this.logger.debug("retrying", { code: failure.code, status: failure.httpStatus, attempt });
-        await this.pause(failure, attempt, options.signal);
+        await this.pause(failure, attempt, options.signal, deadline);
         attempt += 1;
         continue;
       }
@@ -157,13 +218,15 @@ export class Transport {
   private classify(route: RouteSpec, raw: RawResponse): ApiError | OblodaiError {
     const text = Buffer.from(raw.body).toString("utf8");
     try {
-      const decoded = decodeEnvelope(raw.status, text);
+      const decoded = decodeEnvelope(raw.status, text, {
+        retryAfter: raw.headers.get("retry-after"),
+        location: raw.headers.get("location"),
+      });
       if (!decoded.ok) return decoded.error;
     } catch (err) {
       if (err instanceof OblodaiError) return err;
       throw err;
     }
-    // A 2xx-less status with a success envelope cannot happen; treat it as a contract breach.
     return new ContractError(
       `${route.method} ${route.path}: HTTP ${raw.status} with a success envelope`,
       raw.status,
@@ -171,17 +234,42 @@ export class Transport {
     );
   }
 
-  private async pause(err: unknown, attempt: number, signal?: AbortSignal): Promise<void> {
+  private async pause(
+    err: unknown,
+    attempt: number,
+    signal: AbortSignal | undefined,
+    deadline: number,
+  ): Promise<void> {
     const ms = retryDelayMs(err, { attempt, safeToRepeat: true }, this.retry);
-    if (ms > 0) await sleep(ms, signal);
+    if (Date.now() + ms > deadline) {
+      throw new TransportError(
+        "transport.deadline",
+        `retry would exceed the call deadline; last error: ${(err as Error).message}`,
+        err,
+      );
+    }
+    if (ms <= 0) return;
+    try {
+      await sleep(ms, signal);
+    } catch (abort) {
+      throw new TransportError(
+        "transport.aborted",
+        "request aborted by caller during a retry pause",
+        abort,
+      );
+    }
   }
 
   private async send(
     req: { url: string; method: string; headers: Record<string, string>; body: string | undefined },
     options: CallOptions,
+    deadline: number,
   ): Promise<RawResponse> {
     const controller = new AbortController();
-    const timeoutMs = options.timeoutMs ?? this.timeoutMs;
+    const timeoutMs = Math.min(
+      options.timeoutMs ?? this.timeoutMs,
+      Math.max(1, deadline - Date.now()),
+    );
     const timer = setTimeout(
       () =>
         controller.abort(
