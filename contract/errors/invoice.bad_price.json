@@ -1,0 +1,19 @@
+{
+ "route": "POST /v1/payment",
+ "status": 400,
+ "request": {
+  "amount": "-1",
+  "currency": "USDT"
+ },
+ "response": {
+  "error": {
+   "code": "invoice.bad_price",
+   "message": "price must be positive",
+   "retryable": false,
+   "request_id": "a0c62cee-afb0-483b-88b8-1710a39f22a7"
+  }
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

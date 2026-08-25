@@ -1,0 +1,15 @@
+{
+ "route": "GET /v1/documents/{kind}/{id}",
+ "status": 404,
+ "response": {
+  "error": {
+   "code": "document.disabled",
+   "message": "documents are not enabled on this deployment",
+   "retryable": false,
+   "request_id": "839b1eb0-a993-4ac9-b978-607ea7632677"
+  }
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

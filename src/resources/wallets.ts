@@ -1,51 +1,34 @@
-import { BaseResource } from "./base.js";
-import { idempotencyKeyFor } from "./idempotency.js";
-import type {
-  Wallet,
-  CreateWalletParams,
-  BlockWalletParams,
-  BlockedRefundParams,
-} from "../models.js";
+import type { RequestBodies } from "../contract/requests.js";
+import type { Payout, QrCode, Wallet, WalletBlocked } from "../contract/models/index.js";
+import { Resource, type RequestOptions } from "./base.js";
 
-/** Методы статических кошельков. */
-export class Wallets extends BaseResource {
-  /** Создать (или получить) постоянный статический адрес. `POST /v1/wallet` */
-  create(params: CreateWalletParams): Promise<Wallet> {
-    return this.http.request<Wallet>("/v1/wallet", params);
+export type CreateWalletParams = RequestBodies["POST /v1/wallet"];
+
+/** Static deposit wallets: one permanent address per customer, deposits reported as `wallet.paid`. */
+export class Wallets extends Resource {
+  /** `POST /v1/wallet` — idempotent by `order_id`. */
+  create(params: CreateWalletParams, opts?: RequestOptions): Promise<Wallet> {
+    return this.call<Wallet>("POST /v1/wallet", params, opts);
   }
 
-  /** Заблокировать/разблокировать кошелёк. `POST /v1/wallet/block`
-   *  Внимание: is_force_block по умолчанию true — для разблокировки передайте false. */
-  block(params: BlockWalletParams): Promise<{ uuid: string; address: string; blocked: boolean }> {
-    return this.http.request("/v1/wallet/block", params);
+  /** `POST /v1/wallet/qr`. */
+  qr(address: string, opts?: RequestOptions): Promise<QrCode> {
+    return this.call<QrCode>("POST /v1/wallet/qr", { address }, opts);
   }
 
-  /**
-   * Вернуть средства с (заблокированного) кошелька на адрес. `POST /v1/wallet/blocked-address-refund`
-   *
-   * Вызов СОЗДАЁТ выплату, но он once-only ПО САМОМУ КОШЕЛЬКУ и без всяких заголовков: бэкенд
-   * строит детерминированный reference `refund-wallet:<wallet_id>`, берёт advisory-lock и внутри
-   * лока сначала ищет уже существующую выплату по этому reference. Повтор (в том числе
-   * конкурентный — он подождёт на локе) возвращает ТУ ЖЕ выплату, вторая не создаётся. Поэтому
-   * автоповтор при 5xx/таймауте/сетевой ошибке безопасен и включён.
-   *
-   * Маршрут НАМЕРЕННО не обёрнут в idempotency-middleware: обёртка была бы регрессом —
-   * конкурентный повтор получал бы `409 idempotency.in_progress` вместо ожидания и успеха.
-   * `Idempotency-Key` SDK всё равно шлёт (свой — `params.idempotency_key`); на этом маршруте он
-   * безвреден и ни на что не влияет.
-   *
-   * ⚠ Косметика: адрес НЕ входит в reference, поэтому повтор с ДРУГИМ адресом вернёт первую
-   * выплату на ПЕРВЫЙ адрес.
-   */
-  blockedAddressRefund(params: BlockedRefundParams): Promise<unknown> {
-    const { idempotency_key, ...body } = params;
-    return this.http.request("/v1/wallet/blocked-address-refund", body, {
-      idempotencyKey: idempotencyKeyFor(idempotency_key),
-    });
+  /** `POST /v1/wallet/block` — stop crediting an address; later deposits wait for a refund decision. */
+  block(
+    params: RequestBodies["POST /v1/wallet/block"],
+    opts?: RequestOptions,
+  ): Promise<WalletBlocked> {
+    return this.call<WalletBlocked>("POST /v1/wallet/block", params, opts);
   }
 
-  /** QR-код произвольного адреса (data:-URI). `POST /v1/wallet/qr` */
-  qr(address: string): Promise<{ image: string }> {
-    return this.http.request<{ image: string }>("/v1/wallet/qr", { address });
+  /** `POST /v1/wallet/blocked-address-refund` — send funds that landed on a blocked address back. Payout key. */
+  refundBlocked(
+    params: RequestBodies["POST /v1/wallet/blocked-address-refund"],
+    opts?: RequestOptions,
+  ): Promise<Payout> {
+    return this.call<Payout>("POST /v1/wallet/blocked-address-refund", params, opts);
   }
 }

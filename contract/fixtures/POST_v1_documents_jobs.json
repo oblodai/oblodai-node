@@ -1,0 +1,22 @@
+{
+ "route": "POST /v1/documents/jobs",
+ "status": 404,
+ "request": {
+  "format": "csv",
+  "from": "2026-01-01",
+  "kind": "statement",
+  "lang": "en",
+  "to": "2026-08-25"
+ },
+ "response": {
+  "error": {
+   "code": "document.jobs_disabled",
+   "message": "background document generation is not enabled on this deployment",
+   "retryable": false,
+   "request_id": "ee932a5c-18b0-41a0-9a33-145ba0429685"
+  }
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

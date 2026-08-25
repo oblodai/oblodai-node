@@ -1,0 +1,15 @@
+{
+ "route": "GET /v1/documents/split",
+ "status": 404,
+ "response": {
+  "error": {
+   "code": "document.disabled",
+   "message": "documents are not enabled on this deployment",
+   "retryable": false,
+   "request_id": "c781a062-3655-407d-88f3-2cd2ed4703dc"
+  }
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

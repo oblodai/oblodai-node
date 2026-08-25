@@ -1,0 +1,41 @@
+{
+ "route": "POST /v1/payout",
+ "status": 200,
+ "request": {
+  "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+  "amount": "10",
+  "currency": "USDT",
+  "network": "tron",
+  "order_id": "sdk-po-1",
+  "url_callback": "http://127.0.0.1:36207/hook"
+ },
+ "response": {
+  "result": {
+   "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+   "amount": "10.000000",
+   "approval_required": false,
+   "commission": "0.000000",
+   "created_at": "2026-08-25T21:01:23Z",
+   "currency": "USDT",
+   "document_url": "",
+   "fee_bearer": "gateway",
+   "is_final": false,
+   "is_refund": false,
+   "memo": "",
+   "network": "tron",
+   "order_id": "sdk-po-1",
+   "payer_amount": "10.000000",
+   "payment_order_id": null,
+   "refund_for": null,
+   "source": "api",
+   "status": "approved",
+   "txid": "",
+   "updated_at": "2026-08-25T21:01:23Z",
+   "uuid": "7dc3e950-1c59-4dee-a1f5-a0f3e39e5c93"
+  },
+  "state": 0
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

@@ -1,6 +1,6 @@
 {
   "name": "@oblodai-npm/sdk",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Official TypeScript/Node.js SDK for the Oblodai payment gateway: payment acceptance, payouts, static wallets, webhooks.",
   "type": "module",
   "sideEffects": false,
@@ -12,22 +12,33 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
-    }
+    },
+    "./webhooks": {
+      "types": "./dist/webhooks.d.ts",
+      "import": "./dist/webhooks.js",
+      "require": "./dist/webhooks.cjs"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "contract/contract.json",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE",
-    ".env.example"
+    "MIGRATION-1.3.md",
+    "LICENSE"
   ],
   "scripts": {
+    "codegen": "node scripts/codegen.mjs && prettier --write src/contract",
+    "check-drift": "node scripts/check-drift.mjs",
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "npm run build",
+    "test:live": "OBLODAI_LIVE_URL=${OBLODAI_LIVE_URL:-http://localhost:8093} vitest run test/live",
     "fmt": "prettier --write .",
-    "fmt:check": "prettier --check ."
+    "fmt:check": "prettier --check .",
+    "ci": "npm run fmt:check && npm run check-drift && npm run typecheck && npm run build && npm test",
+    "prepublishOnly": "npm run ci"
   },
   "keywords": [
     "oblodai",
@@ -40,7 +51,7 @@
     "payment-gateway"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=18.17"
   },
   "license": "MIT",
   "author": "Oblodai",
@@ -55,10 +66,8 @@
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {
-    "@types/node": "^20.12.0"
-  },
   "devDependencies": {
+    "@types/node": "^20.12.0",
     "prettier": "^3.9.6",
     "tsup": "^8.0.0",
     "typescript": "^5.4.0",

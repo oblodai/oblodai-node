@@ -1,71 +1,50 @@
-import { BaseResource } from "./base.js";
-import type { CreateSplitRuleParams, SplitRule, SplitConfig } from "../models.js";
+import type { RequestBodies } from "../contract/requests.js";
+import type { OkResult, SplitConfig, SplitOptIn, SplitRule } from "../contract/models/index.js";
+import type { PagePromise } from "../core/pagination.js";
+import { Resource, type RequestOptions } from "./base.js";
 
-/**
- * Сплит-платежи (v1.1.0): доля каждого входящего платежа автоматически уходит партнёру.
- * Все методы требуют payout-ключ. Заголовок `Idempotency-Key` на этих эндпоинтах не
- * действует (не обёрнуты) — но операции декларативны (правила), повтор безопасен по смыслу.
- *
- * ВАЖНО про возвраты: отправка долей откладывается на окно `refund_hold_hours` — возврат внутри
- * окна сам уменьшает/отменяет отчисление. Долю, уже ушедшую на внешний адрес, вернуть нельзя.
- */
-export class Splits extends BaseResource {
-  /**
-   * Создать правило сплита. `POST /v1/split/rule`
-   * Ровно одно из двух: `address`+`network` (внешний адрес, необратимо) ИЛИ `merchant_id`
-   * (партнёр на платформе, обратимо). `percent` — 0 < x ≤ 100, шаг 0.01; сумма активных
-   * правил тоже ≤ 100. Удобные обёртки: {@link splitToAddress}, {@link splitToMerchant}.
-   */
-  createRule(params: CreateSplitRuleParams): Promise<{ rule_id: string; percent: number }> {
-    return this.http.request("/v1/split/rule", params);
+export type CreateSplitRuleParams = RequestBodies["POST /v1/split/rule"];
+
+/** Revenue splits: a percentage of every payment forwarded to a partner. Payout key. */
+export class Splits extends Resource {
+  /** `POST /v1/split/rule` — to an external address (`address`+`network`) or a platform merchant (`merchant_id`). */
+  createRule(params: CreateSplitRuleParams, opts?: RequestOptions): Promise<SplitRule> {
+    return this.call<SplitRule>("POST /v1/split/rule", params, opts);
   }
 
-  /** Доля на внешний адрес (необратимо при возврате). Обёртка над {@link createRule}. */
-  splitToAddress(
-    address: string,
-    network: string,
-    percent: number,
-    note?: string,
-  ): Promise<{ rule_id: string; percent: number }> {
-    return this.createRule({ address, network, percent, ...(note !== undefined ? { note } : {}) });
+  /** `POST /v1/split/rule/list`. */
+  listRules(
+    params: RequestBodies["POST /v1/split/rule/list"] = {},
+    opts?: RequestOptions,
+  ): PagePromise<SplitRule> {
+    return this.page<SplitRule>("POST /v1/split/rule/list", params, opts);
   }
 
-  /** Доля аккаунту на платформе (возврат отзовёт долю). Обёртка над {@link createRule}. */
-  splitToMerchant(
-    merchantId: string,
-    percent: number,
-    note?: string,
-  ): Promise<{ rule_id: string; percent: number }> {
-    return this.createRule({
-      merchant_id: merchantId,
-      percent,
-      ...(note !== undefined ? { note } : {}),
-    });
+  /** `POST /v1/split/rule/delete`. */
+  deleteRule(ruleId: string, opts?: RequestOptions): Promise<OkResult> {
+    return this.call<OkResult>("POST /v1/split/rule/delete", { rule_id: ruleId }, opts);
   }
 
-  /** Список правил сплита. `POST /v1/split/rule/list` */
-  async listRules(): Promise<SplitRule[]> {
-    const res = await this.http.request<{ items: SplitRule[] }>("/v1/split/rule/list", {});
-    return res.items;
+  /** `POST /v1/split/config/get`. */
+  getConfig(opts?: RequestOptions): Promise<SplitConfig> {
+    return this.call<SplitConfig>("POST /v1/split/config/get", undefined, opts);
   }
 
-  /** Удалить правило. `POST /v1/split/rule/delete` */
-  deleteRule(ruleId: string): Promise<{ deleted: boolean }> {
-    return this.http.request("/v1/split/rule/delete", { rule_id: ruleId });
+  /** `POST /v1/split/config/set` — how long split shares are held back for refunds. */
+  setConfig(
+    params: RequestBodies["POST /v1/split/config/set"],
+    opts?: RequestOptions,
+  ): Promise<SplitConfig> {
+    return this.call<SplitConfig>("POST /v1/split/config/set", params, opts);
   }
 
-  /** Настройки сплитов (окно удержания перед отправкой долей). `POST /v1/split/config/get` */
-  getConfig(): Promise<SplitConfig> {
-    return this.http.request<SplitConfig>("/v1/split/config/get", {});
+  /** `POST /v1/split/recipient/optin/get` — whether this merchant accepts being a split recipient. */
+  getOptIn(opts?: RequestOptions): Promise<SplitOptIn> {
+    return this.call<SplitOptIn>("POST /v1/split/recipient/optin/get", undefined, opts);
   }
 
-  /**
-   * Задать окно удержания `refund_hold_hours` — отсрочка исходящей маршрутизации
-   * (сплиты/авто-вывод/авто-конверсия) после settle. `POST /v1/split/config/set`
-   */
-  setConfig(refundHoldHours: number): Promise<SplitConfig> {
-    return this.http.request<SplitConfig>("/v1/split/config/set", {
-      refund_hold_hours: refundHoldHours,
-    });
+  /** `POST /v1/split/recipient/optin`. */
+  setOptIn(enabled: boolean, opts?: RequestOptions): Promise<SplitOptIn> {
+    return this.call<SplitOptIn>("POST /v1/split/recipient/optin", { enabled }, opts);
   }
 }

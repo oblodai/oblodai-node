@@ -1,0 +1,19 @@
+{
+ "route": "POST /v1/wallet/blocked-address-refund",
+ "status": 400,
+ "request": {
+  "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+  "uuid": ""
+ },
+ "response": {
+  "error": {
+   "code": "wallet.bad_uuid",
+   "message": "invalid wallet uuid",
+   "retryable": false,
+   "request_id": "709e4b4f-d5a6-4dd8-bb4e-2067bc5e6aef"
+  }
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

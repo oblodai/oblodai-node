@@ -1,0 +1,18 @@
+{
+ "route": "POST /v1/wallet/block",
+ "status": 400,
+ "request": {
+  "address": ""
+ },
+ "response": {
+  "error": {
+   "code": "wallet.no_address",
+   "message": "address is required",
+   "retryable": false,
+   "request_id": "350b2804-06f4-439e-9304-3ad024305bac"
+  }
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

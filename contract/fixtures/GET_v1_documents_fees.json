@@ -1,0 +1,15 @@
+{
+ "route": "GET /v1/documents/fees",
+ "status": 404,
+ "response": {
+  "error": {
+   "code": "document.disabled",
+   "message": "documents are not enabled on this deployment",
+   "retryable": false,
+   "request_id": "7edd42d4-b4b8-4099-b67b-0e1be413a30d"
+  }
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

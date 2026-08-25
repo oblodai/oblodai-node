@@ -1,0 +1,20 @@
+{
+ "route": "POST /v1/split/rule",
+ "status": 200,
+ "request": {
+  "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+  "network": "tron",
+  "note": "partner",
+  "percent": "10"
+ },
+ "response": {
+  "result": {
+   "percent": "10.00",
+   "rule_id": "820641ae-f6bf-4181-8afd-44985540cf6e"
+  },
+  "state": 0
+ },
+ "headers": {
+  "Content-Type": "application/json"
+ }
+}

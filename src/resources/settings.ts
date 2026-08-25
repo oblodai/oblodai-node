@@ -1,51 +1,119 @@
-import { BaseResource } from "./base.js";
-import type { AutoWithdrawRule } from "../models.js";
+import type { RequestBodies } from "../contract/requests.js";
+import type {
+  AcceptedMethod,
+  AccuracyConfig,
+  ApiAllowlist,
+  AutoRefundConfig,
+  AutoWithdrawRule,
+  DiscountRule,
+  OkResult,
+  PaymentFeeConfig,
+} from "../contract/models/index.js";
+import type { PagePromise } from "../core/pagination.js";
+import { Resource, type RequestOptions } from "./base.js";
 
-/** Автовывод и IP-allowlist. */
-export class Settings extends BaseResource {
-  // ── Автовывод ──
-
-  /** Список правил автовывода. `POST /v1/auto-withdraw/list` */
-  listAutoWithdraw(): Promise<{ rules: AutoWithdrawRule[] }> {
-    return this.http.request("/v1/auto-withdraw/list", {});
+/** Merchant-level configuration exposed over the API. */
+export class Settings extends Resource {
+  /** `POST /v1/payment/discount/set` — payer-facing discount/markup per currency+network. */
+  setDiscount(
+    params: RequestBodies["POST /v1/payment/discount/set"],
+    opts?: RequestOptions,
+  ): Promise<DiscountRule> {
+    return this.call<DiscountRule>("POST /v1/payment/discount/set", params, opts);
+  }
+  /** `POST /v1/payment/discount/list`. */
+  listDiscounts(
+    params: RequestBodies["POST /v1/payment/discount/list"] = {},
+    opts?: RequestOptions,
+  ): PagePromise<DiscountRule> {
+    return this.page<DiscountRule>("POST /v1/payment/discount/list", params, opts);
   }
 
-  /** Включить автовывод для актива. `POST /v1/auto-withdraw/set`
-   *  `min` — порог в единицах актива (не minor), по умолчанию "0". */
-  setAutoWithdraw(params: {
-    currency: string;
-    network: string;
-    address: string;
-    min?: string;
-  }): Promise<unknown> {
-    return this.http.request("/v1/auto-withdraw/set", params);
+  /** `POST /v1/payment/accuracy/get` — under/overpayment tolerance. */
+  getAccuracy(opts?: RequestOptions): Promise<AccuracyConfig> {
+    return this.call<AccuracyConfig>("POST /v1/payment/accuracy/get", undefined, opts);
+  }
+  /** `POST /v1/payment/accuracy/set`. */
+  setAccuracy(
+    params: RequestBodies["POST /v1/payment/accuracy/set"],
+    opts?: RequestOptions,
+  ): Promise<AccuracyConfig> {
+    return this.call<AccuracyConfig>("POST /v1/payment/accuracy/set", params, opts);
   }
 
-  /** Выключить автовывод для актива. `POST /v1/auto-withdraw/delete` */
-  deleteAutoWithdraw(currency: string): Promise<unknown> {
-    return this.http.request("/v1/auto-withdraw/delete", { currency });
+  /** `POST /v1/payment/autorefund/get`. */
+  getAutoRefund(opts?: RequestOptions): Promise<AutoRefundConfig> {
+    return this.call<AutoRefundConfig>("POST /v1/payment/autorefund/get", undefined, opts);
+  }
+  /** `POST /v1/payment/autorefund/set` — refund over/underpayments automatically. */
+  setAutoRefund(
+    params: RequestBodies["POST /v1/payment/autorefund/set"],
+    opts?: RequestOptions,
+  ): Promise<AutoRefundConfig> {
+    return this.call<AutoRefundConfig>("POST /v1/payment/autorefund/set", params, opts);
   }
 
-  // ── IP-allowlist ──
-
-  /** Список доверенных IP и статус. `POST /v1/api-allowlist/list` */
-  listAllowlist(): Promise<{ entries: string[]; enabled: boolean }> {
-    return this.http.request("/v1/api-allowlist/list", {});
+  /** `POST /v1/payment/accepted/list` — which currency/network pairs invoices may be paid in. */
+  listAccepted(
+    params: RequestBodies["POST /v1/payment/accepted/list"] = {},
+    opts?: RequestOptions,
+  ): PagePromise<AcceptedMethod> {
+    return this.page<AcceptedMethod>("POST /v1/payment/accepted/list", params, opts);
+  }
+  /** `POST /v1/payment/accepted/set`. */
+  setAccepted(
+    params: RequestBodies["POST /v1/payment/accepted/set"],
+    opts?: RequestOptions,
+  ): Promise<OkResult> {
+    return this.call<OkResult>("POST /v1/payment/accepted/set", params, opts);
   }
 
-  /** Добавить IP или CIDR. `POST /v1/api-allowlist/add` */
-  addAllowlist(cidr: string): Promise<unknown> {
-    return this.http.request("/v1/api-allowlist/add", { cidr });
+  /** `POST /v1/payment/fee-config/get` — share of the network fee charged to the payer. */
+  getPaymentFeeConfig(opts?: RequestOptions): Promise<PaymentFeeConfig> {
+    return this.call<PaymentFeeConfig>("POST /v1/payment/fee-config/get", undefined, opts);
+  }
+  /** `POST /v1/payment/fee-config/set`. */
+  setPaymentFeeConfig(
+    params: RequestBodies["POST /v1/payment/fee-config/set"],
+    opts?: RequestOptions,
+  ): Promise<PaymentFeeConfig> {
+    return this.call<PaymentFeeConfig>("POST /v1/payment/fee-config/set", params, opts);
   }
 
-  /** Удалить IP или CIDR. `POST /v1/api-allowlist/remove` */
-  removeAllowlist(cidr: string): Promise<unknown> {
-    return this.http.request("/v1/api-allowlist/remove", { cidr });
+  /** `POST /v1/auto-withdraw/list`. Payout key. */
+  async listAutoWithdraw(opts?: RequestOptions): Promise<AutoWithdrawRule[]> {
+    return (await this.plainList<AutoWithdrawRule>("POST /v1/auto-withdraw/list", undefined, opts))
+      .items;
+  }
+  /** `POST /v1/auto-withdraw/set` — sweep a currency to an address once the balance passes `min_amount`. */
+  async setAutoWithdraw(
+    params: RequestBodies["POST /v1/auto-withdraw/set"],
+    opts?: RequestOptions,
+  ): Promise<AutoWithdrawRule[]> {
+    return (await this.plainList<AutoWithdrawRule>("POST /v1/auto-withdraw/set", params, opts))
+      .items;
+  }
+  /** `POST /v1/auto-withdraw/delete`. */
+  async deleteAutoWithdraw(currency: string, opts?: RequestOptions): Promise<AutoWithdrawRule[]> {
+    return (
+      await this.plainList<AutoWithdrawRule>("POST /v1/auto-withdraw/delete", { currency }, opts)
+    ).items;
   }
 
-  /** Включить/выключить контроль. `POST /v1/api-allowlist/enable`
-   *  Нельзя включить с пустым списком — сначала добавьте IP. */
-  enableAllowlist(enabled: boolean): Promise<unknown> {
-    return this.http.request("/v1/api-allowlist/enable", { enabled });
+  /** `POST /v1/api-allowlist/list` — source IPs allowed to use the API keys. Payout key. */
+  getApiAllowlist(opts?: RequestOptions): Promise<ApiAllowlist> {
+    return this.call<ApiAllowlist>("POST /v1/api-allowlist/list", undefined, opts);
+  }
+  /** `POST /v1/api-allowlist/add`. */
+  addApiAllowlist(cidr: string, opts?: RequestOptions): Promise<ApiAllowlist> {
+    return this.call<ApiAllowlist>("POST /v1/api-allowlist/add", { cidr }, opts);
+  }
+  /** `POST /v1/api-allowlist/remove`. */
+  removeApiAllowlist(cidr: string, opts?: RequestOptions): Promise<ApiAllowlist> {
+    return this.call<ApiAllowlist>("POST /v1/api-allowlist/remove", { cidr }, opts);
+  }
+  /** `POST /v1/api-allowlist/enable` — switch enforcement on or off (the list is kept). */
+  enableApiAllowlist(enabled: boolean, opts?: RequestOptions): Promise<ApiAllowlist> {
+    return this.call<ApiAllowlist>("POST /v1/api-allowlist/enable", { enabled }, opts);
   }
 }

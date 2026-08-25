@@ -1,113 +1,115 @@
-import crypto from "node:crypto";
-import { OblodaiSignatureError } from "./errors.js";
-import { resolveLogger } from "./logger.js";
-import type { OblodaiLogger } from "./types.js";
+import type { WebhookEvent } from "./contract/models/webhooks.js";
+import { SignatureError } from "./core/errors.js";
+import { signWebhook } from "./core/signing.js";
+import { constantTimeEqual, headerValue, isRecord } from "./core/util.js";
 
 /**
- * Проверка входящих вебхуков.
+ * Webhook verification — usable on its own (`import { verifyWebhook } from "@oblodai/sdk/webhooks"`),
+ * no client or API key required. Deliveries are signed as:
  *
- * ВНИМАНИЕ: подпись вебхука — ДРУГОЙ алгоритм, чем подпись запроса. Здесь подписанная строка это
- * `{timestamp}.{сырое_тело}` (точка-разделитель, без метода и пути), а секрет — тот, что вернул
- * `POST /v1/webhooks` (не ключ API).
+ *   X-Webhook-Timestamp: <unix seconds>
+ *   X-Webhook-Signature: hex(HMAC-SHA256(secret, "<ts>." + rawBody))
+ *   X-Webhook-Signature-Prev: same, with the previous secret — only during a rotation overlap
+ *   X-Webhook-Event: invoice.<status> | payout.<status> | wallet.paid
+ *   X-Webhook-Id: stable per delivery (identical across retries) — use it as your idempotency key
+ *   X-Webhook-Event-Time: unix seconds when the state change committed (order events by it)
  *
- *   X-Webhook-Signature = hex(HMAC-SHA256(secret, "{X-Webhook-Timestamp}." + сырое_тело))
+ * Always verify over the raw request bytes; a re-serialized parse will not match.
  */
-
-/** Заголовки доставки вебхука, нужные для проверки. */
-export interface WebhookHeaders {
-  /** X-Webhook-Timestamp — unix-секунды момента отправки. */
-  timestamp: string;
-  /** X-Webhook-Signature — hex-подпись. */
-  signature: string;
-}
+export type WebhookHeaders = Headers | Record<string, string | string[] | undefined>;
 
 export interface VerifyWebhookOptions {
-  /**
-   * Максимальный возраст вебхука в секундах для replay-защиты. Если задан и timestamp старше —
-   * проверка не пройдёт. По умолчанию 300 (5 минут). Передайте 0, чтобы отключить проверку свежести.
-   */
-  maxAgeSeconds?: number;
-  /** Текущее время в мс (для тестов). По умолчанию Date.now(). */
-  now?: number;
-  /**
-   * Опциональный логгер. Если не задан, применяется env-опция `OBLODAI_LOG` (см. {@link OblodaiLogger}).
-   * Логируются только факт успеха и причина отказа — секрет, подпись и тело НЕ логируются.
-   */
-  logger?: OblodaiLogger;
+  /** The endpoint secret from `webhooks.register` / `rotateSecret`. */
+  secret: string;
+  /** During a rotation you may keep the outgoing secret here until `previous_secret_valid_until`. */
+  previousSecret?: string;
+  /** Reject deliveries whose timestamp is older/newer than this, seconds. Default 300; 0 disables. */
+  toleranceSec?: number;
+  /** Injectable clock (unix seconds) for tests. */
+  now?: () => number;
 }
 
-/**
- * Проверяет подпись и свежесть вебхука. Возвращает `true` при успехе, иначе бросает
- * {@link OblodaiSignatureError}.
- *
- * ВАЖНО: `rawBody` должен быть СЫРЫМ телом запроса (строка или Buffer) — тем же, что пришло по сети.
- * Не передавайте пересериализованный JSON: подпись считается по байтам.
- *
- * Пробные тела (`"is_test": true`) НЕ подписаны — их этой функцией проверять не нужно.
- *
- * @param secret  секрет из POST /v1/webhooks
- * @param rawBody сырое тело запроса
- * @param headers заголовки timestamp/signature
- */
+export const HEADER_WEBHOOK_TIMESTAMP = "X-Webhook-Timestamp";
+export const HEADER_WEBHOOK_SIGNATURE = "X-Webhook-Signature";
+export const HEADER_WEBHOOK_SIGNATURE_PREV = "X-Webhook-Signature-Prev";
+export const HEADER_WEBHOOK_EVENT = "X-Webhook-Event";
+export const HEADER_WEBHOOK_ID = "X-Webhook-Id";
+export const HEADER_WEBHOOK_EVENT_TIME = "X-Webhook-Event-Time";
+
+/** Verify the signature and freshness, then parse. Throws SignatureError; never returns an unverified body. */
 export function verifyWebhook(
-  secret: string,
-  rawBody: string | Buffer,
+  rawBody: string | Uint8Array,
   headers: WebhookHeaders,
-  options: VerifyWebhookOptions = {},
-): true {
-  const { timestamp, signature } = headers;
-  const log = resolveLogger(options.logger);
-
-  if (!timestamp || !signature) {
-    log("warn", "oblodai: webhook verify failed", { reason: "missing headers" });
-    throw new OblodaiSignatureError("Отсутствует timestamp или signature вебхука");
+  options: VerifyWebhookOptions,
+): WebhookEvent {
+  const tsRaw = headerValue(headers, HEADER_WEBHOOK_TIMESTAMP);
+  const sig = headerValue(headers, HEADER_WEBHOOK_SIGNATURE);
+  if (!tsRaw || !sig) {
+    throw new SignatureError(
+      "webhook.missing_header",
+      `missing ${HEADER_WEBHOOK_TIMESTAMP} or ${HEADER_WEBHOOK_SIGNATURE}`,
+    );
   }
+  const ts = Number(tsRaw);
+  if (!Number.isInteger(ts))
+    throw new SignatureError("webhook.bad_signature", "timestamp header is not an integer");
 
-  const raw = typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : rawBody;
-  const signingString = Buffer.concat([Buffer.from(`${timestamp}.`, "utf8"), raw]);
-  const expected = crypto.createHmac("sha256", secret).update(signingString).digest("hex");
-
-  // Сравнение в постоянном времени
-  const expectedBuf = Buffer.from(expected, "utf8");
-  const actualBuf = Buffer.from(signature, "utf8");
-  if (expectedBuf.length !== actualBuf.length || !crypto.timingSafeEqual(expectedBuf, actualBuf)) {
-    log("warn", "oblodai: webhook verify failed", { reason: "signature mismatch" });
-    throw new OblodaiSignatureError("Подпись вебхука не совпадает");
-  }
-
-  // Replay-защита: проверка свежести timestamp
-  const maxAge = options.maxAgeSeconds ?? 300;
-  if (maxAge > 0) {
-    const now = options.now ?? Date.now();
-    const ts = Number(timestamp);
-    if (!Number.isFinite(ts)) {
-      log("warn", "oblodai: webhook verify failed", { reason: "invalid timestamp" });
-      throw new OblodaiSignatureError("Некорректный timestamp вебхука");
-    }
-    const ageSeconds = Math.abs(now / 1000 - ts);
-    if (ageSeconds > maxAge) {
-      log("warn", "oblodai: webhook verify failed", { reason: "stale" });
-      throw new OblodaiSignatureError(
-        `Вебхук слишком старый: возраст ${Math.round(ageSeconds)}с > ${maxAge}с`,
+  const tolerance = options.toleranceSec ?? 300;
+  if (tolerance > 0) {
+    const now = (options.now ?? (() => Math.floor(Date.now() / 1000)))();
+    if (Math.abs(now - ts) > tolerance) {
+      throw new SignatureError(
+        "webhook.stale_timestamp",
+        `delivery timestamp ${ts} is outside the ±${tolerance}s window`,
       );
     }
   }
 
-  log("debug", "oblodai: webhook signature ok");
-  return true;
+  const candidates: Array<[string, string]> = [[sig, options.secret]];
+  const prevSig = headerValue(headers, HEADER_WEBHOOK_SIGNATURE_PREV);
+  // A merchant who has not swapped the stored secret yet verifies the Prev header with it; one who
+  // already swapped but kept the old copy verifies the main header with the new secret. Both hold.
+  if (prevSig) candidates.push([prevSig, options.secret]);
+  if (options.previousSecret) {
+    candidates.push([sig, options.previousSecret]);
+    if (prevSig) candidates.push([prevSig, options.previousSecret]);
+  }
+  const ok = candidates.some(([provided, secret]) =>
+    constantTimeEqual(provided.toLowerCase(), signWebhook(secret, ts, rawBody)),
+  );
+  if (!ok) throw new SignatureError("webhook.bad_signature", "signature does not match the body");
+
+  return parseWebhook(rawBody);
+}
+
+/** Parse a (previously verified) delivery body into a typed event, discriminated by `type`. */
+export function parseWebhook(rawBody: string | Uint8Array): WebhookEvent {
+  const text = typeof rawBody === "string" ? rawBody : Buffer.from(rawBody).toString("utf8");
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new SignatureError("webhook.bad_signature", "body is not JSON");
+  }
+  if (!isRecord(body) || typeof body.type !== "string" || typeof body.uuid !== "string") {
+    throw new SignatureError(
+      "webhook.bad_signature",
+      "body lacks the type/uuid fields every event carries",
+    );
+  }
+  if (body.type !== "payment" && body.type !== "payout" && body.type !== "wallet") {
+    throw new SignatureError("webhook.bad_signature", `unknown event type "${String(body.type)}"`);
+  }
+  return body as unknown as WebhookEvent;
 }
 
 /**
- * Удобная обёртка: проверяет вебхук и возвращает распарсенное тело типа T. Бросает
- * {@link OblodaiSignatureError} при неверной подписи.
+ * Deliveries can arrive out of order (a retried `paid` after a `refund`). Keep the last `sequence`
+ * you processed per object and skip anything not newer.
  */
-export function constructWebhookEvent<T = unknown>(
-  secret: string,
-  rawBody: string | Buffer,
-  headers: WebhookHeaders,
-  options?: VerifyWebhookOptions,
-): T {
-  verifyWebhook(secret, rawBody, headers, options);
-  const text = typeof rawBody === "string" ? rawBody : rawBody.toString("utf8");
-  return JSON.parse(text) as T;
+export function isStaleEvent(
+  event: Pick<WebhookEvent, "sequence">,
+  lastProcessedSequence: number | undefined,
+): boolean {
+  return lastProcessedSequence !== undefined && event.sequence <= lastProcessedSequence;
 }
