@@ -1,15 +1,9 @@
 {
  "route": "GET /v1/documents/batch",
- "status": 404,
- "response": {
-  "error": {
-   "code": "document.disabled",
-   "message": "documents are not enabled on this deployment",
-   "retryable": false,
-   "request_id": "da1dd33a-4366-40dd-a467-c6449df2cae9"
-  }
- },
+ "status": 200,
  "headers": {
-  "Content-Type": "application/json"
+  "Content-Disposition": "inline; filename=\"oblodai-batch-f276dc82.pdf\"",
+  "Content-Length": "46",
+  "Content-Type": "application/pdf"
  }
 }

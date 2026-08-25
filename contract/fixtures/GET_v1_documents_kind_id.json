@@ -1,15 +1,9 @@
 {
  "route": "GET /v1/documents/{kind}/{id}",
- "status": 404,
- "response": {
-  "error": {
-   "code": "document.disabled",
-   "message": "documents are not enabled on this deployment",
-   "retryable": false,
-   "request_id": "50197118-048d-4dc0-8a21-8f95f201b5d1"
-  }
- },
+ "status": 200,
  "headers": {
-  "Content-Type": "application/json"
+  "Content-Disposition": "inline; filename=\"oblodai-payment-3c000292.pdf\"",
+  "Content-Length": "46",
+  "Content-Type": "application/pdf"
  }
 }

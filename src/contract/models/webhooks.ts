@@ -60,9 +60,13 @@ export interface WebhookTestResult {
   /** Absent when the receiver could not be reached (see `error`). */
   status_code?: number;
   error?: string;
+  /** `/v1/payment/testing-webhook` only. */
   url?: string;
   duration_ms?: number;
 }
+export const WebhookTestResultKeys = defineKeys<
+  Required<Omit<WebhookTestResult, "error" | "url" | "duration_ms">>
+>()("ok", "signed", "status_code");
 
 /** Fields every delivered event carries. */
 interface EventBase {
@@ -114,7 +118,9 @@ export const PaymentEventKeys = defineKeys<PaymentEvent>()(
 
 /** `payout.<status>` — a payout (or refund) changed state; the body is the payout itself. */
 export interface PayoutEvent
-  extends Omit<Payout, "error" | "error_code">, Pick<EventBase, "event_at" | "sequence"> {
+  extends
+    Omit<Payout, "error" | "error_code" | "wallet_uuid">,
+    Pick<EventBase, "event_at" | "sequence"> {
   type: "payout";
   status: PayoutStatus;
 }

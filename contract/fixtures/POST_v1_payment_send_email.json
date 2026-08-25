@@ -1,17 +1,17 @@
 {
  "route": "POST /v1/payment/send-email",
- "status": 409,
+ "status": 200,
  "request": {
   "email": "buyer@example.com",
-  "uuid": "8eec426e-cece-4688-ad9d-a5d1aea6a8f4"
+  "uuid": "3c000292-299b-4a08-83c9-82828514c3b1"
  },
  "response": {
-  "error": {
-   "code": "email.disabled",
-   "message": "email is not configured",
-   "retryable": false,
-   "request_id": "ce365ab9-7e9f-43e7-aa85-dccc807f0746"
-  }
+  "result": {
+   "email": "buyer@example.com",
+   "ok": true,
+   "uuid": "3c000292-299b-4a08-83c9-82828514c3b1"
+  },
+  "state": 0
  },
  "headers": {
   "Content-Type": "application/json"

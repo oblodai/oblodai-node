@@ -1,15 +1,9 @@
 {
  "route": "GET /v1/documents/referrals",
- "status": 404,
- "response": {
-  "error": {
-   "code": "document.disabled",
-   "message": "documents are not enabled on this deployment",
-   "retryable": false,
-   "request_id": "e40debb0-375a-4358-a324-441ea7ecfea8"
-  }
- },
+ "status": 200,
  "headers": {
-  "Content-Type": "application/json"
+  "Content-Disposition": "inline; filename=\"oblodai-referrals-efae6625.pdf\"",
+  "Content-Length": "46",
+  "Content-Type": "application/pdf"
  }
 }

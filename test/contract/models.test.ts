@@ -81,7 +81,71 @@ const ROWS: Row[] = [
   ["POST /v1/webhooks/rotate-secret", (r) => r, M.WebhookSecretRotatedKeys],
   ["POST /v1/webhooks/deliveries", (r) => r.items[0], M.WebhookDeliveryKeys],
   ["GET /v1/sandbox/webhooks", (r) => r.items[0], M.WebhookDeliveryKeys, ["payload", "sequence"]],
+  ["POST /v1/payment/resolve", (r) => r, [...M.PayoutKeys, "resolution"]],
+  ["POST /v1/payment/send-email", (r) => r, M.EmailSentKeys],
+  ["POST /v1/payment/resend", (r) => r, M.OkResultKeys],
+  ["POST /v1/payment/accepted/set", (r) => r, M.OkResultKeys],
+  ["POST /v1/split/rule/delete", (r) => r, M.OkResultKeys],
+  ["POST /v1/payment/accepted/list", (r) => r.items[0], M.AcceptedMethodKeys, ["reason"]],
+  ["POST /v1/payment/accuracy/get", (r) => r, M.AccuracyConfigKeys],
+  ["POST /v1/payment/accuracy/set", (r) => r, M.AccuracyConfigKeys],
+  ["POST /v1/payment/autorefund/get", (r) => r, M.AutoRefundConfigKeys],
+  ["POST /v1/payment/autorefund/set", (r) => r, M.AutoRefundConfigKeys, ["configured"]],
+  ["POST /v1/payment/discount/set", (r) => r, M.DiscountRuleKeys],
+  ["POST /v1/payment/fee-config/get", (r) => r, M.PaymentFeeConfigKeys],
+  ["POST /v1/payment/fee-config/set", (r) => r, M.PaymentFeeConfigKeys, ["enabled"]],
+  ["POST /v1/payout/fee-config/get", (r) => r, M.PayoutFeeConfigKeys],
+  ["POST /v1/payout/fee-config/set", (r) => r, M.PayoutFeeConfigKeys, ["configured"]],
+  ["POST /v1/payout/refund-fee-config/get", (r) => r, M.RefundFeeConfigKeys],
+  ["POST /v1/payout/refund-fee-config/set", (r) => r, M.RefundFeeConfigKeys, ["configured"]],
+  ["POST /v1/payment/link/toggle", (r) => r, M.PaymentLinkToggledKeys],
+  ["POST /v1/split/rule", (r) => r, M.SplitRuleCreatedKeys],
+  ["POST /v1/split/config/get", (r) => r, M.SplitConfigKeys],
+  ["POST /v1/split/config/set", (r) => r, M.SplitConfigKeys],
+  ["POST /v1/split/recipient/optin", (r) => r, M.SplitOptInKeys],
+  ["POST /v1/split/recipient/optin/get", (r) => r, M.SplitOptInKeys],
+  ["POST /v1/vrcs", (r) => r, M.VrcsStatusKeys],
+  ["POST /v1/auto-withdraw/set", (r) => r.items[0], M.AutoWithdrawRuleKeys],
+  ["POST /v1/auto-withdraw/delete", (r) => r, ["items"]],
+  ["POST /v1/api-allowlist/add", (r) => r, M.ApiAllowlistKeys],
+  ["POST /v1/api-allowlist/remove", (r) => r, M.ApiAllowlistKeys],
+  ["POST /v1/api-allowlist/enable", (r) => r, M.ApiAllowlistKeys],
+  [
+    "POST /v1/wallet",
+    (r) => r,
+    M.WalletKeys,
+    ["destination_tag", "memo", "address_xaddress", "address_muxed"],
+  ],
+  ["POST /v1/wallet/block", (r) => r, M.WalletBlockedKeys],
+  ["POST /v1/wallet/qr", (r) => r, ["image"]],
+  ["POST /v1/wallet/blocked-address-refund", (r) => r, [...M.PayoutKeys, "wallet_uuid"]],
+  ["POST /v1/transfer/to-personal", (r) => r, M.TransferToPersonalKeys],
+  ["POST /v1/transfer/to-user", (r) => r, M.TransferToUserKeys],
+  ["POST /v1/documents/jobs", (r) => r, M.DocumentJobKeys, ["ready_within", "file", "error"]],
+  ["POST /v1/documents/jobs/info", (r) => r, M.DocumentJobKeys, ["ready_within", "file", "error"]],
+  [
+    "POST /v1/documents/jobs/info",
+    (r) => r.file,
+    ["download_url", "expires_at", "rows", "size_bytes"],
+  ],
+  ["POST /v1/test-webhook/payment", (r) => r, M.WebhookTestResultKeys],
+  ["POST /v1/test-webhook/payout", (r) => r, M.WebhookTestResultKeys],
+  ["POST /v1/test-webhook/wallet", (r) => r, M.WebhookTestResultKeys],
+  [
+    "POST /v1/payment/testing-webhook",
+    (r) => r,
+    [...M.WebhookTestResultKeys, "url", "duration_ms"],
+  ],
+  ["POST /v1/sandbox/faucet", (r) => r, M.FaucetResultKeys],
+  ["POST /v1/sandbox/deposit", (r) => r, M.SandboxDepositKeys],
+  ["POST /v1/sandbox/reset", (r) => r, M.SandboxResetKeys],
+  ["POST /v1/sandbox/webhooks/replay", (r) => r, M.SandboxReplayKeys],
 ];
+
+/** Routes the API guarantees to refuse for API keys (no success body exists to model). */
+const NOT_MODELLED = new Set([
+  "POST /v1/payout/approve", // API-key payouts auto-approve; approve serves the cabinet's maker-checker flow
+]);
 
 function keySetDiff(
   actual: string[],
@@ -110,6 +174,17 @@ describe("wire models match the golden bodies", () => {
       });
     });
   }
+});
+
+describe("every recorded success body is covered by a model row", () => {
+  it("lists each JSON success fixture in ROWS", () => {
+    const covered = new Set(ROWS.map((r) => r[0]));
+    for (const [route, fx] of loadFixtures()) {
+      if (fx.status < 200 || fx.status >= 300 || NOT_MODELLED.has(route)) continue;
+      if (!fx.headers?.["Content-Type"]?.includes("json")) continue;
+      expect(covered.has(route), `${route}: recorded success body has no model row`).toBe(true);
+    }
+  });
 });
 
 describe("enums cover what the wire carries", () => {

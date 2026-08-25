@@ -1,5 +1,5 @@
 import type { RequestBodies } from "../contract/requests.js";
-import type { Payout, QrCode, Wallet, WalletBlocked } from "../contract/models/index.js";
+import type { Payout, Wallet, WalletBlocked, WalletQr } from "../contract/models/index.js";
 import { Resource, type RequestOptions } from "./base.js";
 
 export type CreateWalletParams = RequestBodies["POST /v1/wallet"];
@@ -12,8 +12,8 @@ export class Wallets extends Resource {
   }
 
   /** `POST /v1/wallet/qr`. */
-  qr(address: string, opts?: RequestOptions): Promise<QrCode> {
-    return this.call<QrCode>("POST /v1/wallet/qr", { address }, opts);
+  qr(address: string, opts?: RequestOptions): Promise<WalletQr> {
+    return this.call<WalletQr>("POST /v1/wallet/qr", { address }, opts);
   }
 
   /** `POST /v1/wallet/block` — stop crediting an address; later deposits wait for a refund decision. */

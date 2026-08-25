@@ -32,3 +32,4 @@ export type BatchStatus = "queued" | "processing" | "done" | "stopped" | (string
 export interface OkResult {
   ok: boolean;
 }
+export const OkResultKeys = ["ok"] as const;

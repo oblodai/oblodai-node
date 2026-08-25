@@ -1,15 +1,9 @@
 {
  "route": "GET /v1/documents/wallet/statement",
- "status": 404,
- "response": {
-  "error": {
-   "code": "document.disabled",
-   "message": "documents are not enabled on this deployment",
-   "retryable": false,
-   "request_id": "463ef8ac-1740-4673-9709-ce35eaaaa412"
-  }
- },
+ "status": 200,
  "headers": {
-  "Content-Type": "application/json"
+  "Content-Disposition": "inline; filename=\"oblodai-wallet-statement-554f1ca1.pdf\"",
+  "Content-Length": "46",
+  "Content-Type": "application/pdf"
  }
 }

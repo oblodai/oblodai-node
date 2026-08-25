@@ -2,7 +2,7 @@
  "route": "POST /v1/payout/info",
  "status": 200,
  "request": {
-  "uuid": "e8e7559b-2230-4cf0-8a17-91664c5d3011"
+  "uuid": "fc5c597c-7a3f-4a84-9510-fcbd5d2099c3"
  },
  "response": {
   "result": {
@@ -10,13 +10,13 @@
    "amount": "10.000000",
    "approval_required": false,
    "commission": "0.000000",
-   "created_at": "2026-08-25T21:46:42Z",
+   "created_at": "2026-08-25T22:03:16Z",
    "currency": "USDT",
-   "document_url": "",
+   "document_url": "http://127.0.0.1:44661/v1/documents/payout/fc5c597c-7a3f-4a84-9510-fcbd5d2099c3?exp=1787698996\u0026sig=93f72153d2b7a4e04738856bb84ae8dee28981cf7524fedc2eb036274135d984",
    "error": null,
    "error_code": null,
    "fee_bearer": "gateway",
-   "is_final": false,
+   "is_final": true,
    "is_refund": false,
    "memo": "",
    "network": "tron",
@@ -25,10 +25,10 @@
    "payment_order_id": null,
    "refund_for": null,
    "source": "api",
-   "status": "approved",
-   "txid": "",
-   "updated_at": "2026-08-25T21:46:42Z",
-   "uuid": "e8e7559b-2230-4cf0-8a17-91664c5d3011"
+   "status": "confirmed",
+   "txid": "sandboxtx_8aabf8b5595ec9380f231b7e0ec5060a",
+   "updated_at": "2026-08-25T22:03:16Z",
+   "uuid": "fc5c597c-7a3f-4a84-9510-fcbd5d2099c3"
   },
   "state": 0
  },

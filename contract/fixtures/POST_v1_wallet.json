@@ -1,18 +1,22 @@
 {
  "route": "POST /v1/wallet",
- "status": 403,
+ "status": 200,
  "request": {
   "currency": "USDT",
   "network": "tron",
   "order_id": "sdk-w-1"
  },
  "response": {
-  "error": {
-   "code": "wallet.sandbox_unsupported",
-   "message": "static wallets are not available to a dev store's test key; simulate a deposit on an invoice instead",
-   "retryable": false,
-   "request_id": "bfa1735a-61ce-4467-8a71-35f4aa18c3a8"
-  }
+  "result": {
+   "address": "T90ebc5efe274593567156a24dc8ef28914",
+   "currency": "USDT",
+   "document_url": "http://127.0.0.1:44661/v1/documents/wallet/554f1ca1-9b1e-41ff-ae8b-e82a39008a18?exp=1787698996\u0026sig=d15802d5d189e12c64d133474e05804c4079b31bd691ccdeb54e0d28c3dcfd94",
+   "network": "tron",
+   "order_id": "sdk-w-1",
+   "url": "",
+   "uuid": "554f1ca1-9b1e-41ff-ae8b-e82a39008a18"
+  },
+  "state": 0
  },
  "headers": {
   "Content-Type": "application/json"

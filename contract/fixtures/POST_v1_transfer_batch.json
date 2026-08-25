@@ -8,13 +8,13 @@
     "amount": "1",
     "currency": "USDT",
     "order_id": "sdk-tr-3",
-    "to_user_id": "00000000-0000-0000-0000-000000000001"
+    "to_user_id": "2c8f9d3b-5e4a-4b7c-8d2e-3f4a5b6c7d8e"
    }
   ]
  },
  "response": {
   "result": {
-   "batch_id": "88379c36-3c29-4364-a053-6c4eedf1fe43",
+   "batch_id": "22c5fad7-7eee-4542-9d6d-f856a2788006",
    "count": 1,
    "kind": "transfer",
    "status": "pending"

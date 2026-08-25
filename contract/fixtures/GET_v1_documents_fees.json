@@ -1,15 +1,9 @@
 {
  "route": "GET /v1/documents/fees",
- "status": 404,
- "response": {
-  "error": {
-   "code": "document.disabled",
-   "message": "documents are not enabled on this deployment",
-   "retryable": false,
-   "request_id": "419c96db-f646-4682-8fd6-6c62953e18d5"
-  }
- },
+ "status": 200,
  "headers": {
-  "Content-Type": "application/json"
+  "Content-Disposition": "inline; filename=\"oblodai-fees-efae6625.pdf\"",
+  "Content-Length": "46",
+  "Content-Type": "application/pdf"
  }
 }

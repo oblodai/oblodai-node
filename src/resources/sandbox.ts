@@ -1,8 +1,8 @@
 import type { RequestBodies } from "../contract/requests.js";
 import type {
   FaucetResult,
-  OkResult,
   SandboxDeposit,
+  SandboxReplay,
   SandboxReset,
   WebhookDelivery,
 } from "../contract/models/index.js";
@@ -36,8 +36,8 @@ export class Sandbox extends Resource {
   }
 
   /** `POST /v1/sandbox/webhooks/replay` — re-send a terminal (delivered/dead) delivery. */
-  replay(deliveryId: string, opts?: RequestOptions): Promise<OkResult> {
-    return this.call<OkResult>(
+  replay(deliveryId: string, opts?: RequestOptions): Promise<SandboxReplay> {
+    return this.call<SandboxReplay>(
       "POST /v1/sandbox/webhooks/replay",
       { delivery_id: deliveryId },
       opts,

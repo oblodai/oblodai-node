@@ -1,16 +1,15 @@
 {
  "route": "POST /v1/sandbox/webhooks/replay",
- "status": 400,
+ "status": 200,
  "request": {
-  "delivery_id": ""
+  "delivery_id": "0cab007d-550b-4a59-ae4e-1df93c8cd209"
  },
  "response": {
-  "error": {
-   "code": "sandbox.bad_delivery",
-   "message": "delivery_id must be a uuid",
-   "retryable": false,
-   "request_id": "8b110c03-9254-46a6-847a-006a6061a998"
-  }
+  "result": {
+   "delivery_id": "0cab007d-550b-4a59-ae4e-1df93c8cd209",
+   "ok": true
+  },
+  "state": 0
  },
  "headers": {
   "Content-Type": "application/json"

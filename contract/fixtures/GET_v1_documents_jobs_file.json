@@ -1,15 +1,9 @@
 {
  "route": "GET /v1/documents/jobs/file",
- "status": 404,
- "response": {
-  "error": {
-   "code": "document.jobs_disabled",
-   "message": "background document generation is not enabled on this deployment",
-   "retryable": false,
-   "request_id": "14811a42-bb2a-4764-ae72-70217649643d"
-  }
- },
+ "status": 200,
  "headers": {
-  "Content-Type": "application/json"
+  "Content-Disposition": "attachment; filename=\"statement-55006E34.csv\"",
+  "Content-Length": "1049",
+  "Content-Type": "text/csv; charset=utf-8"
  }
 }

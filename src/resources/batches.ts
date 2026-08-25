@@ -1,5 +1,10 @@
 import type { RequestBodies } from "../contract/requests.js";
-import type { BatchInfo, BatchSubmitted, Transfer } from "../contract/models/index.js";
+import type {
+  BatchInfo,
+  BatchSubmitted,
+  TransferToPersonal,
+  TransferToUser,
+} from "../contract/models/index.js";
 import { PermissionError } from "../core/errors.js";
 import { Resource, type RequestOptions } from "./base.js";
 
@@ -39,16 +44,16 @@ export type TransferBatchParams = RequestBodies["POST /v1/transfer/batch"];
 /** Internal, instant, fee-free moves between platform balances. Payout key. */
 export class Transfers extends Resource {
   /** `POST /v1/transfer/to-personal` — business balance → the owner's personal wallet (needs an owner link). */
-  toPersonal(params: TransferToPersonalParams, opts?: RequestOptions): Promise<Transfer> {
-    return this.call<Transfer>("POST /v1/transfer/to-personal", params, opts);
+  toPersonal(params: TransferToPersonalParams, opts?: RequestOptions): Promise<TransferToPersonal> {
+    return this.call<TransferToPersonal>("POST /v1/transfer/to-personal", params, opts);
   }
 
   /** `POST /v1/transfer/to-user` — business balance → another platform user's personal wallet. `amount` and `currency` are required. */
   toUser(
     params: TransferToUserParams & { amount: string; currency: string },
     opts?: RequestOptions,
-  ): Promise<Transfer> {
-    return this.call<Transfer>("POST /v1/transfer/to-user", params, opts);
+  ): Promise<TransferToUser> {
+    return this.call<TransferToUser>("POST /v1/transfer/to-user", params, opts);
   }
 
   /** `POST /v1/transfer/batch` — ASYNCHRONOUS batch of `toUser` transfers; poll `batches.info`. `order_id` is required on every item. */

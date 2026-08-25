@@ -1,3 +1,4 @@
+import { defineKeys } from "../keys.js";
 import type { Money } from "./common.js";
 
 /** `/v1/sandbox/faucet`. */
@@ -18,3 +19,17 @@ export interface SandboxReset {
   invoices_cancelled: number;
   balances_zeroed: number;
 }
+/** `/v1/sandbox/webhooks/replay`. */
+export interface SandboxReplay {
+  ok: boolean;
+  delivery_id: string;
+}
+export const FaucetResultKeys = defineKeys<FaucetResult>()("asset", "amount", "journal_id");
+export const SandboxDepositKeys = defineKeys<SandboxDeposit>()(
+  "invoice_id",
+  "amount",
+  "confirmations",
+  "txid",
+);
+export const SandboxResetKeys = defineKeys<SandboxReset>()("invoices_cancelled", "balances_zeroed");
+export const SandboxReplayKeys = defineKeys<SandboxReplay>()("ok", "delivery_id");

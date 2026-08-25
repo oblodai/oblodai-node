@@ -1,17 +1,38 @@
 {
  "route": "POST /v1/payment/resolve",
- "status": 409,
+ "status": 200,
  "request": {
-  "action": "accept",
-  "uuid": "57155fd6-16da-4bad-a010-5bd959396070"
+  "action": "refund",
+  "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+  "network": "tron",
+  "uuid": "a0595bbd-a058-46fc-90de-3ab63280ea93"
  },
  "response": {
-  "error": {
-   "code": "resolution.not_underpaid",
-   "message": "only an underpaid (wrong_amount) payment can be resolved; this one is confirm_check",
-   "retryable": false,
-   "request_id": "e50b6ad3-a183-4586-b38c-b9b3730babc8"
-  }
+  "result": {
+   "address": "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+   "amount": "20.000000",
+   "approval_required": false,
+   "commission": "0.000000",
+   "created_at": "2026-08-25T22:03:16Z",
+   "currency": "USDT",
+   "document_url": "http://127.0.0.1:44661/v1/documents/payout/24246c46-fdb0-497e-ae21-9326368fb50b?exp=1787698996\u0026sig=d248594f2a1b5c9db8ef263a792077ba8dd7a05dd7a6ebaf039357e72ac5f68f",
+   "fee_bearer": "gateway",
+   "is_final": false,
+   "is_refund": true,
+   "memo": "",
+   "network": "tron",
+   "order_id": null,
+   "payer_amount": "20.000000",
+   "payment_order_id": "sdk-inv-5",
+   "refund_for": "a0595bbd-a058-46fc-90de-3ab63280ea93",
+   "resolution": "refunded",
+   "source": "api",
+   "status": "approved",
+   "txid": "",
+   "updated_at": "2026-08-25T22:03:16Z",
+   "uuid": "24246c46-fdb0-497e-ae21-9326368fb50b"
+  },
+  "state": 0
  },
  "headers": {
   "Content-Type": "application/json"

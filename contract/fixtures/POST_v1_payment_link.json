@@ -12,9 +12,9 @@
  },
  "response": {
   "result": {
-   "document_url": "",
-   "link_id": "0796fef0-54d2-44b0-aeb3-61a551a33392",
-   "url": ""
+   "document_url": "http://127.0.0.1:44661/v1/documents/paylink/c7aeabe9-07dc-4fb9-8d84-22b44ff39f24?exp=1787698996\u0026sig=6bcf37b3a6cce26bcb805a3a609ddbb4f01d3922807635a2ef74fe0f2fadf622",
+   "link_id": "c7aeabe9-07dc-4fb9-8d84-22b44ff39f24",
+   "url": "http://127.0.0.1:44661/link/c7aeabe9-07dc-4fb9-8d84-22b44ff39f24"
   },
   "state": 0
  },

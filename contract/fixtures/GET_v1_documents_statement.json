@@ -1,15 +1,9 @@
 {
  "route": "GET /v1/documents/statement",
- "status": 404,
- "response": {
-  "error": {
-   "code": "document.disabled",
-   "message": "documents are not enabled on this deployment",
-   "retryable": false,
-   "request_id": "e5412b8c-c251-4923-8c12-42c89eba5d74"
-  }
- },
+ "status": 200,
  "headers": {
-  "Content-Type": "application/json"
+  "Content-Disposition": "inline; filename=\"oblodai-statement-efae6625.pdf\"",
+  "Content-Length": "46",
+  "Content-Type": "application/pdf"
  }
 }
