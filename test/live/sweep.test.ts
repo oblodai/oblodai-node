@@ -104,13 +104,13 @@ describe("live sweep", () => {
     const b = await ob.payments.batch({
       on_error: "continue",
       payments: [
-        { amount: "3", currency: "USDT", network: "tron", order_id: `sw-b-${Date.now()}` },
+        { amount: "5", currency: "USDT", network: "tron", order_id: `sw-b-${Date.now()}` },
       ],
     });
     expect(b.batch_id).toBeTruthy();
     expect((await ob.batches.info({ batch_id: b.batch_id })).batch_id).toBe(b.batch_id);
     const toCancel = await ob.payments.create({
-      amount: "1",
+      amount: "5",
       currency: "USDT",
       network: "tron",
       order_id: `sw-c-${Date.now()}`,
@@ -140,7 +140,7 @@ describe("live sweep", () => {
     await accept(
       ob.refunds.batch({
         refunds: [
-          { uuid: invoice.uuid, address: ADDR, amount: "1", reference: `sw-rb-${Date.now()}` },
+          { uuid: invoice.uuid, address: ADDR, amount: "5", reference: `sw-rb-${Date.now()}` },
         ],
       }),
     );
@@ -173,7 +173,7 @@ describe("live sweep", () => {
     const mass = await ob.payouts.mass({
       payouts: [
         {
-          amount: "1",
+          amount: "5",
           currency: "USDT",
           network: "tron",
           address: ADDR,
@@ -185,7 +185,7 @@ describe("live sweep", () => {
     const batch = await ob.payouts.batch({
       payouts: [
         {
-          amount: "1",
+          amount: "5",
           currency: "USDT",
           network: "tron",
           address: ADDR,
@@ -222,7 +222,7 @@ describe("live sweep", () => {
     const claimed = await pub.payoutLinks.claim(link.claim_token!, { address: ADDR });
     expect(claimed.payout_id).toBeTruthy();
     const second = await ob.payoutLinks.create({
-      amount: "1",
+      amount: "5",
       currency: "USDT",
       network: "tron",
       reference: `sw-pl2-${Date.now()}`,
@@ -230,7 +230,7 @@ describe("live sweep", () => {
     expect((await ob.payoutLinks.cancel(second.link_id)).status).toBe("cancelled");
     const batch = await ob.payoutLinks.batch({
       items: [
-        { amount: "1", currency: "USDT", network: "tron", reference: `sw-plb-${Date.now()}` },
+        { amount: "5", currency: "USDT", network: "tron", reference: `sw-plb-${Date.now()}` },
       ],
     });
     expect(batch.items[0]!.ok).toBe(true);
@@ -338,7 +338,7 @@ describe("live sweep", () => {
     );
     await accept(ob.wallets.qr(ADDR));
     await accept(ob.wallets.block({ address: ADDR }));
-    await accept(ob.transfers.toPersonal({ amount: "1", currency: "USDT" }));
+    await accept(ob.transfers.toPersonal({ amount: "5", currency: "USDT" }));
   });
 
   it("documents (when the stand has a renderer)", async () => {

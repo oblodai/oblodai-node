@@ -54,11 +54,11 @@ describe("live sandbox journey", () => {
   it("replays an idempotent create and refuses a reused key with a different body", async () => {
     const key = `sdk-idem-${Date.now()}`;
     const a = await ob.payments.create(
-      { amount: "1", currency: "USDT", network: "tron", order_id: `${key}-o` },
+      { amount: "5", currency: "USDT", network: "tron", order_id: `${key}-o` },
       { idempotencyKey: key },
     );
     const b = await ob.payments.create(
-      { amount: "1", currency: "USDT", network: "tron", order_id: `${key}-o` },
+      { amount: "5", currency: "USDT", network: "tron", order_id: `${key}-o` },
       { idempotencyKey: key },
     );
     expect(b.uuid).toBe(a.uuid);
