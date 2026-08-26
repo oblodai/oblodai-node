@@ -36,9 +36,8 @@ Migration notes: [MIGRATION-1.3.md](MIGRATION-1.3.md).
 
 - **Requests are signed with the five-field recipe over path+query.** The 1.x line signed four
   fields; the gateway has answered 401 to every 1.x call since the recipe changed.
-- Models, statuses, pagination and parameter names match the current API vocabulary. Notably
-  `wallet.blocked` is the code a `refundBlockedDeposit` on an unblocked or already-refunded address
-  returns, and it is documented on the method.
+- Models, statuses, pagination and parameter names match the current API vocabulary; the wallet
+  model carries `blocked`, and `refundBlockedDeposit` documents the refund-family codes it returns.
 - **Retry safety comes from the contract, not from the shape of a path.** `ROUTES[key].safe` is the
   gateway's own hand-written read-only classification, exported in `contract.json`; the codegen
   fails if any route lacks it. The previous path-suffix heuristic would have mis-classified any new
