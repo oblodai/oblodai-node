@@ -1,7 +1,8 @@
 /**
  * Minimal structured logger contract. Anything with debug/info/warn/error(msg, fields) fits
- * (pino, winston child loggers, console). Field values that carry secrets are redacted before
- * they reach the logger, so a debug log never leaks a key, a signature or a cheque passcode.
+ * (pino, winston child loggers, console). Every field the SDK logs goes through `redact` first —
+ * inside the transport, before the logger is called — so a caller-injected logger receives values
+ * that are already scrubbed and a debug log never leaks a key, a signature or a cheque passcode.
  */
 export type LogFields = Record<string, unknown>;
 
@@ -44,7 +45,21 @@ export function consoleLogger(level: "debug" | "info" | "warn" | "error" = "warn
   };
 }
 
-const SENSITIVE = /secret|signature|passcode|token|authorization|password/i;
+const SENSITIVE = /secret|signature|passcode|token|authorization|password|api[-_]?key/i;
+
+/**
+ * Wrap a logger so its fields are redacted before it sees them. The SDK does this once, around the
+ * logger the caller supplied: redaction that lives inside `consoleLogger` alone would protect only
+ * the SDK's own logger and quietly leave a pino or winston user unprotected.
+ */
+export function redactingLogger(inner: Logger): Logger {
+  return {
+    debug: (m, f) => inner.debug(m, f && redact(f)),
+    info: (m, f) => inner.info(m, f && redact(f)),
+    warn: (m, f) => inner.warn(m, f && redact(f)),
+    error: (m, f) => inner.error(m, f && redact(f)),
+  };
+}
 
 /** Replace values of sensitive-looking keys, recursively, without touching the original object. */
 export function redact<T>(value: T): T {

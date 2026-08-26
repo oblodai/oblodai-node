@@ -1,6 +1,7 @@
 import { ROUTES, type RouteKey } from "../contract/routes.js";
 import type { RequestBodies } from "../contract/requests.js";
 import { asPage, asPlainList, type Page, type PlainList } from "../core/envelope.js";
+import { ConfigError } from "../core/errors.js";
 import { PagePromise, type PageParams } from "../core/pagination.js";
 import type { Query } from "../core/request.js";
 import type { CallOptions, RawResponse, Transport } from "../core/transport.js";
@@ -55,9 +56,19 @@ export abstract class Resource {
     } = {},
   ): PagePromise<T> {
     const { limit, offset, ...rest } = params as PageParams & Record<string, unknown>;
-    // One key per page would be wrong on both sides: the core would replay page 1 forever.
-    const { idempotencyKey: _dropped, ...pageOpts } = opts;
     const route = ROUTES[key];
+    // One key across a paging loop would make the core replay page 1 forever, and a key per page is
+    // not what the caller asked for either — so this is refused loudly and immediately, with the
+    // same code the transport raises on any other route the core does not deduplicate. Silently
+    // dropping it would leave the caller believing a re-send is deduplicated when it is not.
+    const { idempotencyKey, ...pageOpts } = opts;
+    if (idempotencyKey !== undefined) {
+      throw new ConfigError(
+        "sdk.idempotency_unsupported",
+        `${route.method} ${route.path} is a list route and does not deduplicate by Idempotency-Key; remove idempotencyKey from this call`,
+        "idempotencyKey",
+      );
+    }
     return new PagePromise<T>(
       async (p) => {
         const useQuery = route.method === "GET" || opts.viaQuery;

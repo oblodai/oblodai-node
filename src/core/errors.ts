@@ -26,12 +26,16 @@ export type SdkErrorCode =
   | "sdk.bad_idempotency_key"
   | "sdk.idempotency_unsupported"
   | "sdk.bad_envelope"
-  | "sdk.bad_path_param";
+  | "sdk.bad_path_param"
+  | "sdk.bad_header"
+  | "sdk.response_too_large"
+  | "sdk.bad_amount";
 
 export type AnyErrorCode =
   ErrorCode | SdkErrorCode | TransportErrorCode | WebhookErrorCode | (string & {});
 export type TransportErrorCode =
   "transport.timeout" | "transport.network" | "transport.aborted" | "transport.deadline";
+/** Signature-family webhook failures: answer 401 to these and the sender will stop. */
 export type WebhookErrorCode =
   "webhook.bad_signature" | "webhook.stale_timestamp" | "webhook.missing_header";
 
@@ -146,8 +150,24 @@ export class InternalError extends ApiError {}
 
 /** The response could not be interpreted as the documented envelope. */
 export class ContractError extends OblodaiError {
-  constructor(message: string, httpStatus: number, raw?: unknown) {
-    super({ code: "sdk.bad_envelope", message, httpStatus, retryable: false, raw });
+  constructor(
+    message: string,
+    httpStatus: number,
+    raw?: unknown,
+    code: AnyErrorCode = "sdk.bad_envelope",
+  ) {
+    super({ code, message, httpStatus, retryable: false, raw });
+  }
+}
+
+/**
+ * The delivery's signature verified but its body is not a usable event. Deliberately NOT a
+ * `SignatureError`: a receiver that answers 401 to signature failures must not answer 401 here —
+ * the sender is authentic and the delivery should be retried or investigated, not rejected as forged.
+ */
+export class WebhookPayloadError extends ContractError {
+  constructor(message: string, raw?: unknown) {
+    super(message, 0, raw, "webhook.bad_payload");
   }
 }
 
@@ -168,6 +188,56 @@ export interface ApiErrorSource {
   retryAfterHeader?: number;
 }
 
+/**
+ * Upper bound for any retry hint the SDK will report, seconds. A hostile or broken peer can put
+ * anything in `retry_after`/`Retry-After`; clamping here means no caller ever schedules a wait from
+ * a negative, infinite or overflowing number. The retry loop separately honours at most
+ * `retry.maxRetryAfterMs` (default 30 s) of it.
+ */
+export const MAX_RETRY_AFTER_SECONDS = 86_400;
+
+/** A retry hint as seconds, or undefined when the value is not a usable finite number. */
+export function coerceRetryAfterSeconds(value: unknown): number | undefined {
+  let n: number;
+  if (typeof value === "number") n = value;
+  else if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value)))
+    n = Number(value);
+  else return undefined;
+  // NaN carries no instruction; ±Infinity does (wait forever / wait not at all) and clamps like any
+  // other out-of-range number rather than silently vanishing.
+  if (Number.isNaN(n)) return undefined;
+  return Math.min(Math.max(0, n), MAX_RETRY_AFTER_SECONDS);
+}
+
+function stringOrUndefined(v: unknown): string | undefined {
+  return typeof v === "string" ? v : undefined;
+}
+
+/**
+ * Decode `{error: {...}}` field by field. A peer that answers with the right shape but the wrong
+ * types (`code: 123`, `retryable: "yes"`) must not be able to change how the SDK behaves: an
+ * unusable `code` demotes the whole body to "no envelope", and every other field falls back to the
+ * value the HTTP status alone justifies. Never throws.
+ */
+export function decodeErrorDetail(raw: unknown): { detail: ErrorDetail; usable: boolean } {
+  const src = (raw ?? {}) as Record<string, unknown>;
+  const requestId = stringOrUndefined(src.request_id);
+  const code = stringOrUndefined(src.code);
+  if (!code) return { detail: { code: "", request_id: requestId }, usable: false };
+  const retryable = typeof src.retryable === "boolean" ? src.retryable : undefined;
+  return {
+    detail: {
+      code,
+      message: stringOrUndefined(src.message),
+      field: stringOrUndefined(src.field),
+      retryable,
+      retry_after: coerceRetryAfterSeconds(src.retry_after),
+      request_id: requestId,
+    },
+    usable: true,
+  };
+}
+
 /** Build the right subclass from an error envelope (or a synthesized one) and the HTTP status. */
 export function apiErrorFrom(
   httpStatus: number,
@@ -176,17 +246,24 @@ export function apiErrorFrom(
   source: ApiErrorSource = {},
 ): ApiError {
   const synthetic = source.synthetic ?? false;
+  const code = (typeof detail.code === "string" && detail.code) || "internal";
+  const message =
+    (typeof detail.message === "string" && detail.message) ||
+    `request failed with HTTP ${httpStatus} (${code})`;
   const init: OblodaiErrorInit = {
-    code: detail.code || "internal",
-    message:
-      detail.message || `request failed with HTTP ${httpStatus} (${detail.code || "no envelope"})`,
+    code,
+    message,
     httpStatus,
     retryable: synthetic
       ? TRANSIENT_STATUSES.has(httpStatus)
-      : (detail.retryable ?? (httpStatus === 429 || httpStatus === 503)),
-    retryAfter: detail.retry_after ?? source.retryAfterHeader,
-    requestId: detail.request_id,
-    field: detail.field,
+      : typeof detail.retryable === "boolean"
+        ? detail.retryable
+        : httpStatus === 429 || httpStatus === 503,
+    retryAfter:
+      coerceRetryAfterSeconds(detail.retry_after) ??
+      coerceRetryAfterSeconds(source.retryAfterHeader),
+    requestId: stringOrUndefined(detail.request_id),
+    field: stringOrUndefined(detail.field),
     synthetic,
     raw,
   };

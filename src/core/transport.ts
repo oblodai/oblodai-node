@@ -1,4 +1,5 @@
 import type { RouteSpec } from "../contract/types.js";
+import { assertNotRedirected, readCapped } from "./body.js";
 import { SkewCorrectingClock } from "./clock.js";
 import { decodeEnvelope } from "./envelope.js";
 import {
@@ -9,9 +10,10 @@ import {
   type ApiError,
 } from "./errors.js";
 import { assertIdempotencyKey, newIdempotencyKey } from "./idempotency.js";
-import { noopLogger, redact, type Logger } from "./logger.js";
+import { noopLogger, redactingLogger, type Logger } from "./logger.js";
 import { buildRequest, serializeBody, type Credentials, type Query } from "./request.js";
 import { DEFAULT_RETRY, retryDelayMs, shouldRetry, type RetryOptions } from "./retry.js";
+import { INSPECT_CUSTOM, REDACTED, defineHidden, describeCredential } from "./secrets.js";
 import { SIGNATURE_SKEW_SECONDS } from "./signing.js";
 import { sleep } from "./util.js";
 
@@ -66,6 +68,14 @@ export interface RawResponse {
 /** Error codes that mean the core rejected the signature because of the timestamp or MAC. */
 const SIGNATURE_FAILURE_CODES = new Set(["merchant.bad_signature", "auth.bad_timestamp"]);
 
+/**
+ * Response body caps. The SDK buffers the whole body, so an endless or mistargeted stream would
+ * otherwise grow until the process dies. JSON envelopes are small (the largest recorded fixture is
+ * a few hundred kB); documents are PDFs and CSV statements.
+ */
+export const MAX_JSON_BODY_BYTES = 8 * 1024 * 1024;
+export const MAX_BARE_BODY_BYTES = 64 * 1024 * 1024;
+
 export class Transport {
   private readonly fetchImpl: FetchLike;
   private readonly retry: RetryOptions;
@@ -75,6 +85,10 @@ export class Transport {
   private readonly deadlineMs: number;
 
   constructor(private readonly opts: TransportOptions) {
+    // The options carry both key pairs. Non-enumerable so a spread, a key list, `JSON.stringify` or
+    // an `inspect` of the transport (or of anything holding one) cannot reach them by walking
+    // properties; the explicit renderings below cover the two paths that ignore enumerability.
+    defineHidden(this, "opts", opts);
     const f = opts.fetch ?? (globalThis.fetch as FetchLike | undefined);
     if (!f)
       throw new ConfigError(
@@ -84,9 +98,28 @@ export class Transport {
     this.fetchImpl = f;
     this.retry = { ...DEFAULT_RETRY, ...opts.retry };
     this.clock = opts.clock ?? new SkewCorrectingClock();
-    this.logger = opts.logger ?? noopLogger;
+    // Wrapped, not trusted: whatever logger the caller injected receives redacted fields only.
+    this.logger = opts.logger ? redactingLogger(opts.logger) : noopLogger;
     this.timeoutMs = opts.timeoutMs ?? 30_000;
     this.deadlineMs = opts.deadlineMs ?? 90_000;
+  }
+
+  /** What this transport is pointed at — never how it proves who it is. */
+  toJSON(): Record<string, unknown> {
+    return {
+      baseUrl: this.opts.baseUrl,
+      credentials: describeCredential(this.opts.credentials?.publicId),
+      payoutCredentials: describeCredential(this.opts.payoutCredentials?.publicId),
+      adminToken: this.opts.adminToken ? REDACTED : undefined,
+      timeoutMs: this.timeoutMs,
+      deadlineMs: this.deadlineMs,
+      retry: this.retry,
+    };
+  }
+
+  /** `console.log(transport)` / `util.inspect` render the same redacted summary as `toJSON`. */
+  [INSPECT_CUSTOM](): Record<string, unknown> {
+    return { Transport: this.toJSON() };
   }
 
   /** Call an envelope route and return its `result`. */
@@ -145,8 +178,12 @@ export class Transport {
 
     let attempt = 0;
     let skewTried = false;
+    let skewInstalled = 0;
     let skewBefore = 0;
     for (;;) {
+      // The offset this attempt is signed with. Compared against the server's own time below —
+      // never against the shared offset, which a concurrent call may already have corrected.
+      const signedOffset = this.clock.offset;
       const req = buildRequest({
         baseUrl: this.opts.baseUrl,
         route,
@@ -157,16 +194,21 @@ export class Transport {
         idempotencyKey,
         ts: this.clock.now(),
         userAgent: this.opts.userAgent,
-        extraHeaders:
-          route.auth === "onboard" && this.opts.adminToken
-            ? { ...this.opts.headers, "X-Admin-Token": this.opts.adminToken }
-            : this.opts.headers,
+        extraHeaders: this.opts.headers,
+        // Never on a signed merchant route: the admin token provisions merchants, and a gateway
+        // operator's token must not travel on every call a merchant integration makes.
+        adminToken: route.auth === "onboard" ? this.opts.adminToken : undefined,
       });
       this.logger.debug("request", { route: label, attempt, idempotencyKey });
 
       let raw: RawResponse;
       try {
-        raw = await this.send(req, options, deadline);
+        raw = await this.send(
+          req,
+          options,
+          deadline,
+          route.bare ? MAX_BARE_BODY_BYTES : MAX_JSON_BODY_BYTES,
+        );
       } catch (err) {
         if (shouldRetry(err, { attempt, safeToRepeat }, this.retry)) {
           await this.pause(err, attempt, options.signal, deadline);
@@ -179,36 +221,39 @@ export class Transport {
       if (raw.status >= 200 && raw.status < 300) return raw;
 
       const failure = this.classify(route, raw);
-      this.logger.debug(
-        "response",
-        redact({
-          route: label,
-          status: raw.status,
-          code: failure.code,
-          requestId: failure.requestId,
-        }),
-      );
+      this.logger.debug("response", {
+        route: label,
+        status: raw.status,
+        code: failure.code,
+        requestId: failure.requestId,
+      });
 
       // Clock skew: the core rejected the timestamp/MAC. Learn its time from the `Date` header,
       // re-sign once, and keep the offset only if that attempt got past authentication.
       if (raw.status === 401 && SIGNATURE_FAILURE_CODES.has(failure.code)) {
         if (!skewTried) {
           const offset = this.clock.observeServerDate(raw.headers.get("date"));
+          // Against `signedOffset`, not the live offset: when several calls fail together the first
+          // one to recover fixes the shared clock, and the rest must still re-sign their own stale
+          // request instead of concluding "the clock is already right" and failing hard.
           if (
             offset !== undefined &&
-            Math.abs(offset - this.clock.offset) > SIGNATURE_SKEW_SECONDS / 2
+            Math.abs(offset - signedOffset) > SIGNATURE_SKEW_SECONDS / 2
           ) {
             this.logger.warn("clock skew detected; re-signing with server time", {
               route: label,
               offsetSec: offset,
             });
             skewTried = true;
-            skewBefore = this.clock.offset;
+            skewBefore = signedOffset;
+            skewInstalled = offset;
             this.clock.correct(offset);
             continue;
           }
         } else {
-          this.clock.correct(skewBefore); // the corrected timestamp did not help: it was not skew
+          // The corrected timestamp did not help, so it was not skew — but only this call's own
+          // correction may be undone; a sibling's newer one stays.
+          this.clock.revertIfUnchanged(skewInstalled, skewBefore);
         }
       }
       if (shouldRetry(failure, { attempt, safeToRepeat }, this.retry)) {
@@ -269,6 +314,7 @@ export class Transport {
     req: { url: string; method: string; headers: Record<string, string>; body: string | undefined },
     options: CallOptions,
     deadline: number,
+    maxBytes: number,
   ): Promise<RawResponse> {
     const controller = new AbortController();
     const timeoutMs = Math.min(
@@ -296,7 +342,10 @@ export class Transport {
         signal: controller.signal,
         redirect: "manual",
       });
-      const bytes = new Uint8Array(await res.arrayBuffer());
+      assertNotRedirected(req.url, res);
+      // The timeout above is still armed here: it covers reading the body, not just the headers, so
+      // a peer that sends one byte a minute cannot hold the call open past its deadline.
+      const bytes = await readCapped(res, maxBytes, `${req.method} ${req.url}`);
       return {
         status: res.status,
         headers: res.headers,

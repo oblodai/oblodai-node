@@ -6,7 +6,14 @@ export type CreateWalletParams = RequestBodies["POST /v1/wallet"];
 
 /** Static deposit wallets: one permanent address per customer, deposits reported as `wallet.paid`. */
 export class Wallets extends Resource {
-  /** `POST /v1/wallet` — idempotent by `order_id`. */
+  /**
+   * `POST /v1/wallet` — a permanent deposit address for one customer. Idempotent by `order_id`.
+   *
+   * Codes worth branching on: `wallet.static_disabled`, `wallet.unsupported_network`,
+   * `wallet.no_network` (multi-network asset, no `network` given), `wallet.no_address`
+   * (derivation is temporarily unavailable — retryable), `wallet.sandbox_unsupported`,
+   * `request.unknown_currency`, `idempotency.key_reused`.
+   */
   create(params: CreateWalletParams, opts?: RequestOptions): Promise<Wallet> {
     return this.call<Wallet>("POST /v1/wallet", params, opts);
   }
@@ -24,7 +31,14 @@ export class Wallets extends Resource {
     return this.call<WalletBlocked>("POST /v1/wallet/block", params, opts);
   }
 
-  /** `POST /v1/wallet/blocked-address-refund` — send funds that landed on a blocked address back. Payout key. */
+  /**
+   * `POST /v1/wallet/blocked-address-refund` — send funds that landed on a blocked address back.
+   * Payout key.
+   *
+   * Codes worth branching on: `wallet.blocked` (the address is not blocked, or already refunded),
+   * `wallet.abandoned`, `refund.nothing_to_refund`, `refund.dust`,
+   * `payout.insufficient_funds` (retryable), `merchant.wrong_key_kind`.
+   */
   refundBlockedDeposit(
     params: RequestBodies["POST /v1/wallet/blocked-address-refund"],
     opts?: RequestOptions,

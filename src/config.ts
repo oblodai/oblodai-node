@@ -1,4 +1,4 @@
-import type { Credentials } from "./core/request.js";
+import { makeCredentials, type Credentials } from "./core/request.js";
 import type { FetchLike } from "./core/transport.js";
 import type { Logger } from "./core/logger.js";
 import type { RetryOptions } from "./core/retry.js";
@@ -82,11 +82,9 @@ export function resolveConfig(
 
   return {
     baseUrl,
-    credentials: publicId && secret ? { publicId, secret } : undefined,
+    credentials: publicId && secret ? makeCredentials(publicId, secret) : undefined,
     payoutCredentials:
-      payoutPublicId && payoutSecret
-        ? { publicId: payoutPublicId, secret: payoutSecret }
-        : undefined,
+      payoutPublicId && payoutSecret ? makeCredentials(payoutPublicId, payoutSecret) : undefined,
     fetch: opts.fetch,
     timeoutMs: opts.timeoutMs,
     deadlineMs: opts.deadlineMs,

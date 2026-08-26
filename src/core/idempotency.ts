@@ -1,4 +1,4 @@
-import { ValidationError } from "./errors.js";
+import { ConfigError } from "./errors.js";
 import { uuid } from "./util.js";
 
 /**
@@ -28,12 +28,9 @@ export function assertIdempotencyKey(key: string): void {
   }
 }
 
-function sdkInvalid(message: string): ValidationError {
-  return new ValidationError({
-    code: "sdk.bad_idempotency_key",
-    message,
-    httpStatus: 0,
-    retryable: false,
-    field: "idempotencyKey",
-  });
+// A key the SDK refuses is a caller mistake caught before anything is sent — a ConfigError, like
+// every other pre-flight refusal. A ValidationError would claim the API answered 400, and callers
+// branch on that difference.
+function sdkInvalid(message: string): ConfigError {
+  return new ConfigError("sdk.bad_idempotency_key", message, "idempotencyKey");
 }

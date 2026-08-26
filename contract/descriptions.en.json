@@ -1,5 +1,23 @@
 {
   "request": {
+    "POST /v1/api-allowlist/add": {
+      "cidr": "An IP address or subnet in CIDR form (203.0.113.7 or 203.0.113.0/24)."
+    },
+    "POST /v1/api-allowlist/enable": {
+      "enabled": "true — accept API calls only from the listed addresses; false — the list is kept but not enforced."
+    },
+    "POST /v1/api-allowlist/remove": {
+      "cidr": "An IP address or subnet in CIDR form (203.0.113.7 or 203.0.113.0/24)."
+    },
+    "POST /v1/auto-withdraw/delete": {
+      "currency": "The asset whose automatic withdrawal to switch off."
+    },
+    "POST /v1/auto-withdraw/set": {
+      "address": "Destination address (the merchant's external wallet).",
+      "currency": "The asset to withdraw automatically.",
+      "min_amount": "Threshold: the withdrawal fires once the asset's available balance reaches this amount; empty — the network minimum.",
+      "network": "Network of the destination address."
+    },
     "POST /v1/batch/info": {
       "batch_id": "Batch id from the submit response.",
       "limit": "How many items to return in items (pagination).",
@@ -55,6 +73,15 @@
       "url_return": "\"Back to shop\" link on the payment page.",
       "url_success": "Redirect after successful payment."
     },
+    "POST /v1/payment/accepted/list": {
+      "limit": "Page size, 1–100; out of range falls back to 25.",
+      "offset": "Offset from the start of the list (newest first)."
+    },
+    "POST /v1/payment/accepted/set": {
+      "accepted": "The complete list of currency+network pairs an invoice may be paid with; an empty list accepts everything in the catalogue.",
+      "accepted.currency": "Asset code.",
+      "accepted.network": "Network of the asset."
+    },
     "POST /v1/payment/accuracy/set": {
       "accuracy_percent": "Tolerance in percent, 1–5. Required when enabled: true; ignored when enabled: false (reset to 0). Capped at 5 %.",
       "enabled": "Enable/disable the tolerance."
@@ -87,6 +114,10 @@
       "order_id": "Your order reference.",
       "uuid": "Invoice id in Oblodai. Either uuid or order_id is required; uuid takes priority."
     },
+    "POST /v1/payment/discount/list": {
+      "limit": "Page size, 1–100; out of range falls back to 25.",
+      "offset": "Offset from the start of the list (newest first)."
+    },
     "POST /v1/payment/discount/set": {
       "currency": "Currency. Empty = global default for all coins.",
       "discount_percent": "Percentage, from -99 to 99. Positive is a discount, negative is a markup.",
@@ -94,6 +125,12 @@
     },
     "POST /v1/payment/fee-config/set": {
       "payer_pays_percent": "Share of OUR commission paid by the buyer: 0 — the merchant pays (current behaviour), 100 — the buyer pays and the invoice is issued with a markup. Applies to invoices created AFTER the change."
+    },
+    "POST /v1/payment/history": {
+      "kind": "For /v1/payout/history only: payout — ordinary payouts, refund — refunds; empty — both.",
+      "limit": "Page size, 1–100; out of range falls back to 25.",
+      "offset": "Offset from the start of the list (newest first).",
+      "status": "Filter by status (an exact value from the status vocabulary); empty — all of them."
     },
     "POST /v1/payment/info": {
       "order_id": "Your order reference.",
@@ -113,10 +150,18 @@
     },
     "POST /v1/payment/link/info": {
       "document_url": "Signed link to a PDF poster with the payment QR (for printing at the till). Empty if document generation is not enabled.",
-      "link_id": "Payment link identifier.",
-      "url": "Public URL of the payment page — give it to the buyer as a button, in an email or as a QR code.",
-      "limit": "Page size for the link's payments, 1–100; out of range falls back to 25.",
-      "offset": "Offset within the link's payments."
+      "limit": "Page size, 1–100; out of range falls back to 25.",
+      "link_id": "Link id.",
+      "offset": "Offset from the start of the list (newest first).",
+      "url": "Public URL of the payment page — give it to the buyer as a button, in an email or as a QR code."
+    },
+    "POST /v1/payment/link/list": {
+      "limit": "Page size, 1–100; out of range falls back to 25.",
+      "offset": "Offset from the start of the list (newest first)."
+    },
+    "POST /v1/payment/link/toggle": {
+      "active": "true — the link accepts payment; false — it is switched off and its page says so.",
+      "link_id": "Identifier of the payment link."
     },
     "POST /v1/payment/qr": {
       "order_id": "Your order reference.",
@@ -146,6 +191,10 @@
       "email": "Where to send it. Defaults to the payer_email set on the payment.",
       "order_id": "Your order reference.",
       "uuid": "Payment id in Oblodai. Either uuid or order_id is required."
+    },
+    "POST /v1/payment/services": {
+      "limit": "Page size, 1–100; out of range falls back to 25.",
+      "offset": "Offset from the start of the list (newest first)."
     },
     "POST /v1/payment/testing-webhook": {
       "status": "Status in the body. Default paid.",
@@ -180,11 +229,23 @@
       "payouts.source": "Origin label: api (default) or manual.",
       "payouts.url_callback": "Custom webhook URL for this payout (passes the SSRF check). Requires a registered endpoint (POST /v1/webhooks): delivery is signed with its secret."
     },
+    "POST /v1/payout/calculate": {
+      "amount": "Payout amount, as a decimal string.",
+      "currency": "Payout asset (USDT, BTC, …).",
+      "is_subtract": "true — the fee is charged on top of the amount (the recipient gets exactly `amount`); false — it comes out of the payout.",
+      "network": "Payout network; required when the asset lives on more than one."
+    },
     "POST /v1/payout/cancel": {
       "uuid": "Id of the payout (or refund) to cancel."
     },
     "POST /v1/payout/fee-config/set": {
       "fee_on_recipient": "true — the recipient pays the network fee (receives less); false — the merchant bears the fee."
+    },
+    "POST /v1/payout/history": {
+      "kind": "payout — ordinary payouts, refund — refunds; empty — both.",
+      "limit": "Page size, 1–100; out of range falls back to 25.",
+      "offset": "Offset from the start of the list (newest first).",
+      "status": "Filter by status (an exact value from the status vocabulary); empty — all of them."
     },
     "POST /v1/payout/info": {
       "order_id": "Your order reference.",
@@ -246,6 +307,10 @@
     "POST /v1/payout/refund-fee-config/set": {
       "fee_on_customer": "true — the customer receives net (the customer pays the fee); false — the merchant pays the fee and the customer receives gross."
     },
+    "POST /v1/payout/services": {
+      "limit": "Page size, 1–100; out of range falls back to 25.",
+      "offset": "Offset from the start of the list (newest first)."
+    },
     "POST /v1/payout/validate": {
       "address": "Recipient address.",
       "amount": "Payout amount, in currency.",
@@ -295,6 +360,13 @@
       "note": "Comment for yourself (shown in the rule list).",
       "percent": "Share of every payment, as a string: \"10\" = 10 %, \"2.5\" = 2.5 %. Greater than 0 and at most 100, step 0.01 %; the sum of all rules cannot exceed 100 %."
     },
+    "POST /v1/split/rule/delete": {
+      "rule_id": "Identifier of the rule, from POST /v1/split/rule or the rule list."
+    },
+    "POST /v1/split/rule/list": {
+      "limit": "Page size, 1–100; out of range falls back to 25.",
+      "offset": "Offset from the start of the list (newest first)."
+    },
     "POST /v1/test-webhook/payment": {
       "currency": "Currency in the body.",
       "network": "Network in the body.",
@@ -338,6 +410,9 @@
       "order_id": "Idempotency key: a repeat with the same order_id is a no-op; required in a transfer batch.",
       "to_user_id": "Platform user id of the recipient (UUID, not username); a username is resolved to an id via the cabinet public profile /public/users/{username}."
     },
+    "POST /v1/vrcs": {
+      "enabled": "true — convert volatile deposits to USDT automatically, false — stop; omit the field to read the current state without changing it."
+    },
     "POST /v1/wallet": {
       "currency": "Symbol of the receiving currency (USDT, BTC, ETH, …).",
       "network": "Receiving network (tron, ethereum, bitcoin, …).",
@@ -358,88 +433,9 @@
     "POST /v1/webhooks": {
       "url": "HTTPS callback URL. SSRF check: private and local addresses are rejected."
     },
-    "POST /v1/payment/history": {
-      "limit": "Page size, 1–100; out of range falls back to 25.",
-      "offset": "Offset from the start of the list (newest first).",
-      "status": "Filter by status (an exact value from the status vocabulary); empty returns all.",
-      "kind": "Ignored on this route (payout history only)."
-    },
-    "POST /v1/payout/history": {
-      "limit": "Page size, 1–100; out of range falls back to 25.",
-      "offset": "Offset from the start of the list (newest first).",
-      "status": "Filter by status (an exact value from the status vocabulary); empty returns all.",
-      "kind": "payout — ordinary payouts, refund — refunds; empty returns both."
-    },
-    "POST /v1/payment/services": {
-      "limit": "Page size, 1–100; out of range falls back to 25.",
-      "offset": "Offset from the start of the list (newest first)."
-    },
-    "POST /v1/payout/services": {
-      "limit": "Page size, 1–100; out of range falls back to 25.",
-      "offset": "Offset from the start of the list (newest first)."
-    },
     "POST /v1/webhooks/deliveries": {
       "limit": "Page size, 1–100; out of range falls back to 25.",
       "offset": "Offset from the start of the list (newest first)."
-    },
-    "POST /v1/payment/link/list": {
-      "limit": "Page size, 1–100; out of range falls back to 25.",
-      "offset": "Offset from the start of the list (newest first)."
-    },
-    "POST /v1/split/rule/list": {
-      "limit": "Page size, 1–100; out of range falls back to 25.",
-      "offset": "Offset from the start of the list (newest first)."
-    },
-    "POST /v1/payment/discount/list": {
-      "limit": "Page size, 1–100; out of range falls back to 25.",
-      "offset": "Offset from the start of the list (newest first)."
-    },
-    "POST /v1/payment/accepted/list": {
-      "limit": "Page size, 1–100; out of range falls back to 25.",
-      "offset": "Offset from the start of the list (newest first)."
-    },
-    "POST /v1/payout/calculate": {
-      "amount": "Payout amount as a decimal string.",
-      "currency": "Payout asset (USDT, BTC, …).",
-      "network": "Payout network; required when the asset lives on several networks.",
-      "is_subtract": "true — the fee is debited from the balance on top of the amount (the recipient gets exactly amount); false — the fee is taken out of the payout."
-    },
-    "POST /v1/payment/link/toggle": {
-      "link_id": "Payment link identifier.",
-      "active": "true — the link accepts payments; false — disabled (the page shows the link as inactive)."
-    },
-    "POST /v1/split/rule/delete": {
-      "rule_id": "Rule identifier from POST /v1/split/rule or the list."
-    },
-    "POST /v1/payment/accepted/set": {
-      "accepted": "The full list of currency+network pairs payers may use; an empty list accepts everything in the catalog.",
-      "accepted.currency": "Asset code.",
-      "accepted.network": "Asset network."
-    },
-    "POST /v1/auto-withdraw/set": {
-      "currency": "Asset to withdraw automatically.",
-      "network": "Network of the destination address.",
-      "address": "Destination address (the merchant's external wallet).",
-      "min_amount": "Threshold: the sweep runs once the available balance of the asset reaches this amount; empty uses the network minimum."
-    },
-    "POST /v1/auto-withdraw/delete": {
-      "currency": "Asset whose auto-withdrawal to switch off."
-    },
-    "POST /v1/api-allowlist/add": {
-      "cidr": "IP or subnet in CIDR notation (203.0.113.7 or 203.0.113.0/24)."
-    },
-    "POST /v1/api-allowlist/remove": {
-      "cidr": "IP or subnet in CIDR notation (203.0.113.7 or 203.0.113.0/24)."
-    },
-    "POST /v1/api-allowlist/enable": {
-      "enabled": "true — accept API calls only from listed addresses; false — the list is kept but not enforced."
-    },
-    "POST /v1/vrcs": {
-      "enabled": "true — enable auto-conversion of volatile deposits to USDT, false — disable; omit to read the current state."
-    },
-    "POST /v1/merchants": {
-      "email": "Owner email; must be unique across merchants.",
-      "name": "Display name of the merchant."
     }
   },
   "response": {

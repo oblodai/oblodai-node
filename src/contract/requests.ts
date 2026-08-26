@@ -1,4 +1,4 @@
-// GENERATED FILE — do not edit. Source: contract/contract.json (core bfca971cce71).
+// GENERATED FILE — do not edit. Source: contract/contract.json (core 7ec04293c426).
 // Regenerate with: npm run codegen
 import type {
   AmountMode,
@@ -13,27 +13,27 @@ import type { Money } from "./models/common.js";
 /** Request bodies by route, generated from the core's documented DTOs (names, required flags, descriptions, examples). */
 export interface RequestBodies {
   "POST /v1/api-allowlist/add": {
-    /** IP or subnet in CIDR notation (203.0.113.7 or 203.0.113.0/24). Example: "203.0.113.0/24". */
+    /** An IP address or subnet in CIDR form (203.0.113.7 or 203.0.113.0/24). Example: "203.0.113.0/24". */
     cidr: string;
   };
   "POST /v1/api-allowlist/enable": {
-    /** true — accept API calls only from listed addresses; false — the list is kept but not enforced. Example: true. */
+    /** true — accept API calls only from the listed addresses; false — the list is kept but not enforced. Example: true. */
     enabled: boolean;
   };
   "POST /v1/api-allowlist/remove": {
-    /** IP or subnet in CIDR notation (203.0.113.7 or 203.0.113.0/24). Example: "203.0.113.0/24". */
+    /** An IP address or subnet in CIDR form (203.0.113.7 or 203.0.113.0/24). Example: "203.0.113.0/24". */
     cidr: string;
   };
   "POST /v1/auto-withdraw/delete": {
-    /** Asset whose auto-withdrawal to switch off. Example: "USDT". */
+    /** The asset whose automatic withdrawal to switch off. Example: "USDT". */
     currency: string;
   };
   "POST /v1/auto-withdraw/set": {
     /** Destination address (the merchant's external wallet). Example: "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx". */
     address: string;
-    /** Asset to withdraw automatically. Example: "USDT". */
+    /** The asset to withdraw automatically. Example: "USDT". */
     currency: string;
-    /** Threshold: the sweep runs once the available balance of the asset reaches this amount; empty uses the network minimum. Example: "100". */
+    /** Threshold: the withdrawal fires once the asset's available balance reaches this amount; empty — the network minimum. Example: "100". */
     min_amount?: Money;
     /** Network of the destination address. Example: "tron". */
     network: Network | (string & {});
@@ -67,7 +67,7 @@ export interface RequestBodies {
     to?: string;
   };
   "POST /v1/documents/jobs/info": {
-    /** Job id from the creation response. Example: "6f1c…". */
+    /** Job id from the creation response. */
     job_id: string;
   };
   "POST /v1/exchange-rate/list": {
@@ -93,9 +93,9 @@ export interface RequestBodies {
     payer_email?: string;
   };
   "POST /v1/merchants": {
-    /** Owner email; must be unique across merchants. Example: "owner@shop.example". */
+    /**  Example: "owner@shop.example". */
     email: string;
-    /** Display name of the merchant. Example: "Acme". */
+    /**  Example: "Acme". */
     name?: string;
   };
   "POST /v1/pay/{id}/select": {
@@ -145,11 +145,11 @@ export interface RequestBodies {
     offset?: number;
   };
   "POST /v1/payment/accepted/set": {
-    /** The full list of currency+network pairs payers may use; an empty list accepts everything in the catalog. */
+    /** The complete list of currency+network pairs an invoice may be paid with; an empty list accepts everything in the catalogue. */
     accepted: Array<{
       /** Asset code. Example: "USDT". */
       currency: string;
-      /** Asset network. Example: "tron". */
+      /** Network of the asset. Example: "tron". */
       network: Network | (string & {});
     }>;
   };
@@ -229,13 +229,13 @@ export interface RequestBodies {
     payer_pays_percent: number;
   };
   "POST /v1/payment/history": {
-    /** Ignored on this route (payout history only). Example: "payout". */
+    /** For /v1/payout/history only: payout — ordinary payouts, refund — refunds; empty — both. Example: "payout". */
     kind?: string;
     /** Page size, 1–100; out of range falls back to 25. Example: 25. */
     limit?: number;
     /** Offset from the start of the list (newest first). Example: 0. */
     offset?: number;
-    /** Filter by status (an exact value from the status vocabulary); empty returns all. Example: "paid". */
+    /** Filter by status (an exact value from the status vocabulary); empty — all of them. Example: "paid". */
     status?: PaymentStatus | (string & {});
   };
   "POST /v1/payment/info": {
@@ -263,15 +263,15 @@ export interface RequestBodies {
     pinned_currency?: string;
     /** Settlement network pinned to the link; empty — the buyer chooses the network. Example: "tron". */
     pinned_network?: Network | (string & {});
-    /** Title on the payment page. Example: "Поддержать проект". */
+    /** Title on the payment page. */
     title?: string;
   };
   "POST /v1/payment/link/info": {
-    /** Page size for the link's payments, 1–100; out of range falls back to 25. Example: 25. */
+    /** Page size, 1–100; out of range falls back to 25. Example: 25. */
     limit?: number;
-    /** Payment link identifier. Example: "5d3f2a71-9c84-4b0e-8d17-3e6a2c9f1b40". */
+    /** Link id. Example: "5d3f2a71-9c84-4b0e-8d17-3e6a2c9f1b40". */
     link_id: string;
-    /** Offset within the link's payments. Example: 0. */
+    /** Offset from the start of the list (newest first). Example: 0. */
     offset?: number;
   };
   "POST /v1/payment/link/list": {
@@ -281,9 +281,9 @@ export interface RequestBodies {
     offset?: number;
   };
   "POST /v1/payment/link/toggle": {
-    /** true — the link accepts payments; false — disabled (the page shows the link as inactive). Example: false. */
+    /** true — the link accepts payment; false — it is switched off and its page says so. Example: false. */
     active: boolean;
-    /** Payment link identifier. Example: "5d3f2a71-9c84-4b0e-8d17-3e6a2c9f1b40". */
+    /** Identifier of the payment link. Example: "5d3f2a71-9c84-4b0e-8d17-3e6a2c9f1b40". */
     link_id: string;
   };
   "POST /v1/payment/qr": {
@@ -400,13 +400,13 @@ export interface RequestBodies {
     }>;
   };
   "POST /v1/payout/calculate": {
-    /** Payout amount as a decimal string. Example: "10". */
+    /** Payout amount, as a decimal string. Example: "10". */
     amount: Money;
     /** Payout asset (USDT, BTC, …). Example: "USDT". */
     currency: string;
-    /** true — the fee is debited from the balance on top of the amount (the recipient gets exactly amount); false — the fee is taken out of the payout. */
+    /** true — the fee is charged on top of the amount (the recipient gets exactly `amount`); false — it comes out of the payout. */
     is_subtract?: boolean;
-    /** Payout network; required when the asset lives on several networks. Example: "tron". */
+    /** Payout network; required when the asset lives on more than one. Example: "tron". */
     network?: Network | (string & {});
   };
   "POST /v1/payout/cancel": {
@@ -418,13 +418,13 @@ export interface RequestBodies {
     fee_on_recipient: boolean;
   };
   "POST /v1/payout/history": {
-    /** payout — ordinary payouts, refund — refunds; empty returns both. Example: "payout". */
+    /** payout — ordinary payouts, refund — refunds; empty — both. Example: "payout". */
     kind?: "payout" | "refund" | (string & {});
     /** Page size, 1–100; out of range falls back to 25. Example: 25. */
     limit?: number;
     /** Offset from the start of the list (newest first). Example: 0. */
     offset?: number;
-    /** Filter by status (an exact value from the status vocabulary); empty returns all. Example: "paid". */
+    /** Filter by status (an exact value from the status vocabulary); empty — all of them. Example: "paid". */
     status?: PayoutStatus | (string & {});
   };
   "POST /v1/payout/info": {
@@ -446,13 +446,13 @@ export interface RequestBodies {
     fee_bearer?: FeeBearer | (string & {});
     /** Payout network for the recipient (tron, bitcoin, …). Example: "tron". */
     network: Network | (string & {});
-    /** Message to the recipient (shown on the claim page and in the email). Example: "Спасибо за участие". */
+    /** Message to the recipient (shown on the claim page and in the email). */
     note?: string;
     /** Claim code — a second factor for the link: "auto" — we generate it and return it ONCE in the response, or your own (6–64 visible characters), empty — no code. Pass the code to the recipient over a channel SEPARATE from the link (it is not put into the email); after 10 incorrect attempts the link is locked. Example: "auto". */
     passcode?: string;
     /** Your deduplication key, unique per merchant; the Idempotency-Key header has no effect on this endpoint. Example: "bonus-42". */
     reference?: string;
-    /** Title — shown to the recipient on the claim page. Example: "Бонус". */
+    /** Title — shown to the recipient on the claim page. */
     title?: string;
   };
   "POST /v1/payout/link/batch": {
@@ -470,13 +470,13 @@ export interface RequestBodies {
       fee_bearer?: FeeBearer | (string & {});
       /** Payout network for the recipient (tron, bitcoin, …). Example: "tron". */
       network: Network | (string & {});
-      /** Message to the recipient (shown on the claim page and in the email). Example: "Спасибо за участие". */
+      /** Message to the recipient (shown on the claim page and in the email). */
       note?: string;
       /** Claim code — a second factor for the link: "auto" — we generate it and return it ONCE in the response, or your own (6–64 visible characters), empty — no code. Pass the code to the recipient over a channel SEPARATE from the link (it is not put into the email); after 10 incorrect attempts the link is locked. Example: "auto". */
       passcode?: string;
       /** Your deduplication key, unique per merchant; the Idempotency-Key header has no effect on this endpoint. Example: "bonus-42". */
       reference: string;
-      /** Title — shown to the recipient on the claim page. Example: "Бонус". */
+      /** Title — shown to the recipient on the claim page. */
       title?: string;
     }>;
   };
@@ -485,7 +485,7 @@ export interface RequestBodies {
     link_id: string;
   };
   "POST /v1/payout/link/cheque": {
-    /** Claim secret from the payout link creation response. Stored only as a hash and never reissued — the cheque can be printed only while you still hold the token. Example: "nUqx1yG3…". */
+    /** Claim secret from the payout link creation response. Stored only as a hash and never reissued — the cheque can be printed only while you still hold the token. */
     claim_token: string;
     /** Document language — one of the 41 supported codes (en by default); the full list is in the document.unknown_lang error. Example: "ru". */
     lang?: string;
@@ -621,7 +621,7 @@ export interface RequestBodies {
     percent: string;
   };
   "POST /v1/split/rule/delete": {
-    /** Rule identifier from POST /v1/split/rule or the list. Example: "9f4c1a2b-77de-4a55-9c1f-0e2b3d4a5f60". */
+    /** Identifier of the rule, from POST /v1/split/rule or the rule list. Example: "9f4c1a2b-77de-4a55-9c1f-0e2b3d4a5f60". */
     rule_id: string;
   };
   "POST /v1/split/rule/list": {
@@ -706,7 +706,7 @@ export interface RequestBodies {
     to_user_id: string;
   };
   "POST /v1/vrcs": {
-    /** true — enable auto-conversion of volatile deposits to USDT, false — disable; omit to read the current state. Example: true. */
+    /** true — convert volatile deposits to USDT automatically, false — stop; omit the field to read the current state without changing it. Example: true. */
     enabled?: boolean;
   };
   "POST /v1/wallet": {
@@ -746,5 +746,3 @@ export interface RequestBodies {
     offset?: number;
   };
 }
-
-export type RequestBodyOf<K extends keyof RequestBodies> = RequestBodies[K];

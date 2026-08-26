@@ -44,4 +44,92 @@ iteration, `verifyWebhook` with rotation support, `isStaleEvent`, money helpers.
 ## Webhooks
 
 `verifyWebhook(rawBody, headers, { secret })` replaces the previous verifier; it also accepts
-`previousSecret` during rotations and rejects stale timestamps (±300 s) by default.
+`previousSecret` during rotations and rejects stale timestamps (±300 s) by default. `toleranceSec: 0`
+disables the freshness check; a negative one is a `ConfigError`, and so is an empty `secret` or an
+empty `previousSecret` (the old code would have verified with the empty key).
+
+Three changes need a look at your handler:
+
+1. **A type your SDK release does not know no longer throws.** `verifyWebhook` / `parseWebhook`
+   return `AnyWebhookEvent`, which is the modelled union plus `UnknownWebhookEvent`. Narrow first:
+
+   ```ts
+   const { event, isTest } = verifyWebhookDelivery(raw, req.headers, { secret });
+   if (!isKnownEvent(event)) return res.sendStatus(200); // log it; a newer gateway sent it
+   if (event.type === "payment" && event.status === "paid") markPaid(event.order_id);
+   ```
+
+   Without the `isKnownEvent` guard, `event.type === "payment"` still compiles but the per-kind
+   fields come back as `unknown`.
+
+2. **An authentic delivery with an unreadable body is no longer a signature error.** It is a
+   `WebhookPayloadError` (`webhook.bad_payload`). If you answer 401/400 to `SignatureError`, keep
+   doing that — but answer 5xx to `WebhookPayloadError` so the gateway retries it:
+
+   ```ts
+   if (err instanceof SignatureError) return res.status(400).send(err.code); // forged or stale
+   if (err instanceof WebhookPayloadError) return res.status(500).send(err.code); // authentic, unreadable
+   ```
+
+3. **`isStaleEvent` never throws.** An event with no usable integer `sequence` is reported as not
+   stale, rather than raising.
+
+`verifyWebhookDelivery(...).isTest` is true for rehearsal deliveries (`webhooks.test`, sandbox).
+They are signed exactly like live ones, so a handler that does not check it will act on money that
+never moved.
+
+## Merchant provisioning and the admin token
+
+`client.merchants.create({ email, name })` and `client.merchants.createSandbox(merchantId)` mint
+merchants and their key pairs. These two routes are not HMAC-signed; a self-hosted gateway gates them
+with its admin token, passed as `adminToken:` or `OBLODAI_ADMIN_TOKEN` and sent as `X-Admin-Token` on
+those routes only. A caller `X-Admin-Token` in `headers:` is dropped, so it can never ride along on a
+signed merchant route.
+
+## Secrets are redacted in JSON and in logs
+
+The client, its transport, the resolved credentials and every secret-bearing result render as
+`[redacted]`:
+
+| object                                  | redacted field(s)            |
+| --------------------------------------- | ---------------------------- |
+| `Oblodai` / `Transport` / `Credentials` | the API secrets, admin token |
+| `webhooks.register` / `rotateSecret`    | `secret`                     |
+| `merchants.create` / `createSandbox`    | `*_key.secret`               |
+| `payoutLinks.create` / `batch`          | `claim_token`, `passcode`    |
+
+The values still read normally as properties — `endpoint.secret`, `link.claim_token` — but they are
+gone from `JSON.stringify` and from `console.log` / `util.inspect`. **If you persisted one of these
+objects by serialising it, read the field explicitly instead:**
+
+```ts
+const { secret } = await oblodai.webhooks.register(url);
+await vault.put("oblodai/webhook", secret); // NOT JSON.stringify(endpoint)
+```
+
+A logger passed as `logger:` is wrapped, so it receives fields that were already scrubbed.
+
+## Retry safety, idempotency and amounts
+
+- Retry safety is `ROUTES[key].safe` — the gateway's own read-only classification, shipped in
+  `contract.json`. Nothing is inferred from a path any more.
+- Passing `idempotencyKey` to a list method now raises `sdk.idempotency_unsupported` instead of
+  being dropped silently. Remove it; paging cannot use one.
+- The money helpers raise `ConfigError` with code `sdk.bad_amount` for anything that is not
+  `-?digits[.digits]` (at most 64 characters). If you fed them numbers or `".5"`, they used to throw
+  a native `TypeError` — catch the SDK error now.
+- `Money` is a `string`. `a < b` compiles and is wrong (`"9" < "10"`); use `compareAmounts`.
+
+## Errors, headers and limits
+
+- `ConfigError`, `WebhookPayloadError`, `PaymentBatchParams`, `PageParams` and `Credentials` are
+  exported from the package root (`ConfigError` was documented but unreachable before).
+- A caller header the SDK owns (`Accept`, `Content-Type`, `User-Agent`, `X-Public-Id`, `X-Signature`,
+  `X-Timestamp`, `Idempotency-Key`, `X-Admin-Token`) is dropped whatever its casing, and a header
+  value with CR/LF or a non-ASCII character raises `sdk.bad_header` before anything is sent.
+- Response bodies are capped at 8 MiB (JSON) / 64 MiB (documents) — `sdk.response_too_large`.
+- `payouts.mass` takes at most 100 elements, `payoutLinks.batch` at most 500; the asynchronous
+  batches take up to 5000.
+- The published tarball no longer contains `contract/fixtures`, `contract/errors` or
+  `contract/webhook-samples.json`. `import contract from "@oblodai-npm/sdk/contract.json" with { type: "json" }`
+  still works.

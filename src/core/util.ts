@@ -57,13 +57,6 @@ export function headerValue(
   return undefined;
 }
 
-/** Strip `undefined` values so they never reach JSON.stringify as explicit nulls. */
-export function compact<T extends Record<string, unknown>>(obj: T): Partial<T> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) if (v !== undefined) out[k] = v;
-  return out as Partial<T>;
-}
-
 export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
