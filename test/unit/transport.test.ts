@@ -158,13 +158,14 @@ describe("transport", () => {
     expect(err.code).toBe("transport.timeout");
   });
 
-  it("uses the payout credentials for payout routes when configured", async () => {
+  it("signs money-in and money-out routes with the same single API key", async () => {
     const { fetch, calls } = mockFetch([ok({ uuid: "p" }), ok({ uuid: "i" })]);
-    const ob = new Oblodai({ ...creds, payoutPublicId: "wk_test_1", payoutSecret: "s2", fetch });
+    const ob = new Oblodai({ ...creds, fetch });
     await ob.payouts.create({ amount: "1", currency: "USDT", address: "T", order_id: "o" });
     await ob.payments.create({ amount: "1", currency: "USDT" });
-    expect(calls[0]!.headers["x-public-id"]).toBe("wk_test_1");
+    expect(calls[0]!.headers["x-public-id"]).toBe("pk_test_1");
     expect(calls[1]!.headers["x-public-id"]).toBe("pk_test_1");
+    expect(calls[0]!.headers["x-signature"]).toBeDefined();
   });
 
   it("refuses a public route call with no credentials only when the route needs them", async () => {

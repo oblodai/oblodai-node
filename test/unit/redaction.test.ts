@@ -7,13 +7,11 @@ import { mockFetch, ok } from "../support/mock-fetch.js";
 const creds = {
   publicId: "pk_live_1",
   secret: "SUPER-SECRET-1",
-  payoutPublicId: "wk_live_1",
-  payoutSecret: "SUPER-SECRET-2",
   adminToken: "ADMIN-TOKEN-1",
   baseUrl: "https://api.test",
 };
 
-const SECRETS = ["SUPER-SECRET-1", "SUPER-SECRET-2", "ADMIN-TOKEN-1"];
+const SECRETS = ["SUPER-SECRET-1", "ADMIN-TOKEN-1"];
 
 function expectNoSecrets(text: string, what: string) {
   for (const s of SECRETS) expect(text, `${what} leaked ${s}`).not.toContain(s);
@@ -106,22 +104,19 @@ describe("secrets never print", () => {
     expect(inspect(batch, { depth: 5 })).not.toContain("CLAIM-1");
   });
 
-  it("keeps freshly minted merchant key secrets out of logs", async () => {
-    const pair = (s: string) => ({ public_id: "pk_x", secret: s, kind: "api" });
+  it("keeps a freshly minted merchant key secret out of logs", async () => {
     const { fetch } = mockFetch([
       ok({
         merchant_id: "m1",
         project_id: "p1",
-        api_key: pair("MINTED-1"),
-        payment_key: pair("MINTED-2"),
-        payout_key: pair("MINTED-3"),
+        api_key: { public_id: "pk_x", secret: "MINTED-1" },
       }),
     ]);
     const ob = new Oblodai({ ...creds, fetch });
     const minted = await ob.merchants.create({ email: "a@b.c", name: "A" });
-    expect(minted.payout_key.secret).toBe("MINTED-3");
+    expect(minted.api_key.secret).toBe("MINTED-1"); // still usable
     const dumped = JSON.stringify(minted) + inspect(minted, { depth: 10 });
-    for (const s of ["MINTED-1", "MINTED-2", "MINTED-3"]) expect(dumped).not.toContain(s);
+    expect(dumped).not.toContain("MINTED-1");
   });
 
   it("keeps resolved credentials out of JSON and inspect", async () => {

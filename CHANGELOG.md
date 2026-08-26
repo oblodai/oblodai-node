@@ -6,7 +6,7 @@ All notable changes to this package are documented here. The format follows
 
 ## [1.3.0] — 2026-08-26
 
-A rewrite, generated from the gateway's contract snapshot (core `7ec0429`) and verified against it.
+A rewrite, generated from the gateway's contract snapshot (core `2cc44c1`) and verified against it.
 Migration notes: [MIGRATION-1.3.md](MIGRATION-1.3.md).
 
 ### Added
@@ -18,14 +18,14 @@ Migration notes: [MIGRATION-1.3.md](MIGRATION-1.3.md).
   sent as `X-Admin-Token` on those two routes and nowhere else.
 - `PagePromise` on every list method: `await` for one page, `for await` for every item, `.all(max)`
   for an array. Nothing is requested until it is consumed.
-- Retries driven by the API's own `retryable` flag, automatic idempotency keys, clock-skew
-  correction, two key pairs (payment and payout) selected per route.
+- Retries driven by the API's own `retryable` flag, automatic idempotency keys and clock-skew
+  correction.
 - `@oblodai-npm/sdk/webhooks` — signature verification with no client and no API key, rotation-aware
   (`previousSecret`), plus `parseWebhook`, `isStaleEvent`, `isTestEvent`, `isKnownEvent`.
 - `verifyWebhookDelivery(...).isTest` is true for rehearsal deliveries (`webhooks.test`, sandbox):
   signed exactly like live ones, so a handler must check it and never act as if money moved.
 - Machine-readable surface: `ROUTES` (with the gateway's own `safe` flag), `RequestBodies`,
-  `ERROR_CODES` (471), `NETWORKS`, `PAYMENT_STATUSES`, `PAYOUT_STATUSES`, `EVENT_TYPES`,
+  `ERROR_CODES` (469), `NETWORKS`, `PAYMENT_STATUSES`, `PAYOUT_STATUSES`, `EVENT_TYPES`,
   `CONTRACT_CORE_COMMIT` / `CONTRACT_HASH`.
 - Contract tests against golden response bodies and real signed webhook deliveries; a drift gate
   (`npm run check-drift`); a live journey (`npm run test:live`).
@@ -94,6 +94,13 @@ Migration notes: [MIGRATION-1.3.md](MIGRATION-1.3.md).
 
 ### Changed
 
+- **One API key.** A merchant holds a single key and it signs every signed route, so the client takes
+  exactly `publicId` + `secret` (plus `adminToken` for the two provisioning routes). The payout
+  credential pair (`payoutPublicId` / `payoutSecret`, `OBLODAI_PAYOUT_PUBLIC_ID` /
+  `OBLODAI_PAYOUT_SECRET`), the per-call `preferPayoutKey` option and the payout-key retry inside
+  `batches.info` are gone; `ROUTES[key].auth` is now `public`, `key` or `onboard`, and the onboarding
+  response carries `api_key` alone. `merchant.wrong_key_kind` has left the catalogue — it can only
+  reach a merchant still holding a pre-merge `oblodai_pk_` / `oblodai_wk_` pair.
 - Zero runtime dependencies; Node ≥ 18.17; ESM + CJS with a `./webhooks` subpath export.
 - The published tarball carries `contract/contract.json` and `contract/descriptions.en.json` only.
   The golden fixtures, error samples and webhook samples stay in the repository (they are test
@@ -141,8 +148,8 @@ It returns `Delivery[]` rather than `{ deliveries: Delivery[] }` — the SDK unw
 - Signed GET in the transport (`HttpClient.requestGet`) — the same canonical string with an empty
   body, needed by `GET /v1/sandbox/webhooks`.
 - Transfers to platform users — `account.transferToUser({ to_user_id, amount, currency, order_id? })`:
-  an internal, fee-free move from the merchant balance to a platform user's personal wallet
-  (payout key). `to_user_id` is a UUID, not a username.
+  an internal, fee-free move from the merchant balance to a platform user's personal wallet.
+  `to_user_id` is a UUID, not a username.
 - Payroll-style batches — `account.transferBatch([...], { onError?, idempotency_key? })`, processed
   in the background; progress and per-element results through the existing `batches.info(batch_id)`.
 - Public checkout — `payments.publicGet(uuid)` and `payments.publicSelect(uuid, { currency, network })`
@@ -157,8 +164,7 @@ It returns `Delivery[]` rather than `{ deliveries: Delivery[] }` — the SDK unw
   `deleteRule`, `getConfig` / `setConfig`.
 - Invoice by e-mail — `payments.sendEmail({ uuid | order_id, email? })` (10 mails per hour per
   recipient).
-- Underpayment resolution — `payments.resolve({ uuid | order_id, action: "accept" | "refund" })`
-  (payout key).
+- Underpayment resolution — `payments.resolve({ uuid | order_id, action: "accept" | "refund" })`.
 - Payout links ("crypto cheques") — `client.payoutLinks`: `create`, `createBatch` (up to 500),
   `list`, `info`, `cancel`, plus unsigned `claimInfo(token)` and `claim(token, { address, memo? })`.
   Funds are reserved without knowing the recipient's wallet. Set `expires_in_hours` explicitly: the

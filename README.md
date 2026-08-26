@@ -49,16 +49,14 @@ Keys are issued in the dashboard at [my.oblodai.com](https://my.oblodai.com) →
 secret is shown once, at creation. A live pair is a public id `oblodai_<hex>` with a secret
 `oblodai_live_<hex>`; a sandbox pair is `test_oblodai_<hex>` with `oblodai_test_<hex>`.
 
-| Key kind               | Public id                                              | Signs                                                                                                                                                                                                                                                                            |
-| ---------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Payment key            | `oblodai_<hex>` (legacy split key: `oblodai_pk_<hex>`) | Everything that takes money in: `payments.*`, `paymentLinks.*`, `wallets.create/qr/block`, `documents.*`, `account.*`, `catalog.*`, most of `settings.*`                                                                                                                         |
-| Payout key             | `oblodai_<hex>` (legacy split key: `oblodai_wk_<hex>`) | Everything that moves money out: `payouts.*`, `refunds.*`, `payoutLinks.*`, `transfers.*`, `splits.*`, `wallets.refundBlockedDeposit`, `settings.*AutoWithdraw`, `settings.*ApiAllowlist`, `webhooks.rotateSecret`, `webhooks.test("payout")`, `sandbox.faucet`, `sandbox.reset` |
-| Sandbox key            | `test_oblodai_<hex>`                                   | Both kinds at once, against a chainless copy of the gateway                                                                                                                                                                                                                      |
-| Onboarding admin token | set on a self-hosted gateway                           | `merchants.create`, `merchants.createSandbox` only — unsigned, sent as `X-Admin-Token` and on no other route                                                                                                                                                                     |
+**One API key signs everything.** A merchant has a single key, and it authenticates every signed
+route — money in and money out, settings, documents, sandbox. There is no separate payout credential.
 
-The current live key is **unified**: one `oblodai_<hex>` pair signs both sides. Projects issued before
-the merge still hold two separate pairs, and there a payment key alone cannot pay anybody — configure
-both and the SDK picks the right one per call:
+| Credential             | Where it comes from                       | Signs                                                                                                                                                                                                      |
+| ---------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API key                | dashboard → **API keys**                  | Every signed route: `payments.*`, `payouts.*`, `refunds.*`, `paymentLinks.*`, `payoutLinks.*`, `transfers.*`, `splits.*`, `wallets.*`, `webhooks.*`, `documents.*`, `settings.*`, `account.*`, `batches.*` |
+| Sandbox API key        | sandbox onboarding — `test_oblodai_<hex>` | The same surface, against a chainless copy of the gateway                                                                                                                                                  |
+| Onboarding admin token | set on a self-hosted gateway              | `merchants.create`, `merchants.createSandbox` only — unsigned, sent as `X-Admin-Token` and on no other route                                                                                               |
 
 ```ts
 import { Oblodai } from "@oblodai-npm/sdk";
@@ -66,13 +64,14 @@ import { Oblodai } from "@oblodai-npm/sdk";
 const oblodai = new Oblodai({
   publicId: process.env.OBLODAI_PUBLIC_ID,
   secret: process.env.OBLODAI_SECRET,
-  payoutPublicId: process.env.OBLODAI_PAYOUT_PUBLIC_ID,
-  payoutSecret: process.env.OBLODAI_PAYOUT_SECRET,
 });
 ```
 
-On a split key pair, a call signed with the wrong kind is a 403 `merchant.wrong_key_kind`. On a route
-that accepts either kind (`batches.info` for a payout batch, say) pass `{ preferPayoutKey: true }`.
+Public routes (the payer-facing pages, the currency catalogue) take no credentials at all, and the
+admin token travels on the two `merchants.*` routes and nowhere else. Merchants provisioned before
+the keys were merged may still hold an old split pair — `oblodai_pk_…` in, `oblodai_wk_…` out — and
+only there can a call be refused with 403 `merchant.wrong_key_kind`; minting one current key in the
+dashboard retires it.
 
 ## Quick start
 
@@ -101,10 +100,7 @@ Send a payout. Validate first (free, no side effects), then create with your own
 ```ts
 import { Oblodai } from "@oblodai-npm/sdk";
 
-const oblodai = new Oblodai({
-  publicId: process.env.OBLODAI_PAYOUT_PUBLIC_ID,
-  secret: process.env.OBLODAI_PAYOUT_SECRET,
-});
+const oblodai = new Oblodai(); // the same key that took the payment sends the payout
 
 const params = {
   amount: "10",
@@ -160,7 +156,6 @@ await oblodai.sandbox.reset(); // cancel open invoices, zero the balances
 - `webhooks.test("payment" | "payout" | "wallet")` rehearses a delivery against your live endpoint.
   Rehearsals are signed exactly like real deliveries and carry `test: true` — check `isTest` and
   never let one move money in your system.
-- `sandbox.faucet` and `sandbox.reset` need the payout key.
 
 ## Method overview
 
@@ -190,7 +185,7 @@ Conventions that hold across all of them:
 - Fetch one: `.info(uuid | { order_id })`, aliased `.get`. Fetch many: `.history(params)` on payments
   and payouts (aliased `.list`), `.list(params)` elsewhere.
 - Every method takes the same optional last argument —
-  `{ idempotencyKey, signal, timeoutMs, deadlineMs, preferPayoutKey }`.
+  `{ idempotencyKey, signal, timeoutMs, deadlineMs }`.
 - Synchronous bulk calls are capped per call — `payouts.mass` at 100 elements, `payoutLinks.batch` at
   500 — and report each element separately (`{ idx, ok, result, message, error_code }`), so a 200 can
   still contain failures. Asynchronous batches (`payments.batch`, `payouts.batch`, `refunds.batch`,
@@ -297,7 +292,7 @@ classes below are exported from the package root, so `instanceof` works.
 | -------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ValidationError`                            | 400       | The request is malformed; `field` names the offender                                                                                                                         |
 | `AuthenticationError`                        | 401       | Bad signature, unknown public id, skewed clock                                                                                                                               |
-| `PermissionError`                            | 403       | Right key, wrong kind or missing capability (`merchant.wrong_key_kind`)                                                                                                      |
+| `PermissionError`                            | 403       | The key is valid but not allowed to do this: a disabled feature, an IP allow-list, a missing capability                                                                      |
 | `NotFoundError`                              | 404       | No such object                                                                                                                                                               |
 | `ConflictError` / `IdempotencyConflictError` | 409       | State conflict; the second for a reused idempotency key with a different body                                                                                                |
 | `RateLimitError`                             | 429       | Throttled; `retryAfter` is set                                                                                                                                               |
@@ -315,7 +310,7 @@ envelope — a proxy or a load balancer replied, not the API; a non-boolean `ret
 `code` or a nonsense `retry_after` never leak through, they fall back to what the HTTP status alone
 justifies. `JSON.stringify(err)` keeps `message` and drops the raw body.
 
-Branch on `code`, not on the message. The full catalogue is 471 codes, exported as `ERROR_CODES` and
+Branch on `code`, not on the message. The full catalogue is 469 codes, exported as `ERROR_CODES` and
 typed as `ErrorCode`:
 
 ```ts
@@ -340,7 +335,7 @@ async function sendPayout(params: CreatePayoutParams): Promise<void> {
 ```
 
 Codes worth handling explicitly: `payout.insufficient_funds`, `payout.funds_maturing`,
-`idempotency.key_reused`, `invoice.not_payable`, `payment.not_found`, `merchant.wrong_key_kind`,
+`idempotency.key_reused`, `invoice.not_payable`, `payment.not_found`,
 `merchant.bad_signature`, `request.rate_limited`.
 
 ## Retries, idempotency and timeouts
@@ -360,7 +355,7 @@ a path or an HTTP verb.
   retries safe across process restarts too. On a route the gateway does not deduplicate the SDK
   refuses the key up front (`ConfigError`, `sdk.idempotency_unsupported`) rather than dropping it
   silently — list methods included.
-- **Per-call options**: `{ idempotencyKey, signal, timeoutMs, deadlineMs, preferPayoutKey }`.
+- **Per-call options**: `{ idempotencyKey, signal, timeoutMs, deadlineMs }`.
   `timeoutMs` bounds one attempt (default 30000), `deadlineMs` the whole call including retries
   (default 90000).
 - **Clock skew is corrected once.** The gateway rejects timestamps more than ±300 s from its own; on a
@@ -386,30 +381,27 @@ const oblodai = new Oblodai({
 });
 ```
 
-| Option                            | Default                                | Meaning                                                                 |
-| --------------------------------- | -------------------------------------- | ----------------------------------------------------------------------- |
-| `publicId` / `secret`             | `OBLODAI_PUBLIC_ID` / `OBLODAI_SECRET` | The payment (or sandbox) key pair; both or neither                      |
-| `payoutPublicId` / `payoutSecret` | `OBLODAI_PAYOUT_*`                     | The payout key pair; both or neither                                    |
-| `baseUrl`                         | `https://api.oblodai.com`              | API origin; a path prefix is preserved                                  |
-| `allowInsecureBaseUrl`            | `false`                                | Permit a plain-`http://` base URL that is not loopback                  |
-| `adminToken`                      | `OBLODAI_ADMIN_TOKEN`                  | Self-hosted onboarding token; used by the two `merchants.*` routes only |
-| `timeoutMs`                       | `30000`                                | Per-attempt timeout                                                     |
-| `deadlineMs`                      | `90000`                                | Budget for the whole call, retries included                             |
-| `retry`                           | see above                              | `{ maxRetries, baseDelayMs, maxDelayMs, maxRetryAfterMs }`              |
-| `headers`                         | —                                      | Extra headers on every request                                          |
-| `logger`                          | `OBLODAI_LOG`                          | Structured logger; `consoleLogger(level)` is provided                   |
-| `fetch`                           | global `fetch`                         | Custom fetch — undici with a proxy agent, a recording stub in tests     |
+| Option                 | Default                                | Meaning                                                                 |
+| ---------------------- | -------------------------------------- | ----------------------------------------------------------------------- |
+| `publicId` / `secret`  | `OBLODAI_PUBLIC_ID` / `OBLODAI_SECRET` | The merchant's one API key; both or neither                             |
+| `baseUrl`              | `https://api.oblodai.com`              | API origin; a path prefix is preserved                                  |
+| `allowInsecureBaseUrl` | `false`                                | Permit a plain-`http://` base URL that is not loopback                  |
+| `adminToken`           | `OBLODAI_ADMIN_TOKEN`                  | Self-hosted onboarding token; used by the two `merchants.*` routes only |
+| `timeoutMs`            | `30000`                                | Per-attempt timeout                                                     |
+| `deadlineMs`           | `90000`                                | Budget for the whole call, retries included                             |
+| `retry`                | see above                              | `{ maxRetries, baseDelayMs, maxDelayMs, maxRetryAfterMs }`              |
+| `headers`              | —                                      | Extra headers on every request                                          |
+| `logger`               | `OBLODAI_LOG`                          | Structured logger; `consoleLogger(level)` is provided                   |
+| `fetch`                | global `fetch`                         | Custom fetch — undici with a proxy agent, a recording stub in tests     |
 
-| Environment variable       | Meaning                                                           |
-| -------------------------- | ----------------------------------------------------------------- |
-| `OBLODAI_PUBLIC_ID`        | Public id of the payment (or sandbox) key                         |
-| `OBLODAI_SECRET`           | Its secret                                                        |
-| `OBLODAI_PAYOUT_PUBLIC_ID` | Public id of the payout key                                       |
-| `OBLODAI_PAYOUT_SECRET`    | Its secret                                                        |
-| `OBLODAI_ADMIN_TOKEN`      | Onboarding admin token of a self-hosted gateway                   |
-| `OBLODAI_BASE_URL`         | API origin                                                        |
-| `OBLODAI_LOG`              | `debug` \| `info` \| `warn` \| `error` — enables a console logger |
-| `OBLODAI_ALLOW_INSECURE`   | `1` permits a non-loopback plain-`http://` base URL               |
+| Environment variable     | Meaning                                                           |
+| ------------------------ | ----------------------------------------------------------------- |
+| `OBLODAI_PUBLIC_ID`      | Public id of the merchant's API key (live or sandbox)             |
+| `OBLODAI_SECRET`         | Its secret                                                        |
+| `OBLODAI_ADMIN_TOKEN`    | Onboarding admin token of a self-hosted gateway                   |
+| `OBLODAI_BASE_URL`       | API origin                                                        |
+| `OBLODAI_LOG`            | `debug` \| `info` \| `warn` \| `error` — enables a console logger |
+| `OBLODAI_ALLOW_INSECURE` | `1` permits a non-loopback plain-`http://` base URL               |
 
 Headers you add with `headers:` travel on every request, except the ones the SDK owns (`Accept`,
 `Content-Type`, `User-Agent`, `X-Public-Id`, `X-Signature`, `X-Timestamp`, `Idempotency-Key`,
@@ -417,7 +409,7 @@ Headers you add with `headers:` travel on every request, except the ones the SDK
 non-ASCII character is a `ConfigError`.
 
 **Secrets never print.** The client, its transport, the resolved credentials and every secret-bearing
-result — a webhook `secret`, a freshly minted key pair, a payout link's
+result — a webhook `secret`, a freshly minted API key, a payout link's
 `claim_token`/`claim_url`/`passcode` — render as `[redacted]` in `JSON.stringify` and
 `console.log`/`util.inspect`, at any depth. The values are still readable as properties
 (`endpoint.secret` works); only the automatic renderings are scrubbed. A logger you inject through
@@ -431,9 +423,9 @@ box, other plain-`http://` hosts need `allowInsecureBaseUrl: true` (or `OBLODAI_
 
 `contract/` is exported by the gateway's own test suite, not written by hand. It holds the route
 registry — 107 merchant routes, each with its `auth`, `idempotent`, `safe`, `bare` and `list` flags —
-request DTO schemas with English field docs, enums, every error code (471), signing vectors, golden
+request DTO schemas with English field docs, enums, every error code (469), signing vectors, golden
 response bodies recorded from a live gateway and real signed webhook deliveries. This release is
-built from core `7ec04293c426`.
+built from core `2cc44c16f516`.
 
 `src/contract/` is generated from it with `npm run codegen`. `npm run check-drift` fails when the two
 disagree, and `npm test` checks every model against the golden bodies and every route flag against

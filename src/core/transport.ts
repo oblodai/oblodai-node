@@ -26,10 +26,8 @@ export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
 export interface TransportOptions {
   baseUrl: string;
-  /** Used for `payment`/`any` routes, and for `payout` routes when no payout credentials exist. */
+  /** The merchant's one API key; it signs every `key` route. */
   credentials?: Credentials;
-  /** Optional second key pair for `payout` routes (the core issues separate key kinds). */
-  payoutCredentials?: Credentials;
   fetch?: FetchLike;
   /** Per-attempt timeout, ms. Default 30000. */
   timeoutMs?: number;
@@ -51,8 +49,6 @@ export interface CallOptions {
   pathParams?: Record<string, string | number>;
   /** Supply your own key to make the call idempotent across process restarts. */
   idempotencyKey?: string;
-  /** Prefer the payout key pair on an `any`-gated route. */
-  preferPayoutKey?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
   deadlineMs?: number;
@@ -85,7 +81,7 @@ export class Transport {
   private readonly deadlineMs: number;
 
   constructor(private readonly opts: TransportOptions) {
-    // The options carry both key pairs. Non-enumerable so a spread, a key list, `JSON.stringify` or
+    // The options carry the API key. Non-enumerable so a spread, a key list, `JSON.stringify` or
     // an `inspect` of the transport (or of anything holding one) cannot reach them by walking
     // properties; the explicit renderings below cover the two paths that ignore enumerability.
     defineHidden(this, "opts", opts);
@@ -109,7 +105,6 @@ export class Transport {
     return {
       baseUrl: this.opts.baseUrl,
       credentials: describeCredential(this.opts.credentials?.publicId),
-      payoutCredentials: describeCredential(this.opts.payoutCredentials?.publicId),
       adminToken: this.opts.adminToken ? REDACTED : undefined,
       timeoutMs: this.timeoutMs,
       deadlineMs: this.deadlineMs,
@@ -147,14 +142,6 @@ export class Transport {
     return this.execute(route, options);
   }
 
-  /** Which key pair signs a route. `any` routes take the payment key unless told otherwise. */
-  private credentialsFor(route: RouteSpec, preferPayout: boolean): Credentials | undefined {
-    if (route.auth === "payout" || (route.auth === "any" && preferPayout)) {
-      return this.opts.payoutCredentials ?? this.opts.credentials;
-    }
-    return this.opts.credentials;
-  }
-
   private async execute(route: RouteSpec, options: CallOptions): Promise<RawResponse> {
     const body = serializeBody(options.body, route.method);
     let idempotencyKey = options.idempotencyKey;
@@ -190,7 +177,7 @@ export class Transport {
         pathParams: options.pathParams,
         query: options.query,
         body,
-        credentials: this.credentialsFor(route, options.preferPayoutKey ?? false),
+        credentials: this.opts.credentials,
         idempotencyKey,
         ts: this.clock.now(),
         userAgent: this.opts.userAgent,

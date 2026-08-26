@@ -81,7 +81,7 @@ never moved.
 ## Merchant provisioning and the admin token
 
 `client.merchants.create({ email, name })` and `client.merchants.createSandbox(merchantId)` mint
-merchants and their key pairs. These two routes are not HMAC-signed; a self-hosted gateway gates them
+merchants and their one API key (`api_key`; the response carries no other key). These two routes are not HMAC-signed; a self-hosted gateway gates them
 with its admin token, passed as `adminToken:` or `OBLODAI_ADMIN_TOKEN` and sent as `X-Admin-Token` on
 those routes only. A caller `X-Admin-Token` in `headers:` is dropped, so it can never ride along on a
 signed merchant route.
@@ -95,7 +95,7 @@ The client, its transport, the resolved credentials and every secret-bearing res
 | --------------------------------------- | -------------------------------------- |
 | `Oblodai` / `Transport` / `Credentials` | the API secrets, admin token           |
 | `webhooks.register` / `rotateSecret`    | `secret`                               |
-| `merchants.create` / `createSandbox`    | `*_key.secret`                         |
+| `merchants.create` / `createSandbox`    | `api_key.secret`                       |
 | `payoutLinks.create` / `batch`          | `claim_token`, `claim_url`, `passcode` |
 
 The values still read normally as properties — `endpoint.secret`, `link.claim_token` — but they are
@@ -108,6 +108,29 @@ await vault.put("oblodai/webhook", secret); // NOT JSON.stringify(endpoint)
 ```
 
 A logger passed as `logger:` is wrapped, so it receives fields that were already scrubbed.
+
+## One API key
+
+A merchant has a single API key, and it signs every signed route — payments and payouts alike. The
+client takes exactly `publicId` + `secret` (plus `adminToken` for the two provisioning routes):
+
+| removed                                              | do this instead                                        |
+| ---------------------------------------------------- | ------------------------------------------------------ |
+| `payoutPublicId` / `payoutSecret`                    | drop them; `publicId` / `secret` sign everything       |
+| `OBLODAI_PAYOUT_PUBLIC_ID` / `OBLODAI_PAYOUT_SECRET` | drop them; `OBLODAI_PUBLIC_ID` / `OBLODAI_SECRET` only |
+| `{ preferPayoutKey: true }` on a call                | drop the option; there is no second key to choose      |
+| catching `merchant.wrong_key_kind`                   | drop the branch (see below)                            |
+
+The environment the SDK reads is exactly six variables: `OBLODAI_PUBLIC_ID`, `OBLODAI_SECRET`,
+`OBLODAI_ADMIN_TOKEN`, `OBLODAI_BASE_URL`, `OBLODAI_LOG`, `OBLODAI_ALLOW_INSECURE`.
+
+`merchant.wrong_key_kind` has left the gateway's catalogue and `ERROR_CODES` with it. It can only
+reach a merchant still holding a pre-merge split pair (`oblodai_pk_…` in, `oblodai_wk_…` out); mint
+one current key in the dashboard and the code cannot occur at all.
+
+`ROUTES[key].auth` follows: it is `"public"` (no credentials), `"key"` (signed with the API key) or
+`"onboard"` (the admin token). The old `payment` / `payout` / `any` values are gone, and the codegen
+refuses a contract export that still uses them.
 
 ## Retry safety, idempotency and amounts
 

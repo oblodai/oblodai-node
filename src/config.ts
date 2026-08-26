@@ -8,13 +8,10 @@ import { ConfigError } from "./core/errors.js";
 export const DEFAULT_BASE_URL = "https://api.oblodai.com";
 
 export interface ClientOptions {
-  /** Public id of the API key (`X-Public-Id`). Falls back to `OBLODAI_PUBLIC_ID`. */
+  /** Public id of the merchant's one API key (`X-Public-Id`). Falls back to `OBLODAI_PUBLIC_ID`. */
   publicId?: string;
-  /** Secret of the API key. Falls back to `OBLODAI_SECRET`. */
+  /** Secret of that key; it signs every signed route. Falls back to `OBLODAI_SECRET`. */
   secret?: string;
-  /** Optional dedicated payout key; the core issues payment and payout keys separately. */
-  payoutPublicId?: string;
-  payoutSecret?: string;
   /** API origin. Falls back to `OBLODAI_BASE_URL`, then https://api.oblodai.com. */
   baseUrl?: string;
   /** Custom fetch (undici with a proxy agent, a recording stub in tests). */
@@ -38,7 +35,6 @@ export interface ClientOptions {
 export interface ResolvedConfig {
   baseUrl: string;
   credentials?: Credentials;
-  payoutCredentials?: Credentials;
   fetch?: FetchLike;
   timeoutMs?: number;
   deadlineMs?: number;
@@ -64,15 +60,6 @@ export function resolveConfig(
       "publicId and secret must be provided together (or set both OBLODAI_PUBLIC_ID and OBLODAI_SECRET)",
     );
   }
-  const payoutPublicId = opts.payoutPublicId ?? env.OBLODAI_PAYOUT_PUBLIC_ID;
-  const payoutSecret = opts.payoutSecret ?? env.OBLODAI_PAYOUT_SECRET;
-  if ((payoutPublicId && !payoutSecret) || (!payoutPublicId && payoutSecret)) {
-    throw new ConfigError(
-      "sdk.bad_config",
-      "payoutPublicId and payoutSecret must be provided together",
-    );
-  }
-
   let logger = opts.logger;
   if (!logger && env.OBLODAI_LOG) {
     const lvl = env.OBLODAI_LOG.toLowerCase();
@@ -83,8 +70,6 @@ export function resolveConfig(
   return {
     baseUrl,
     credentials: publicId && secret ? makeCredentials(publicId, secret) : undefined,
-    payoutCredentials:
-      payoutPublicId && payoutSecret ? makeCredentials(payoutPublicId, payoutSecret) : undefined,
     fetch: opts.fetch,
     timeoutMs: opts.timeoutMs,
     deadlineMs: opts.deadlineMs,

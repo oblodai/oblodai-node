@@ -33,7 +33,7 @@ export class Webhooks extends Resource {
     return protectSecrets(endpoint, WEBHOOK_SECRET_FIELDS);
   }
 
-  /** `POST /v1/webhooks/rotate-secret` — new secret; the old one keeps verifying until `previous_secret_valid_until`. Payout key. */
+  /** `POST /v1/webhooks/rotate-secret` — new secret; the old one keeps verifying until `previous_secret_valid_until`. */
   async rotateSecret(opts?: RequestOptions): Promise<WebhookSecretRotated> {
     const rotated = await this.call<WebhookSecretRotated>(
       "POST /v1/webhooks/rotate-secret",
