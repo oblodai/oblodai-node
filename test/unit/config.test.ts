@@ -20,8 +20,8 @@ describe("config", () => {
   });
   it("refuses plain http except for localhost or when allowed", () => {
     expect(() => resolveConfig({ baseUrl: "http://api.oblodai.com" }, {})).toThrow(/https/);
-    expect(resolveConfig({ baseUrl: "http://localhost:8093" }, {}).baseUrl).toBe(
-      "http://localhost:8093",
+    expect(resolveConfig({ baseUrl: "http://localhost:8095" }, {}).baseUrl).toBe(
+      "http://localhost:8095",
     );
     expect(
       resolveConfig({ baseUrl: "http://10.0.0.1", allowInsecureBaseUrl: true }, {}).baseUrl,

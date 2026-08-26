@@ -48,7 +48,7 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit && tsc --noEmit -p examples/tsconfig.json",
     "test": "vitest run",
-    "test:live": "OBLODAI_LIVE_URL=${OBLODAI_LIVE_URL:-http://localhost:8093} vitest run test/live",
+    "test:live": "OBLODAI_LIVE_URL=${OBLODAI_LIVE_URL:-http://localhost:8095} vitest run test/live",
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check .",
     "ci": "npm run fmt:check && npm run check-drift && npm run typecheck && npm run build && npm test",

@@ -1,4 +1,4 @@
-// End-to-end in the sandbox with a test_ key: fake money in, a simulated deposit, the webhook log.
+// End-to-end in the sandbox with a test_oblodai_ key: fake money in, a simulated deposit, the webhook log.
 import { Oblodai } from "@oblodai-npm/sdk";
 
 const oblodai = new Oblodai({

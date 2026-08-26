@@ -22,7 +22,7 @@ export const SDK_VERSION = "1.3.0";
  * The Oblodai API client. One instance per key pair; safe to share across requests.
  *
  * ```ts
- * const oblodai = new Oblodai({ publicId: "pk_live_…", secret: "…" });
+ * const oblodai = new Oblodai({ publicId: "oblodai_…", secret: "oblodai_live_…" });
  * const invoice = await oblodai.payments.create({ amount: "25", currency: "USDT", network: "tron", order_id: "o-1" });
  * ```
  */
