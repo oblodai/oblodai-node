@@ -35,7 +35,8 @@ describe("request signing (vectors exported from the core test suite)", () => {
   });
 
   it("signs the body bytes, so a Uint8Array and its string form agree", () => {
-    const body = '{"additional_data":"тест"}';
+    // Deliberately multi-byte: signing over characters instead of bytes would disagree here.
+    const body = '{"additional_data":"caf\u00e9 \u2615"}';
     const a = signRequest("s", { ts: 5, method: "POST", requestUri: "/v1/payment", body });
     const b = signRequest("s", {
       ts: 5,

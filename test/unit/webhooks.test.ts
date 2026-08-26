@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isKnownEvent } from "../../src/contract/models/webhooks.js";
 import {
   isStaleEvent,
   parseWebhook,
@@ -105,6 +106,9 @@ describe("verifyWebhook rules", () => {
     expect(isStaleEvent(ev, 7)).toBe(true);
     expect(isStaleEvent(ev, 6)).toBe(false);
     expect(isStaleEvent(ev, undefined)).toBe(false);
-    expect(() => parseWebhook('{"type":"alien","uuid":"x"}')).toThrow(/unknown event type/);
+    // A type from a newer core must reach the handler, not blow up the receiver.
+    const alien = parseWebhook('{"type":"alien","uuid":"x"}');
+    expect(alien.type).toBe("alien");
+    expect(isKnownEvent(alien)).toBe(false);
   });
 });

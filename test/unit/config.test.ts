@@ -14,7 +14,8 @@ describe("config", () => {
       {},
       { OBLODAI_PUBLIC_ID: "pk", OBLODAI_SECRET: "s", OBLODAI_BASE_URL: "https://x.test/" },
     );
-    expect(cfg.credentials).toEqual({ publicId: "pk", secret: "s" });
+    expect(cfg.credentials?.publicId).toBe("pk");
+    expect(cfg.credentials?.secret).toBe("s");
     expect(cfg.baseUrl).toBe("https://x.test");
   });
   it("refuses plain http except for localhost or when allowed", () => {

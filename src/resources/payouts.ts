@@ -24,7 +24,16 @@ export type PayoutBatchParams = RequestBodies["POST /v1/payout/batch"];
 
 /** Outgoing transfers to external addresses. Every route here needs the payout key. */
 export class Payouts extends Resource {
-  /** `POST /v1/payout` — create and (for API keys) auto-approve a payout. Idempotent by `order_id` and Idempotency-Key. Errors to handle: `payout.insufficient_funds` (retryable), `payout.funds_maturing`, `payout.bad_address`, `payout.memo_required`. */
+  /**
+   * `POST /v1/payout` — create and (for API keys) auto-approve a payout. Idempotent by `order_id`
+   * and Idempotency-Key.
+   *
+   * Codes worth branching on: `payout.insufficient_funds` (retryable — top up and repeat with the
+   * SAME key), `payout.funds_maturing` (retryable — deposits not yet mature),
+   * `payout.bad_address`, `payout.address_network_mismatch`, `payout.memo_required`,
+   * `payout.amount_below_fee`, `payout.frozen`, `payout.order_id_required`,
+   * `idempotency.key_reused`, `merchant.wrong_key_kind` (payment key on a payout route).
+   */
   create(params: CreatePayoutParams, opts?: RequestOptions): Promise<Payout> {
     return this.call<Payout>("POST /v1/payout", params, opts);
   }
@@ -73,7 +82,15 @@ export class Payouts extends Resource {
     return this.history(params, opts);
   }
 
-  /** `POST /v1/payout/mass` — SYNCHRONOUS batch (≤100): each element reports its own outcome in the response. */
+  /**
+   * `POST /v1/payout/mass` — SYNCHRONOUS batch (≤100): each element reports its own outcome in the
+   * response, so a call that returns 200 can still contain failures — check every `items[].ok`.
+   *
+   * Call-level codes worth branching on: `payout.batch_too_large` (>100),
+   * `payout.empty_batch`, `payout.insufficient_funds` (retryable), `payout.frozen`,
+   * `merchant.wrong_key_kind`. Per-element failures arrive as `items[].error_code` with the same
+   * vocabulary as `create`.
+   */
   mass(
     params: MassPayoutParams,
     opts?: RequestOptions,
@@ -81,7 +98,15 @@ export class Payouts extends Resource {
     return this.call<{ items: BatchElement<Payout>[] }>("POST /v1/payout/mass", params, opts);
   }
 
-  /** `POST /v1/payout/batch` — ASYNCHRONOUS batch (≤5000): returns a ticket; poll `batches.info`. `order_id` is required on every item. */
+  /**
+   * `POST /v1/payout/batch` — ASYNCHRONOUS batch (≤5000): returns a ticket; poll `batches.info`.
+   * `order_id` is required on every item.
+   *
+   * Codes worth branching on: `payout.batch_too_large`, `payout.empty_batch`,
+   * `payout.order_id_required`, `payout.reference_collision`, `payout.frozen`,
+   * `merchant.wrong_key_kind`, `idempotency.key_reused`. Insufficient funds surface per element
+   * while the batch runs, not on submission.
+   */
   batch(params: PayoutBatchParams, opts?: RequestOptions): Promise<BatchSubmitted> {
     return this.call<BatchSubmitted>("POST /v1/payout/batch", params, opts);
   }

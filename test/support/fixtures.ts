@@ -40,6 +40,8 @@ export function loadContract(): {
     path: string;
     auth: string;
     idempotent: boolean;
+    /** The core's own read-only classification; the SDK never infers it. */
+    safe: boolean;
     bare: boolean;
     list?: string;
   }>;

@@ -1,6 +1,12 @@
 // Express receiver: verify over the RAW body, deduplicate by X-Webhook-Id, ignore stale sequences.
 import express from "express";
-import { verifyWebhookDelivery, isStaleEvent, SignatureError } from "@oblodai-npm/sdk/webhooks";
+import {
+  verifyWebhookDelivery,
+  isStaleEvent,
+  isKnownEvent,
+  SignatureError,
+  WebhookPayloadError,
+} from "@oblodai-npm/sdk/webhooks";
 
 const app = express();
 const seenDeliveries = new Set<string>(); // X-Webhook-Id; use your database in production
@@ -13,12 +19,20 @@ app.post("/oblodai/webhook", express.raw({ type: "*/*" }), (req, res) => {
       secret: process.env.OBLODAI_WEBHOOK_SECRET!,
     });
   } catch (err) {
+    // A forged or stale delivery: answer 4xx so the sender stops.
     if (err instanceof SignatureError) return res.status(400).send(err.code);
+    // Authentic but unreadable — NOT a signature failure. Answer 5xx so it is retried, and alert.
+    if (err instanceof WebhookPayloadError) return res.status(500).send(err.code);
     throw err;
   }
   const { event, id } = delivery;
   if (id && seenDeliveries.has(id)) return res.sendStatus(200); // retry of a delivery we already handled
   if (id) seenDeliveries.add(id);
+  // An event type this SDK release does not model: log it and acknowledge, never crash.
+  if (!isKnownEvent(event)) {
+    console.log("unknown event type", event.type);
+    return res.sendStatus(200);
+  }
   if (isStaleEvent(event, lastSequence.get(event.uuid))) return res.sendStatus(200);
   lastSequence.set(event.uuid, event.sequence);
 

@@ -29,12 +29,13 @@
       }
     },
     "./contract.json": "./contract/contract.json",
-    "./contract/*": "./contract/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./contract/descriptions.en.json": "./contract/descriptions.en.json"
   },
   "files": [
     "dist",
-    "contract",
+    "contract/contract.json",
+    "contract/descriptions.en.json",
     "AGENTS.md",
     "README.md",
     "CHANGELOG.md",

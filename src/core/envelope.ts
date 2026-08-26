@@ -1,4 +1,10 @@
-import { ContractError, apiErrorFrom, type ApiError, type ErrorDetail } from "./errors.js";
+import {
+  ContractError,
+  MAX_RETRY_AFTER_SECONDS,
+  apiErrorFrom,
+  decodeErrorDetail,
+  type ApiError,
+} from "./errors.js";
 import { isRecord } from "./util.js";
 
 /**
@@ -79,12 +85,27 @@ export function decodeEnvelope<T>(
   }
 
   if (isRecord(body) && isRecord(body.error)) {
-    return {
-      ok: false,
-      error: apiErrorFrom(httpStatus, body.error as unknown as ErrorDetail, body, {
-        retryAfterHeader,
-      }),
-    };
+    // Field by field: a body with the envelope shape but the wrong types must not be able to steer
+    // the SDK (a non-boolean `retryable` deciding retries, a numeric `code` breaking `family`).
+    const { detail, usable } = decodeErrorDetail(body.error);
+    if (usable) {
+      return { ok: false, error: apiErrorFrom(httpStatus, detail, body, { retryAfterHeader }) };
+    }
+    if (httpStatus >= 400) {
+      return {
+        ok: false,
+        error: apiErrorFrom(
+          httpStatus,
+          {
+            code: "internal",
+            message: noEnvelope(httpStatus, text),
+            request_id: detail.request_id,
+          },
+          body,
+          { synthetic: true, retryAfterHeader },
+        ),
+      };
+    }
   }
   if (httpStatus >= 400) {
     return {
@@ -107,17 +128,26 @@ export function decodeEnvelope<T>(
   );
 }
 
-/** `Retry-After` as delta-seconds or an HTTP-date; undefined when absent or unparsable. */
+/**
+ * `Retry-After` as delta-seconds or an HTTP-date; undefined when absent or unparsable. Whatever the
+ * peer wrote, the result is a finite number of seconds in [0, MAX_RETRY_AFTER_SECONDS]: a date in
+ * the year 9999, a 400-digit integer or a negative delta can never become a wait the caller honours.
+ */
 export function parseRetryAfter(
   value: string | null | undefined,
   now: number = Date.now(),
 ): number | undefined {
   if (!value) return undefined;
   const v = value.trim();
-  if (/^\d+$/.test(v)) return Number(v);
+  if (/^\d+$/.test(v)) return clampSeconds(Number(v));
   const at = Date.parse(v);
   if (Number.isNaN(at)) return undefined;
-  return Math.max(0, Math.ceil((at - now) / 1000));
+  return clampSeconds(Math.ceil((at - now) / 1000));
+}
+
+function clampSeconds(n: number): number | undefined {
+  if (!Number.isFinite(n)) return undefined;
+  return Math.min(Math.max(0, n), MAX_RETRY_AFTER_SECONDS);
 }
 
 function noEnvelope(status: number, text: string): string {

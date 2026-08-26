@@ -21,7 +21,14 @@ export type PaymentBatchParams = RequestBodies["POST /v1/payment/batch"];
 
 /** Invoices: create, look up, cancel, list, and the payer-facing checkout endpoints. Payment key. */
 export class Payments extends Resource {
-  /** `POST /v1/payment` — create an invoice. Idempotent by `order_id` and by Idempotency-Key. */
+  /**
+   * `POST /v1/payment` — create an invoice. Idempotent by `order_id` and by Idempotency-Key.
+   *
+   * Codes worth branching on: `payment.bad_amount`, `payment.below_minimum`,
+   * `payment.minimum_unavailable` (rate feed down — retryable), `payment.unsupported_network`,
+   * `payment.network_required` (multi-network asset, no `network` given),
+   * `request.unknown_currency`, `idempotency.key_reused` (same key, different body).
+   */
   create(params: CreatePaymentParams, opts?: RequestOptions): Promise<Payment> {
     return this.call<Payment>("POST /v1/payment", params, opts);
   }
@@ -51,7 +58,13 @@ export class Payments extends Resource {
     return this.history(params, opts);
   }
 
-  /** `POST /v1/payment/batch` — create up to 5000 invoices asynchronously; track with `batches.info`. */
+  /**
+   * `POST /v1/payment/batch` — create up to 5000 invoices asynchronously; track with `batches.info`.
+   *
+   * Codes worth branching on: `payment.bad_amount`, `payment.below_minimum`,
+   * `request.unknown_currency`, `request.missing_field` (an item without `order_id`),
+   * `payout.batch_too_large`, `idempotency.key_reused`.
+   */
   batch(params: PaymentBatchParams, opts?: RequestOptions): Promise<BatchSubmitted> {
     return this.call<BatchSubmitted>("POST /v1/payment/batch", params, opts);
   }

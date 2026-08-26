@@ -76,12 +76,16 @@ describe("PagePromise", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("does not forward a caller idempotency key to list pages", async () => {
+  it("refuses a caller idempotency key on a list route instead of dropping it", async () => {
     const { fetch, calls } = mockFetch([
       ok({ items: [], paginate: { total: 0, per_page: 50, offset: 0, has_pages: false } }),
     ]);
-    await new Oblodai({ ...creds, fetch }).payouts.history({}, { idempotencyKey: "k" });
-    expect(calls[0]!.headers["idempotency-key"]).toBeUndefined();
+    const ob = new Oblodai({ ...creds, fetch });
+    // Silently dropping it would leave the caller believing a re-send is deduplicated when it is not.
+    expect(() => ob.payouts.history({}, { idempotencyKey: "k" })).toThrow(
+      /does not deduplicate by Idempotency-Key/,
+    );
+    expect(calls).toHaveLength(0);
   });
 });
 

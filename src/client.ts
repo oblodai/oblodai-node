@@ -1,5 +1,6 @@
 import { resolveConfig, type ClientOptions } from "./config.js";
 import { CONTRACT_HASH } from "./contract/version.js";
+import { INSPECT_CUSTOM } from "./core/secrets.js";
 import { Transport } from "./core/transport.js";
 import { Account, Catalog } from "./resources/account.js";
 import { Batches, Transfers } from "./resources/batches.js";
@@ -43,7 +44,10 @@ export class Oblodai {
   readonly sandbox: Sandbox;
   readonly merchants: Merchants;
 
-  /** The transport, exposed for advanced use (custom routes, tests). */
+  /**
+   * The transport, exposed for advanced use (custom routes, tests). It renders itself redacted, so
+   * logging the client cannot print a key — see `Transport.toJSON`.
+   */
   readonly transport: Transport;
 
   constructor(options: ClientOptions = {}) {
@@ -77,5 +81,15 @@ export class Oblodai {
     this.catalog = new Catalog(this.transport);
     this.sandbox = new Sandbox(this.transport);
     this.merchants = new Merchants(this.transport);
+  }
+
+  /** Structured-logger friendly: the namespaces are machinery, the transport redacts itself. */
+  toJSON(): Record<string, unknown> {
+    return { Oblodai: SDK_VERSION, transport: this.transport.toJSON() };
+  }
+
+  /** `console.log(client)` shows the same redacted summary, at any inspect depth. */
+  [INSPECT_CUSTOM](): Record<string, unknown> {
+    return this.toJSON();
   }
 }

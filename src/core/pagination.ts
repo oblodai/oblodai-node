@@ -44,16 +44,6 @@ export async function* iteratePages<T>(
   }
 }
 
-/** Collect all pages into one array (bounded by `maxItems` when given). */
-export async function collectPages<T>(
-  fetchPage: PageFetcher<T>,
-  opts: IterateOptions = {},
-): Promise<T[]> {
-  const out: T[] = [];
-  for await (const item of iteratePages(fetchPage, opts)) out.push(item);
-  return out;
-}
-
 /**
  * What a list method returns: `await` it (or `.then/.catch/.finally`) for the first page, or
  * `for await` it to walk every item across pages. Nothing is requested until it is consumed, and

@@ -22,13 +22,17 @@ const missingDescriptions = [];
 
 const HEADER = `// GENERATED FILE — do not edit. Source: contract/contract.json (core ${contract.core_commit.slice(0, 12)}).\n// Regenerate with: npm run codegen\n`;
 
-// Read-only routes: a transport failure may be retried without risking a duplicate side effect.
-const SAFE_SUFFIX = /\/(info|history|list|calculate|validate|services|get|balance|qr|deliveries)$/;
-// Paths that look read-only but whose body can mutate state.
-const NOT_SAFE = new Set(["POST /v1/vrcs"]);
+// Retry safety is NOT inferred here. `safe` is the core's own hand-classified statement that a route
+// is read-only and may be re-sent after a transport failure without an idempotency key. A route
+// without the flag is a contract export the SDK must not guess about.
 function isSafe(r) {
-  if (NOT_SAFE.has(`${r.method} ${r.path}`)) return false;
-  return r.method === "GET" || SAFE_SUFFIX.test(r.path);
+  if (typeof r.safe !== "boolean") {
+    throw new Error(
+      `route ${r.method} ${r.path} has no boolean "safe" field in contract/contract.json — ` +
+        `re-export the contract from a core that classifies retry safety (the SDK never infers it)`,
+    );
+  }
+  return r.safe;
 }
 
 // --- routes.ts -------------------------------------------------------------------------------
@@ -161,6 +165,12 @@ function tsType(schema, indent, ctx) {
       return "unknown";
   }
 }
+/** True when the example can be shown verbatim in an English doc comment (printable ASCII only). */
+function isAsciiExample(example) {
+  if (example === undefined) return false;
+  return /^[\x20-\x7e]*$/.test(JSON.stringify(example));
+}
+
 function objectType(schema, indent, ctx) {
   const req = new Set(schema.required ?? []);
   for (const f of REQUIRED_OVERRIDES[ctx.route] ?? []) {
@@ -175,7 +185,9 @@ function objectType(schema, indent, ctx) {
     const key = `${ctx.prefix}${n}`;
     const desc = descriptions.request?.[ctx.route]?.[key];
     if (!desc && p.description) missingDescriptions.push(`${ctx.route}#${key}`);
-    const ex = p.example !== undefined ? ` Example: ${JSON.stringify(p.example)}.` : "";
+    // Core example tags are authored in the core's own language; only ASCII ones are copied into
+    // the generated docs so the published SDK stays English-only.
+    const ex = isAsciiExample(p.example) ? ` Example: ${JSON.stringify(p.example)}.` : "";
     const doc = desc || ex ? `${pad}/** ${desc ?? ""}${ex} */\n` : "";
     return `${doc}${pad}${n}${req.has(n) ? "" : "?"}: ${tsType(p, indent + 1, { ...ctx, field: n })};`;
   });
@@ -189,7 +201,7 @@ for (const r of routes) {
   if (!schema) continue;
   reqTs += `  "${key}": ${tsType(schema, 1, { route: key, prefix: "", field: "" })};\n`;
 }
-reqTs += `}\n\nexport type RequestBodyOf<K extends keyof RequestBodies> = RequestBodies[K];\n`;
+reqTs += `}\n`;
 writeFileSync(join(outDir, "requests.ts"), reqTs);
 
 // --- version.ts ------------------------------------------------------------------------------

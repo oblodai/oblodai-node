@@ -142,6 +142,27 @@ const COVERAGE: Record<RouteKey, Call> = {
   "POST /v1/merchants/{id}/sandbox": (ob) => ob.merchants.createSandbox("m1"),
 };
 
+/** The seven fields the SDK's behaviour hangs on; `list` is normalised so absent === undefined. */
+function specOf(r: {
+  method: string;
+  path: string;
+  auth: string;
+  idempotent: boolean;
+  safe: boolean;
+  bare: boolean;
+  list?: string;
+}) {
+  return {
+    method: r.method,
+    path: r.path,
+    auth: r.auth,
+    idempotent: r.idempotent,
+    safe: r.safe,
+    bare: r.bare,
+    list: r.list ?? undefined,
+  };
+}
+
 describe("route registry", () => {
   const contract = loadContract();
   const declared = new Set(
@@ -156,6 +177,35 @@ describe("route registry", () => {
 
   it("every recorded fixture belongs to a known route", () => {
     for (const route of loadFixtures().keys()) expect(ROUTES).toHaveProperty([route]);
+  });
+
+  /**
+   * Field-by-field, not just the key set: a flipped `safe`/`idempotent`/`auth` in the generated
+   * registry is a retry-safety or credential bug that the key-set assertion above cannot see.
+   */
+  it("every route's flags equal contract.json field by field", () => {
+    const fromContract = new Map(contract.routes.map((r) => [`${r.method} ${r.path}`, r] as const));
+    for (const key of Object.keys(ROUTES) as RouteKey[]) {
+      const declared = fromContract.get(key);
+      expect(declared, `${key} is not declared by the core`).toBeDefined();
+      expect(specOf(ROUTES[key]), key).toEqual(specOf(declared!));
+    }
+  });
+
+  it("the flag comparison catches a flipped flag", () => {
+    const declared = contract.routes.find((r) => `${r.method} ${r.path}` === "POST /v1/payout")!;
+    expect(declared.safe).toBe(false);
+    expect(specOf({ ...ROUTES["POST /v1/payout"], safe: true })).not.toEqual(specOf(declared));
+    expect(specOf({ ...ROUTES["POST /v1/payout"], idempotent: false })).not.toEqual(
+      specOf(declared),
+    );
+    expect(specOf({ ...ROUTES["POST /v1/payout"], auth: "payment" })).not.toEqual(specOf(declared));
+  });
+
+  it("no route is left unclassified for retry safety", () => {
+    for (const r of contract.routes) expect(typeof r.safe, `${r.method} ${r.path}`).toBe("boolean");
+    for (const key of Object.keys(ROUTES) as RouteKey[])
+      expect(typeof ROUTES[key].safe, key).toBe("boolean");
   });
 
   for (const key of Object.keys(ROUTES) as RouteKey[]) {

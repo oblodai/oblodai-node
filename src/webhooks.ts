@@ -1,9 +1,12 @@
-import type { WebhookEvent } from "./contract/models/webhooks.js";
-import { OblodaiError, SignatureError } from "./core/errors.js";
+import type { AnyWebhookEvent } from "./contract/models/webhooks.js";
+import { isKnownEvent } from "./contract/models/webhooks.js";
+import { ConfigError, OblodaiError, SignatureError, WebhookPayloadError } from "./core/errors.js";
 import { signWebhook } from "./core/signing.js";
 import { constantTimeEqual, headerValue, isRecord } from "./core/util.js";
 
-export { SignatureError, OblodaiError };
+export { SignatureError, WebhookPayloadError, ConfigError, OblodaiError };
+export { isKnownEvent };
+export type { AnyWebhookEvent };
 
 /**
  * Webhook verification — usable on its own (`import { verifyWebhook } from "@oblodai-npm/sdk/webhooks"`),
@@ -17,15 +20,20 @@ export { SignatureError, OblodaiError };
  *   X-Webhook-Event-Time: unix seconds when the state change committed (order events by it)
  *
  * Always verify over the raw request bytes; a re-serialized parse will not match.
+ *
+ * The checks run in one deliberate order: headers, then the MAC, then freshness, then the body.
+ * The MAC comes before the timestamp so an unauthenticated caller cannot use the freshness window
+ * as an oracle, and the body is parsed only after it is known to be authentic.
  */
 export type WebhookHeaders = Headers | Record<string, string | string[] | undefined>;
 
 export interface VerifyWebhookOptions {
-  /** The endpoint secret from `webhooks.register` / `rotateSecret`. */
+  /** The endpoint secret from `webhooks.register` / `rotateSecret`. Must be non-empty. */
   secret: string;
   /**
    * During a rotation keep the outgoing secret here. Deliveries queued before the rotation stay
    * signed with it for their whole retry life (~26 h), so keep it at least that long after rotating.
+   * Supplying an empty string is a configuration error, not "no previous secret" — omit it instead.
    */
   previousSecret?: string;
   /** Reject deliveries whose timestamp is older/newer than this, seconds. Default 300; 0 disables. */
@@ -36,7 +44,8 @@ export interface VerifyWebhookOptions {
 
 /** A verified delivery: the event plus the advisory headers worth keeping. */
 export interface WebhookDeliveryInfo {
-  event: WebhookEvent;
+  /** Use `isKnownEvent(event)` before switching on `type`: a newer core may send a type this release does not model. */
+  event: AnyWebhookEvent;
   /** `X-Webhook-Id` — stable across retries of the same delivery; use it as your idempotency key. */
   id?: string;
   /** `X-Webhook-Event` — `invoice.<status>` | `payout.<status>` | `wallet.paid`. */
@@ -57,12 +66,14 @@ export const HEADER_WEBHOOK_ID = "X-Webhook-Id";
 export const HEADER_WEBHOOK_EVENT_TIME = "X-Webhook-Event-Time";
 export const HEADER_WEBHOOK_TEST = "X-Webhook-Test";
 
+export const DEFAULT_TOLERANCE_SECONDS = 300;
+
 /** Verify the signature and freshness, then parse. Throws SignatureError; never returns an unverified body. */
 export function verifyWebhook(
   rawBody: string | Uint8Array,
   headers: WebhookHeaders,
   options: VerifyWebhookOptions,
-): WebhookEvent {
+): AnyWebhookEvent {
   return verifyWebhookDelivery(rawBody, headers, options).event;
 }
 
@@ -72,19 +83,57 @@ export function verifyWebhookDelivery(
   headers: WebhookHeaders,
   options: VerifyWebhookOptions,
 ): WebhookDeliveryInfo {
+  // Configuration first, before a single byte is hashed: verifying with an empty key would "verify"
+  // whatever an attacker sends, since they can compute HMAC("" , body) as easily as we can.
+  const secret = requireSecret(options?.secret, "secret");
+  const previousSecret =
+    options?.previousSecret === undefined
+      ? undefined
+      : requireSecret(options.previousSecret, "previousSecret");
+  const tolerance = options?.toleranceSec ?? DEFAULT_TOLERANCE_SECONDS;
+  if (typeof tolerance !== "number" || !Number.isFinite(tolerance) || tolerance < 0) {
+    throw new ConfigError(
+      "sdk.bad_config",
+      "toleranceSec must be a non-negative number of seconds (0 disables the freshness check)",
+      "toleranceSec",
+    );
+  }
+
+  // --- 1. headers ---
   const tsRaw = headerValue(headers, HEADER_WEBHOOK_TIMESTAMP);
-  const sig = headerValue(headers, HEADER_WEBHOOK_SIGNATURE);
-  if (!tsRaw || !sig) {
+  const sigRaw = headerValue(headers, HEADER_WEBHOOK_SIGNATURE);
+  if (tsRaw === undefined || sigRaw === undefined) {
     throw new SignatureError(
       "webhook.missing_header",
       `missing ${HEADER_WEBHOOK_TIMESTAMP} or ${HEADER_WEBHOOK_SIGNATURE}`,
     );
   }
-  const ts = Number(tsRaw);
-  if (!Number.isInteger(ts))
+  const sig = normalizeSignature(sigRaw, HEADER_WEBHOOK_SIGNATURE);
+  const ts = Number(tsRaw.trim());
+  if (!Number.isInteger(ts)) {
     throw new SignatureError("webhook.bad_signature", "timestamp header is not an integer");
+  }
 
-  const tolerance = options.toleranceSec ?? 300;
+  // --- 2. MAC, current secret first, then the rotation overlap ---
+  const prevSigRaw = headerValue(headers, HEADER_WEBHOOK_SIGNATURE_PREV);
+  const prevSig =
+    prevSigRaw === undefined
+      ? undefined
+      : normalizeSignature(prevSigRaw, HEADER_WEBHOOK_SIGNATURE_PREV);
+  // A merchant who has not swapped the stored secret yet verifies the Prev header with it; one who
+  // already swapped but kept the old copy verifies the main header with the new secret. Both hold.
+  const candidates: Array<[string, string]> = [[sig, secret]];
+  if (prevSig) candidates.push([prevSig, secret]);
+  if (previousSecret) {
+    candidates.push([sig, previousSecret]);
+    if (prevSig) candidates.push([prevSig, previousSecret]);
+  }
+  const ok = candidates.some(([provided, key]) =>
+    constantTimeEqual(provided, signWebhook(key, ts, rawBody)),
+  );
+  if (!ok) throw new SignatureError("webhook.bad_signature", "signature does not match the body");
+
+  // --- 3. freshness, only for a delivery that is already proven authentic ---
   if (tolerance > 0) {
     const now = (options.now ?? (() => Math.floor(Date.now() / 1000)))();
     if (Math.abs(now - ts) > tolerance) {
@@ -95,65 +144,98 @@ export function verifyWebhookDelivery(
     }
   }
 
-  const candidates: Array<[string, string]> = [[sig, options.secret]];
-  const prevSig = headerValue(headers, HEADER_WEBHOOK_SIGNATURE_PREV);
-  // A merchant who has not swapped the stored secret yet verifies the Prev header with it; one who
-  // already swapped but kept the old copy verifies the main header with the new secret. Both hold.
-  if (prevSig) candidates.push([prevSig, options.secret]);
-  if (options.previousSecret) {
-    candidates.push([sig, options.previousSecret]);
-    if (prevSig) candidates.push([prevSig, options.previousSecret]);
-  }
-  const ok = candidates.some(([provided, secret]) =>
-    constantTimeEqual(provided.toLowerCase(), signWebhook(secret, ts, rawBody)),
-  );
-  if (!ok) throw new SignatureError("webhook.bad_signature", "signature does not match the body");
-
+  // --- 4. body ---
   const eventTimeRaw = headerValue(headers, HEADER_WEBHOOK_EVENT_TIME);
   const event = parseWebhook(rawBody);
   return {
     event,
-    isTest: headerValue(headers, HEADER_WEBHOOK_TEST) === "true" || event.test === true,
+    isTest: isTrueHeader(headerValue(headers, HEADER_WEBHOOK_TEST)) || isTestEvent(event),
     id: headerValue(headers, HEADER_WEBHOOK_ID),
     eventType: headerValue(headers, HEADER_WEBHOOK_EVENT),
-    eventTime: eventTimeRaw && /^\d+$/.test(eventTimeRaw) ? Number(eventTimeRaw) : undefined,
+    eventTime: eventTimeRaw && /^\d+$/.test(eventTimeRaw.trim()) ? Number(eventTimeRaw) : undefined,
     sentAt: ts,
   };
 }
 
 /** True for rehearsal deliveries (`webhooks.test`, sandbox) — never act on them as if money moved. */
-export function isTestEvent(event: Pick<WebhookEvent, "test">): boolean {
-  return event.test === true;
+export function isTestEvent(event: { test?: unknown } | null | undefined): boolean {
+  return (event as { test?: unknown } | null | undefined)?.test === true;
 }
 
-/** Parse a (previously verified) delivery body into a typed event, discriminated by `type`. */
-export function parseWebhook(rawBody: string | Uint8Array): WebhookEvent {
+/**
+ * Parse a (previously verified) delivery body into a typed event. A body that is not usable JSON,
+ * or lacks the fields every event carries, raises `webhook.bad_payload` — deliberately NOT a
+ * signature error, so a receiver that answers 401 to forged deliveries does not answer 401 to an
+ * authentic one it simply could not read.
+ */
+export function parseWebhook(rawBody: string | Uint8Array): AnyWebhookEvent {
   const text = typeof rawBody === "string" ? rawBody : Buffer.from(rawBody).toString("utf8");
   let body: unknown;
   try {
     body = JSON.parse(text);
   } catch {
-    throw new SignatureError("webhook.bad_signature", "body is not JSON");
+    throw new WebhookPayloadError("delivery body is not JSON", text);
   }
-  if (!isRecord(body) || typeof body.type !== "string" || typeof body.uuid !== "string") {
-    throw new SignatureError(
-      "webhook.bad_signature",
-      "body lacks the type/uuid fields every event carries",
-    );
+  if (!isRecord(body)) {
+    throw new WebhookPayloadError("delivery body is not a JSON object", body);
   }
-  if (body.type !== "payment" && body.type !== "payout" && body.type !== "wallet") {
-    throw new SignatureError("webhook.bad_signature", `unknown event type "${String(body.type)}"`);
+  if (typeof body.type !== "string" || body.type === "") {
+    throw new WebhookPayloadError("delivery body has no `type` string", body);
   }
-  return body as unknown as WebhookEvent;
+  const event = body as unknown as AnyWebhookEvent;
+  // An event kind from a newer core is handed back verbatim rather than rejected; only the kinds
+  // this release models are held to their field types.
+  if (isKnownEvent(event) && typeof body.uuid !== "string") {
+    throw new WebhookPayloadError(`"${body.type}" event has no \`uuid\` string`, body);
+  }
+  return event;
 }
 
 /**
  * Deliveries can arrive out of order (a retried `paid` after a `refund`). Keep the last `sequence`
- * you processed per object and skip anything not newer.
+ * you processed per object and skip anything not newer. Never throws: an event without a usable
+ * `sequence` is not stale, because nothing about it can be compared.
  */
 export function isStaleEvent(
-  event: Pick<WebhookEvent, "sequence">,
-  lastProcessedSequence: number | undefined,
+  event: { sequence?: unknown } | null | undefined,
+  lastProcessedSequence: number | undefined | null,
 ): boolean {
-  return lastProcessedSequence !== undefined && event.sequence <= lastProcessedSequence;
+  if (typeof lastProcessedSequence !== "number" || !Number.isInteger(lastProcessedSequence)) {
+    return false;
+  }
+  const sequence = (event as { sequence?: unknown } | null | undefined)?.sequence;
+  if (typeof sequence !== "number" || !Number.isInteger(sequence)) return false;
+  return sequence <= lastProcessedSequence;
+}
+
+function requireSecret(value: unknown, field: string): string {
+  if (typeof value !== "string" || value === "") {
+    throw new ConfigError(
+      "sdk.bad_config",
+      `${field} must be a non-empty string; verifying with an empty key would accept any body`,
+      field,
+    );
+  }
+  return value;
+}
+
+/**
+ * Signature headers survive proxies that add whitespace and senders that upper-case hex, but a
+ * `0x`-prefixed value is not what the core signs — accepting it would mean accepting a value that
+ * never matches, framed as a mismatch the integrator cannot explain.
+ */
+function normalizeSignature(raw: string, header: string): string {
+  const v = raw.trim();
+  if (v === "") throw new SignatureError("webhook.bad_signature", `${header} is empty`);
+  if (!/^[0-9a-fA-F]+$/.test(v)) {
+    throw new SignatureError(
+      "webhook.bad_signature",
+      `${header} is not hexadecimal (a "0x" prefix is not part of the signature)`,
+    );
+  }
+  return v.toLowerCase();
+}
+
+function isTrueHeader(value: string | undefined): boolean {
+  return typeof value === "string" && value.trim().toLowerCase() === "true";
 }

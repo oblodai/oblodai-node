@@ -43,6 +43,18 @@ export class SkewCorrectingClock implements Clock {
     this.offsetSec = offsetSec;
   }
 
+  /**
+   * Undo a correction only when nobody else has moved the clock since. The offset is shared by every
+   * in-flight call on the client; an unconditional revert would throw away a sibling call's good
+   * correction and send the whole client back into `merchant.bad_signature`. Returns true when the
+   * revert happened. (JS runs one turn at a time, so the read-compare-write below is atomic.)
+   */
+  revertIfUnchanged(installed: number, previous: number): boolean {
+    if (this.offsetSec !== installed) return false;
+    this.offsetSec = previous;
+    return true;
+  }
+
   reset(): void {
     this.offsetSec = 0;
   }

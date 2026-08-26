@@ -184,3 +184,37 @@ export const WalletEventKeys = defineKeys<Omit<WalletEvent, "test">>()(
 );
 
 export type WebhookEvent = PaymentEvent | PayoutEvent | WalletEvent;
+
+/**
+ * A delivery whose `type` this SDK release does not know. The core adds event types without asking,
+ * and a receiver that throws on one it has not heard of turns a new feature into an outage — so an
+ * unknown type is returned verbatim, with the raw `type` string, for the handler to ignore or log.
+ */
+export interface UnknownWebhookEvent {
+  type: string;
+  uuid?: string;
+  sequence?: number;
+  event_at?: Timestamp;
+  test?: boolean;
+  [field: string]: unknown;
+}
+
+/** What a verified delivery can be: one of the known events, or one from a newer core. */
+export type AnyWebhookEvent = WebhookEvent | UnknownWebhookEvent;
+
+/** The event types this release models field by field. */
+export const KNOWN_EVENT_KINDS = ["payment", "payout", "wallet"] as const;
+
+/**
+ * Narrow a delivery to the modelled union. Use it before switching on `type` so the compiler keeps
+ * the per-kind fields:
+ *
+ * ```ts
+ * const { event } = verifyWebhookDelivery(raw, headers, { secret });
+ * if (!isKnownEvent(event)) return void log.info("unknown event type", event.type);
+ * if (event.type === "payment") console.log(event.payer_amount);
+ * ```
+ */
+export function isKnownEvent(event: AnyWebhookEvent): event is WebhookEvent {
+  return (KNOWN_EVENT_KINDS as readonly string[]).includes(event.type);
+}
