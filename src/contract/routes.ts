@@ -1,4 +1,4 @@
-// GENERATED FILE — do not edit. Source: contract/contract.json (core 7b8eb828b9ec).
+// GENERATED FILE — do not edit. Source: contract/contract.json (core bfca971cce71).
 // Regenerate with: npm run codegen
 import type { RouteSpec } from "./types.js";
 

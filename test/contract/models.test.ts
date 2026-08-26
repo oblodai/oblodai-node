@@ -211,7 +211,7 @@ describe("enums cover what the wire carries", () => {
           : s.body.type === "payout"
             ? M.PayoutEventKeys
             : M.WalletEventKeys;
-      expect(keySetDiff(Object.keys(s.body), keys)).toEqual({
+      expect(keySetDiff(Object.keys(s.body), keys, ["test"])).toEqual({
         missingOnWire: [],
         unknownOnWire: [],
       });

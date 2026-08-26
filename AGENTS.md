@@ -60,7 +60,7 @@ import { verifyWebhookDelivery, isStaleEvent } from "@oblodai-npm/sdk/webhooks";
 const { event, id } = verifyWebhookDelivery(rawBody, req.headers, { secret });
 ```
 
-Verify over the **raw** bytes. Deduplicate on `id` (`X-Webhook-Id`); drop out-of-order events with
+Verify over the **raw** bytes. `verifyWebhookDelivery(...).isTest` is true for rehearsal deliveries (`test: true` in the signed body) — never treat them as money. Deduplicate on `id` (`X-Webhook-Id`); drop out-of-order events with
 `isStaleEvent(event, lastSequence)`. During rotation pass `previousSecret` for ≥26 h.
 
 ## Machine-readable surface

@@ -45,6 +45,8 @@ export interface WebhookDeliveryInfo {
   eventTime?: number;
   /** `X-Webhook-Timestamp` — unix seconds when this attempt was sent. */
   sentAt: number;
+  /** A rehearsal delivery (`X-Webhook-Test: true` / body `test: true`): signed like a live one, but no money moved. */
+  isTest: boolean;
 }
 
 export const HEADER_WEBHOOK_TIMESTAMP = "X-Webhook-Timestamp";
@@ -53,6 +55,7 @@ export const HEADER_WEBHOOK_SIGNATURE_PREV = "X-Webhook-Signature-Prev";
 export const HEADER_WEBHOOK_EVENT = "X-Webhook-Event";
 export const HEADER_WEBHOOK_ID = "X-Webhook-Id";
 export const HEADER_WEBHOOK_EVENT_TIME = "X-Webhook-Event-Time";
+export const HEADER_WEBHOOK_TEST = "X-Webhook-Test";
 
 /** Verify the signature and freshness, then parse. Throws SignatureError; never returns an unverified body. */
 export function verifyWebhook(
@@ -107,13 +110,20 @@ export function verifyWebhookDelivery(
   if (!ok) throw new SignatureError("webhook.bad_signature", "signature does not match the body");
 
   const eventTimeRaw = headerValue(headers, HEADER_WEBHOOK_EVENT_TIME);
+  const event = parseWebhook(rawBody);
   return {
-    event: parseWebhook(rawBody),
+    event,
+    isTest: headerValue(headers, HEADER_WEBHOOK_TEST) === "true" || event.test === true,
     id: headerValue(headers, HEADER_WEBHOOK_ID),
     eventType: headerValue(headers, HEADER_WEBHOOK_EVENT),
     eventTime: eventTimeRaw && /^\d+$/.test(eventTimeRaw) ? Number(eventTimeRaw) : undefined,
     sentAt: ts,
   };
+}
+
+/** True for rehearsal deliveries (`webhooks.test`, sandbox) — never act on them as if money moved. */
+export function isTestEvent(event: Pick<WebhookEvent, "test">): boolean {
+  return event.test === true;
 }
 
 /** Parse a (previously verified) delivery body into a typed event, discriminated by `type`. */
