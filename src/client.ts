@@ -19,7 +19,7 @@ import { Merchants } from "./resources/merchants.js";
 export const SDK_VERSION = "1.3.0";
 
 /**
- * The Oblodai API client. One instance per key pair; safe to share across requests.
+ * The Oblodai API client. One instance per API key; safe to share across requests.
  *
  * ```ts
  * const oblodai = new Oblodai({ publicId: "oblodai_…", secret: "oblodai_live_…" });
@@ -55,7 +55,6 @@ export class Oblodai {
     this.transport = new Transport({
       baseUrl: cfg.baseUrl,
       credentials: cfg.credentials,
-      payoutCredentials: cfg.payoutCredentials,
       fetch: cfg.fetch,
       timeoutMs: cfg.timeoutMs,
       deadlineMs: cfg.deadlineMs,

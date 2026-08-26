@@ -10,7 +10,7 @@ export type OnboardParams = RequestBodies["POST /v1/merchants"];
  * HMAC-signed; a self-hosted gateway gates them with its admin token (`adminToken` option).
  */
 export class Merchants extends Resource {
-  /** `POST /v1/merchants` — create a merchant and mint its payment and payout keys (shown once). */
+  /** `POST /v1/merchants` — create a merchant and mint its API key (the secret is shown once). */
   async create(params: OnboardParams, opts?: RequestOptions): Promise<MerchantOnboarded> {
     return protectKeys(await this.call<MerchantOnboarded>("POST /v1/merchants", params, opts));
   }
@@ -26,10 +26,8 @@ export class Merchants extends Resource {
   }
 }
 
-/** Freshly minted key pairs are shown once; keep their secrets out of every automatic rendering. */
+/** A freshly minted key is shown once; keep its secret out of every automatic rendering. */
 function protectKeys<T extends MerchantOnboarded>(minted: T): T {
-  for (const pair of [minted.api_key, minted.payment_key, minted.payout_key]) {
-    if (pair) protectSecrets(pair, ["secret"]);
-  }
+  if (minted.api_key) protectSecrets(minted.api_key, ["secret"]);
   return minted;
 }

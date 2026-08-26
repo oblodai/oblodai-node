@@ -122,11 +122,11 @@ export function buildRequest(input: BuildInput): BuiltRequest {
     headers[HEADER_ADMIN_TOKEN] = input.adminToken;
   }
 
-  if (route.auth !== "public" && route.auth !== "onboard") {
+  if (route.auth === "key") {
     if (!input.credentials) {
       throw new ConfigError(
         "sdk.missing_credentials",
-        `${route.method} ${route.path} needs a ${route.auth === "any" ? "merchant" : route.auth} API key: pass { publicId, secret } to new Oblodai() or set OBLODAI_PUBLIC_ID / OBLODAI_SECRET`,
+        `${route.method} ${route.path} is signed with the merchant's API key: pass { publicId, secret } to new Oblodai() or set OBLODAI_PUBLIC_ID / OBLODAI_SECRET`,
       );
     }
     headers[HEADER_PUBLIC_ID] = input.credentials.publicId;

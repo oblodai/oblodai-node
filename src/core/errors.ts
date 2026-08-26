@@ -133,7 +133,7 @@ export class ApiError extends OblodaiError {}
 export class ValidationError extends ApiError {}
 /** 401 — bad signature, unknown key, clock skew, IP not in the allow-list. */
 export class AuthenticationError extends ApiError {}
-/** 403 — the key is valid but not allowed to do this (wrong key kind, feature disabled). */
+/** 403 — the key is valid but not allowed to do this (feature disabled, allow-list, capability). */
 export class PermissionError extends ApiError {}
 /** 404 — the referenced object does not exist for this merchant. */
 export class NotFoundError extends ApiError {}

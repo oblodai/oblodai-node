@@ -50,16 +50,15 @@ API-ключа. Пишете код с ИИ-агентом? Дайте ему [A
 показывается один раз, при создании. Боевая пара — это public id `oblodai_<hex>` и секрет
 `oblodai_live_<hex>`; пара песочницы — `test_oblodai_<hex>` и `oblodai_test_<hex>`.
 
-| Вид ключа              | Public id                                                   | Чем подписывает                                                                                                                                                                                                                                                             |
-| ---------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Платёжный ключ         | `oblodai_<hex>` (устаревшая раздельная: `oblodai_pk_<hex>`) | Всё, что принимает деньги: `payments.*`, `paymentLinks.*`, `wallets.create/qr/block`, `documents.*`, `account.*`, `catalog.*`, большая часть `settings.*`                                                                                                                   |
-| Выплатной ключ         | `oblodai_<hex>` (устаревшая раздельная: `oblodai_wk_<hex>`) | Всё, что отправляет деньги: `payouts.*`, `refunds.*`, `payoutLinks.*`, `transfers.*`, `splits.*`, `wallets.refundBlockedDeposit`, `settings.*AutoWithdraw`, `settings.*ApiAllowlist`, `webhooks.rotateSecret`, `webhooks.test("payout")`, `sandbox.faucet`, `sandbox.reset` |
-| Ключ песочницы         | `test_oblodai_<hex>`                                        | Оба вида сразу, против бесцепочечной копии шлюза                                                                                                                                                                                                                            |
-| Админ-токен онбординга | задаётся на self-hosted шлюзе                               | Только `merchants.create`, `merchants.createSandbox` — без подписи, уходит как `X-Admin-Token` и ни на одном другом маршруте                                                                                                                                                |
+**Один API-ключ подписывает всё.** У мерчанта один ключ, и он аутентифицирует каждый подписанный
+маршрут — деньги на вход и на выход, настройки, документы, песочницу. Отдельных выплатных учётных
+данных нет.
 
-Нынешний боевой ключ **единый**: одна пара `oblodai_<hex>` подписывает обе стороны. У проектов,
-заведённых до объединения, пары до сих пор две, и там одним платёжным ключом никому не заплатить —
-настройте обе, и SDK сам выберет нужную для каждого вызова:
+| Учётные данные         | Откуда берутся                             | Что подписывают                                                                                                                                                                                                    |
+| ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| API-ключ               | кабинет → **API-ключи**                    | Каждый подписанный маршрут: `payments.*`, `payouts.*`, `refunds.*`, `paymentLinks.*`, `payoutLinks.*`, `transfers.*`, `splits.*`, `wallets.*`, `webhooks.*`, `documents.*`, `settings.*`, `account.*`, `batches.*` |
+| API-ключ песочницы     | онбординг песочницы — `test_oblodai_<hex>` | Ту же поверхность, против бесцепочечной копии шлюза                                                                                                                                                                |
+| Админ-токен онбординга | задаётся на self-hosted шлюзе              | Только `merchants.create`, `merchants.createSandbox` — без подписи, уходит как `X-Admin-Token` и ни на одном другом маршруте                                                                                       |
 
 ```ts
 import { Oblodai } from "@oblodai-npm/sdk";
@@ -67,14 +66,14 @@ import { Oblodai } from "@oblodai-npm/sdk";
 const oblodai = new Oblodai({
   publicId: process.env.OBLODAI_PUBLIC_ID,
   secret: process.env.OBLODAI_SECRET,
-  payoutPublicId: process.env.OBLODAI_PAYOUT_PUBLIC_ID,
-  payoutSecret: process.env.OBLODAI_PAYOUT_SECRET,
 });
 ```
 
-На раздельной паре вызов, подписанный ключом не того вида, — это 403 `merchant.wrong_key_kind`. На
-маршруте, который принимает оба вида (например, `batches.info` для выплатного батча), передайте
-`{ preferPayoutKey: true }`.
+Публичные маршруты (страницы для плательщика, каталог валют) не требуют учётных данных вовсе, а
+админ-токен ходит на двух маршрутах `merchants.*` и больше нигде. У мерчантов, заведённых до
+объединения ключей, может до сих пор лежать старая раздельная пара — `oblodai_pk_…` на вход,
+`oblodai_wk_…` на выход, — и только там вызов может быть отклонён с 403 `merchant.wrong_key_kind`;
+выпуск одного актуального ключа в кабинете это снимает.
 
 ## Быстрый старт
 
@@ -105,10 +104,7 @@ console.log(invoice.url, invoice.address, invoice.status); // "created"
 ```ts
 import { Oblodai } from "@oblodai-npm/sdk";
 
-const oblodai = new Oblodai({
-  publicId: process.env.OBLODAI_PAYOUT_PUBLIC_ID,
-  secret: process.env.OBLODAI_PAYOUT_SECRET,
-});
+const oblodai = new Oblodai(); // the same key that took the payment sends the payout
 
 const params = {
   amount: "10",
@@ -165,7 +161,6 @@ await oblodai.sandbox.reset(); // cancel open invoices, zero the balances
 - `webhooks.test("payment" | "payout" | "wallet")` прогоняет репетиционную доставку на ваш боевой
   эндпоинт. Репетиции подписаны точно так же, как настоящие доставки, и несут `test: true` —
   проверяйте `isTest` и никогда не давайте такой доставке двигать деньги в вашей системе.
-- `sandbox.faucet` и `sandbox.reset` требуют выплатной ключ.
 
 ## Обзор методов
 
@@ -195,7 +190,7 @@ await oblodai.sandbox.reset(); // cancel open invoices, zero the balances
 - Получить один объект: `.info(uuid | { order_id })`, псевдоним `.get`. Получить много:
   `.history(params)` у платежей и выплат (псевдоним `.list`), `.list(params)` в остальных случаях.
 - Каждый метод принимает один и тот же необязательный последний аргумент —
-  `{ idempotencyKey, signal, timeoutMs, deadlineMs, preferPayoutKey }`.
+  `{ idempotencyKey, signal, timeoutMs, deadlineMs }`.
 - Синхронные массовые вызовы ограничены по числу элементов — `payouts.mass` до 100, `payoutLinks.batch`
   до 500 — и отчитываются по каждому элементу отдельно (`{ idx, ok, result, message, error_code }`),
   так что и внутри 200 могут быть отказы. Асинхронные батчи (`payments.batch`, `payouts.batch`,
@@ -306,7 +301,7 @@ app.post("/oblodai/webhook", express.raw({ type: "*/*" }), (req, res) => {
 | -------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ValidationError`                            | 400        | Запрос некорректен; `field` называет виновника                                                                                                                          |
 | `AuthenticationError`                        | 401        | Неверная подпись, неизвестный public id, разъехавшиеся часы                                                                                                             |
-| `PermissionError`                            | 403        | Ключ верный, но не того вида или без нужного права (`merchant.wrong_key_kind`)                                                                                          |
+| `PermissionError`                            | 403        | Ключ верный, но действие ему не разрешено: выключенная функция, IP-список, отсутствующее право                                                                          |
 | `NotFoundError`                              | 404        | Такого объекта нет                                                                                                                                                      |
 | `ConflictError` / `IdempotencyConflictError` | 409        | Конфликт состояния; второй — переиспользованный ключ идемпотентности с другим телом                                                                                     |
 | `RateLimitError`                             | 429        | Троттлинг; `retryAfter` заполнен                                                                                                                                        |
@@ -325,7 +320,7 @@ app.post("/oblodai/webhook", express.raw({ type: "*/*" }), (req, res) => {
 что оправдывает один только HTTP-статус. `JSON.stringify(err)` сохраняет `message` и выбрасывает
 сырое тело.
 
-Ветвитесь по `code`, а не по сообщению. Полный каталог — 471 код, экспортируется как `ERROR_CODES` и
+Ветвитесь по `code`, а не по сообщению. Полный каталог — 469 кодов, экспортируется как `ERROR_CODES` и
 типизирован как `ErrorCode`:
 
 ```ts
@@ -350,7 +345,7 @@ async function sendPayout(params: CreatePayoutParams): Promise<void> {
 ```
 
 Коды, которые стоит обрабатывать отдельно: `payout.insufficient_funds`, `payout.funds_maturing`,
-`idempotency.key_reused`, `invoice.not_payable`, `payment.not_found`, `merchant.wrong_key_kind`,
+`idempotency.key_reused`, `invoice.not_payable`, `payment.not_found`,
 `merchant.bad_signature`, `request.rate_limited`.
 
 ## Ретраи, идемпотентность и таймауты
@@ -370,7 +365,7 @@ async function sendPayout(params: CreatePayoutParams): Promise<void> {
   выплату. Передавайте свой `idempotencyKey`, чтобы ретраи оставались безопасными и через перезапуск
   процесса. На маршруте, который шлюз не дедуплицирует, SDK отвергает ключ сразу (`ConfigError`,
   `sdk.idempotency_unsupported`), а не молча его выбрасывает, — списочные методы в том числе.
-- **Опции на вызов**: `{ idempotencyKey, signal, timeoutMs, deadlineMs, preferPayoutKey }`.
+- **Опции на вызов**: `{ idempotencyKey, signal, timeoutMs, deadlineMs }`.
   `timeoutMs` ограничивает одну попытку (по умолчанию 30000), `deadlineMs` — весь вызов вместе с
   ретраями (по умолчанию 90000).
 - **Рассинхрон часов корректируется один раз.** Шлюз отклоняет метки времени, отличающиеся от его
@@ -397,30 +392,27 @@ const oblodai = new Oblodai({
 });
 ```
 
-| Опция                             | По умолчанию                           | Смысл                                                                            |
-| --------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------- |
-| `publicId` / `secret`             | `OBLODAI_PUBLIC_ID` / `OBLODAI_SECRET` | Платёжная (или песочная) пара ключей; обе или ни одной                           |
-| `payoutPublicId` / `payoutSecret` | `OBLODAI_PAYOUT_*`                     | Выплатная пара ключей; обе или ни одной                                          |
-| `baseUrl`                         | `https://api.oblodai.com`              | Адрес API; префикс пути сохраняется                                              |
-| `allowInsecureBaseUrl`            | `false`                                | Разрешить базовый URL по обычному `http://` вне локальной петли                  |
-| `adminToken`                      | `OBLODAI_ADMIN_TOKEN`                  | Токен онбординга self-hosted шлюза; используют только два маршрута `merchants.*` |
-| `timeoutMs`                       | `30000`                                | Таймаут одной попытки                                                            |
-| `deadlineMs`                      | `90000`                                | Бюджет на весь вызов, включая ретраи                                             |
-| `retry`                           | см. выше                               | `{ maxRetries, baseDelayMs, maxDelayMs, maxRetryAfterMs }`                       |
-| `headers`                         | —                                      | Дополнительные заголовки на каждом запросе                                       |
-| `logger`                          | `OBLODAI_LOG`                          | Структурный логгер; `consoleLogger(level)` идёт в комплекте                      |
-| `fetch`                           | глобальный `fetch`                     | Свой fetch — undici с прокси-агентом, записывающая заглушка в тестах             |
+| Опция                  | По умолчанию                           | Смысл                                                                            |
+| ---------------------- | -------------------------------------- | -------------------------------------------------------------------------------- |
+| `publicId` / `secret`  | `OBLODAI_PUBLIC_ID` / `OBLODAI_SECRET` | Единственный API-ключ мерчанта; оба или ни одного                                |
+| `baseUrl`              | `https://api.oblodai.com`              | Адрес API; префикс пути сохраняется                                              |
+| `allowInsecureBaseUrl` | `false`                                | Разрешить базовый URL по обычному `http://` вне локальной петли                  |
+| `adminToken`           | `OBLODAI_ADMIN_TOKEN`                  | Токен онбординга self-hosted шлюза; используют только два маршрута `merchants.*` |
+| `timeoutMs`            | `30000`                                | Таймаут одной попытки                                                            |
+| `deadlineMs`           | `90000`                                | Бюджет на весь вызов, включая ретраи                                             |
+| `retry`                | см. выше                               | `{ maxRetries, baseDelayMs, maxDelayMs, maxRetryAfterMs }`                       |
+| `headers`              | —                                      | Дополнительные заголовки на каждом запросе                                       |
+| `logger`               | `OBLODAI_LOG`                          | Структурный логгер; `consoleLogger(level)` идёт в комплекте                      |
+| `fetch`                | глобальный `fetch`                     | Свой fetch — undici с прокси-агентом, записывающая заглушка в тестах             |
 
-| Переменная окружения       | Смысл                                                               |
-| -------------------------- | ------------------------------------------------------------------- |
-| `OBLODAI_PUBLIC_ID`        | Public id платёжного (или песочного) ключа                          |
-| `OBLODAI_SECRET`           | Его секрет                                                          |
-| `OBLODAI_PAYOUT_PUBLIC_ID` | Public id выплатного ключа                                          |
-| `OBLODAI_PAYOUT_SECRET`    | Его секрет                                                          |
-| `OBLODAI_ADMIN_TOKEN`      | Админ-токен онбординга self-hosted шлюза                            |
-| `OBLODAI_BASE_URL`         | Адрес API                                                           |
-| `OBLODAI_LOG`              | `debug` \| `info` \| `warn` \| `error` — включает консольный логгер |
-| `OBLODAI_ALLOW_INSECURE`   | `1` разрешает нелокальный базовый URL по обычному `http://`         |
+| Переменная окружения     | Смысл                                                               |
+| ------------------------ | ------------------------------------------------------------------- |
+| `OBLODAI_PUBLIC_ID`      | Public id API-ключа мерчанта (боевого или песочного)                |
+| `OBLODAI_SECRET`         | Его секрет                                                          |
+| `OBLODAI_ADMIN_TOKEN`    | Админ-токен онбординга self-hosted шлюза                            |
+| `OBLODAI_BASE_URL`       | Адрес API                                                           |
+| `OBLODAI_LOG`            | `debug` \| `info` \| `warn` \| `error` — включает консольный логгер |
+| `OBLODAI_ALLOW_INSECURE` | `1` разрешает нелокальный базовый URL по обычному `http://`         |
 
 Заголовки, добавленные через `headers:`, уходят с каждым запросом, кроме тех, которыми владеет сам
 SDK (`Accept`, `Content-Type`, `User-Agent`, `X-Public-Id`, `X-Signature`, `X-Timestamp`,
@@ -428,7 +420,7 @@ SDK (`Accept`, `Content-Type`, `User-Agent`, `X-Public-Id`, `X-Signature`, `X-Ti
 заголовка с CR/LF или не-ASCII символом — это `ConfigError`.
 
 **Секреты не печатаются.** Клиент, его транспорт, разобранные учётные данные и любой результат с
-секретом внутри — `secret` вебхука, только что выпущенная пара ключей, `claim_token`/`claim_url`/`passcode`
+секретом внутри — `secret` вебхука, только что выпущенный API-ключ, `claim_token`/`claim_url`/`passcode`
 выплатной ссылки — отображаются как `[redacted]` в `JSON.stringify` и `console.log`/`util.inspect`, на
 любой глубине. Сами значения по-прежнему читаются как свойства (`endpoint.secret` работает); вычищается
 только автоматическое отображение. Логгер, переданный через `logger:`, получает поля уже
@@ -442,9 +434,9 @@ SDK (`Accept`, `Content-Type`, `User-Agent`, `X-Public-Id`, `X-Signature`, `X-Ti
 
 `contract/` выгружается собственным тестовым набором шлюза, а не пишется руками. В нём лежат реестр
 маршрутов — 107 мерчантских маршрутов, у каждого флаги `auth`, `idempotent`, `safe`, `bare` и `list`, —
-схемы DTO запросов с англоязычным описанием полей, перечисления, все коды ошибок (471), векторы
+схемы DTO запросов с англоязычным описанием полей, перечисления, все коды ошибок (469), векторы
 подписи, эталонные тела ответов, записанные с живого шлюза, и настоящие подписанные доставки вебхуков.
-Этот релиз собран с ядра `7ec04293c426`.
+Этот релиз собран с ядра `2cc44c16f516`.
 
 `src/contract/` генерируется из снимка командой `npm run codegen`. `npm run check-drift` падает, когда
 эти двое разошлись, а `npm test` сверяет каждую модель с эталонными телами и каждый флаг маршрута с

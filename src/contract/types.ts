@@ -6,8 +6,12 @@
  */
 export type HttpMethod = "GET" | "POST";
 
-/** Which credential the core's gate expects. Mirrors api_conformance_test.go constants. */
-export type RouteAuth = "public" | "payment" | "payout" | "any" | "onboard";
+/**
+ * Which credential the core's gate expects. Mirrors api_conformance_test.go constants: `public` is
+ * unsigned, `key` is signed with the merchant's one API key, `onboard` carries the gateway's admin
+ * token. There is no third credential — a merchant holds a single key that signs every signed route.
+ */
+export type RouteAuth = "public" | "key" | "onboard";
 
 export type ListKind = "paged" | "plain";
 

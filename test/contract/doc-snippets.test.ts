@@ -108,7 +108,11 @@ describe("README code blocks", () => {
 
 // A code the gateway never sends sends an integrator down a branch that can never run.
 const FAMILIES = new Set(ERROR_CODES.map((c) => c.split(".")[0]));
-const KNOWN = new Set<string>(ERROR_CODES);
+// Retired codes the READMEs may still name, each with a reason the prose spells out. Only
+// `merchant.wrong_key_kind` qualifies: a merchant on a pre-merge `oblodai_pk_`/`oblodai_wk_` pair can
+// still be refused with it, so the single paragraph about legacy split keys is allowed to say so.
+const LEGACY = new Set(["merchant.wrong_key_kind"]);
+const KNOWN = new Set<string>([...ERROR_CODES, ...LEGACY]);
 const SDK_LOCAL = /^(sdk|transport|webhook)\./;
 // `contract.json`, `examples.ts`, `shop.example` … share the dotted shape without being codes.
 const NOT_A_CODE =
@@ -173,6 +177,6 @@ describe("README prose", () => {
     const named = new Set(
       [...readFileSync(join(ROOT, file), "utf8").matchAll(/\bOBLODAI_[A-Z_]+/g)].map((m) => m[0]),
     );
-    expect([...named].filter((v) => !owned.has(v) && !v.startsWith("OBLODAI_PAYOUT_"))).toEqual([]);
+    expect([...named].filter((v) => !owned.has(v))).toEqual([]);
   });
 });

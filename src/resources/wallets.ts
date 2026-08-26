@@ -33,11 +33,10 @@ export class Wallets extends Resource {
 
   /**
    * `POST /v1/wallet/blocked-address-refund` — send funds that landed on a blocked address back.
-   * Payout key.
    *
    * Codes worth branching on: `wallet.bad_uuid`, `refund.no_address` (the address is not blocked),
    * `refund.nothing_to_refund` (already refunded or empty), `refund.dust` (below the network minimum),
-   * `refund.destination_internal`, `merchant.wrong_key_kind`.
+   * `refund.destination_internal`.
    */
   refundBlockedDeposit(
     params: RequestBodies["POST /v1/wallet/blocked-address-refund"],

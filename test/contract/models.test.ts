@@ -141,7 +141,7 @@ const ROWS: Row[] = [
   ["POST /v1/sandbox/reset", (r) => r, M.SandboxResetKeys],
   ["POST /v1/sandbox/webhooks/replay", (r) => r, M.SandboxReplayKeys],
   ["POST /v1/merchants", (r) => r, M.MerchantOnboardedKeys],
-  ["POST /v1/merchants", (r) => r.api_key, ["public_id", "secret", "kind"]],
+  ["POST /v1/merchants", (r) => r.api_key, ["public_id", "secret"]],
   ["POST /v1/merchants/{id}/sandbox", (r) => r, M.SandboxStoreKeys],
 ];
 

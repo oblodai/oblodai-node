@@ -15,8 +15,6 @@ export interface RequestOptions {
   timeoutMs?: number;
   /** Overall budget including retries, ms. */
   deadlineMs?: number;
-  /** Sign with the payout key on a route that accepts either key kind (e.g. `batches.info` for payout batches). */
-  preferPayoutKey?: boolean;
 }
 
 /** Body type for a route: the generated DTO when the core documents one, otherwise free-form. */
@@ -124,7 +122,6 @@ export abstract class Resource {
       pathParams: opts.pathParams,
       query: opts.query,
       idempotencyKey: opts.idempotencyKey,
-      preferPayoutKey: opts.preferPayoutKey,
       signal: opts.signal,
       timeoutMs: opts.timeoutMs,
       deadlineMs: opts.deadlineMs,

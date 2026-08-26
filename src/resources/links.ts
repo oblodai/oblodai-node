@@ -26,7 +26,7 @@ export type CreatePayoutLinkParams = RequestBodies["POST /v1/payout/link"];
 export type PayoutLinkBatchParams = RequestBodies["POST /v1/payout/link/batch"];
 export type ClaimParams = RequestBodies["POST /v1/claim/{token}"];
 
-/** Payout links (cheques): funds reserved now, claimed later by whoever holds the token. Payout key. */
+/** Payout links (cheques): funds reserved now, claimed later by whoever holds the token. */
 export class PayoutLinks extends Resource {
   /**
    * `POST /v1/payout/link` — reserve funds and mint a claim token (`claim_token`/`claim_url` are
@@ -35,8 +35,7 @@ export class PayoutLinks extends Resource {
    *
    * Codes worth branching on: `payout_link.disabled`, `payout.insufficient_funds` (retryable),
    * `payout.funds_maturing` (retryable), `payout.bad_amount`, `payout.bad_address`,
-   * `payout.reference_collision` (that `reference` already minted a different link),
-   * `merchant.wrong_key_kind`.
+   * `payout.reference_collision` (that `reference` already minted a different link).
    */
   async create(params: CreatePayoutLinkParams, opts?: RequestOptions): Promise<PayoutLink> {
     const link = await this.call<PayoutLink>("POST /v1/payout/link", params, opts);
@@ -77,7 +76,7 @@ export class PayoutLinks extends Resource {
    * `reference` is required on every item.
    *
    * Call-level codes worth branching on: `payout.batch_too_large` (>500), `payout.empty_batch`,
-   * `payout_link.disabled`, `payout.insufficient_funds` (retryable), `merchant.wrong_key_kind`.
+   * `payout_link.disabled`, `payout.insufficient_funds` (retryable).
    * Per-element failures arrive as `items[].error_code` with the vocabulary of `create`.
    */
   async batch(
@@ -133,7 +132,7 @@ export class PayoutLinks extends Resource {
 export type CreatePaymentLinkParams = RequestBodies["POST /v1/payment/link"];
 export type PaymentLinkCheckoutParams = RequestBodies["POST /v1/link/{id}/checkout"];
 
-/** Reusable payment links (tip jars, price tags): each checkout spawns an invoice. Payment key. */
+/** Reusable payment links (tip jars, price tags): each checkout spawns an invoice. */
 export class PaymentLinks extends Resource {
   /**
    * `POST /v1/payment/link` — a reusable link; each checkout spawns its own invoice.

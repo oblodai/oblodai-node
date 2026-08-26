@@ -11,7 +11,7 @@ import { Resource, type RequestOptions } from "./base.js";
 
 /** Developer sandbox (`test_` keys only): fake money, simulated deposits, webhook inspector. */
 export class Sandbox extends Resource {
-  /** `POST /v1/sandbox/faucet` — credit test funds. Payout key. */
+  /** `POST /v1/sandbox/faucet` — credit test funds. */
   faucet(
     params: RequestBodies["POST /v1/sandbox/faucet"],
     opts?: RequestOptions,
@@ -44,7 +44,7 @@ export class Sandbox extends Resource {
     );
   }
 
-  /** `POST /v1/sandbox/reset` — cancel open invoices and zero balances. Payout key. */
+  /** `POST /v1/sandbox/reset` — cancel open invoices and zero balances. */
   reset(opts?: RequestOptions): Promise<SandboxReset> {
     return this.call<SandboxReset>("POST /v1/sandbox/reset", undefined, opts);
   }

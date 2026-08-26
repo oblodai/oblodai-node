@@ -35,6 +35,21 @@ function isSafe(r) {
   return r.safe;
 }
 
+// The whole auth vocabulary: `public` is unsigned, `key` is signed with the merchant's one API key,
+// `onboard` carries the gateway's admin token. Anything else — including the pre-merge `payment` /
+// `payout` / `any` kinds — is an export the SDK must refuse rather than silently mis-sign.
+const AUTH_KINDS = new Set(["public", "key", "onboard"]);
+function authOf(r) {
+  if (!AUTH_KINDS.has(r.auth)) {
+    throw new Error(
+      `route ${r.method} ${r.path} declares auth "${r.auth}" in contract/contract.json — ` +
+        `the SDK knows only ${[...AUTH_KINDS].map((a) => `"${a}"`).join(", ")}; re-export the ` +
+        `contract from a core on the single-API-key model`,
+    );
+  }
+  return r.auth;
+}
+
 // --- routes.ts -------------------------------------------------------------------------------
 const routes = contract.routes
   .filter((r) => !/^\/(healthz|readyz|docs|openapi\.json|internal)/.test(r.path))
@@ -50,7 +65,7 @@ for (const r of routes) {
   const fields = [
     `method: "${r.method}"`,
     `path: "${r.path}"`,
-    `auth: "${r.auth}"`,
+    `auth: "${authOf(r)}"`,
     `idempotent: ${r.idempotent}`,
     `safe: ${isSafe(r)}`,
     `bare: ${r.bare}`,

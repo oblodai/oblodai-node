@@ -7,14 +7,13 @@ shipped in `contract/contract.json` (also importable as `@oblodai-npm/sdk/contra
 
 - Amounts are decimal **strings** (`Money`): `amount: "25"`, never `25`. Do not `parseFloat`; use
   `addAmounts` / `compareAmounts` from the package.
-- Every method's **last** argument is `{ idempotencyKey?, signal?, timeoutMs?, deadlineMs?, preferPayoutKey? }`.
+- Every method's **last** argument is `{ idempotencyKey?, signal?, timeoutMs?, deadlineMs? }`.
 - Amount helpers refuse anything that is not `-?digits[.digits]` (≤ 64 chars) with
   `ConfigError` / `sdk.bad_amount`. Order amounts with `compareAmounts`, never with `<` or `sort()`.
-- Two key kinds. The **payout key** is required for: `payouts.*`, `refunds.*`, `payoutLinks.*`,
-  `transfers.*`, `splits.*`, `wallets.refundBlockedDeposit`, `settings.*AutoWithdraw`,
-  `settings.*ApiAllowlist`, `webhooks.rotateSecret`, `webhooks.test("payout")`, `sandbox.faucet`,
-  `sandbox.reset`. Configure it with `payoutPublicId`/`payoutSecret` (or `OBLODAI_PAYOUT_*`); a wrong
-  kind is a 403 `merchant.wrong_key_kind`.
+- **One API key.** `publicId` + `secret` (or `OBLODAI_PUBLIC_ID` / `OBLODAI_SECRET`) sign every
+  signed route — money in and money out alike. There is no payout credential and no per-call key
+  choice. `ROUTES[key].auth` is `"key"` (signed), `"public"` (no credentials) or `"onboard"`
+  (`adminToken`, the two `merchants.*` routes only).
 - List methods return a `PagePromise`: `await` = one page (`{ items, paginate }`), `for await` = every
   item, `.all(max)` = array. It is a real Promise (`then/catch/finally`) and requests nothing until consumed.
 - Idempotency keys are generated automatically on create routes and reused across retries. Passing
@@ -54,8 +53,9 @@ failure). Every one is exported from the package root. `JSON.stringify(err)` kee
 drops the raw body.
 
 Codes worth handling: `payout.insufficient_funds` (retryable), `payout.funds_maturing` (retryable),
-`idempotency.key_reused`, `invoice.not_payable`, `payment.not_found`, `merchant.wrong_key_kind`,
-`merchant.bad_signature`, `request.rate_limited`. Full list: `ERROR_CODES`.
+`idempotency.key_reused`, `invoice.not_payable`, `payment.not_found`, `merchant.bad_signature`,
+`request.rate_limited`. Full list: `ERROR_CODES`. (`merchant.wrong_key_kind` is retired: it can only
+reach a merchant still holding a pre-merge `oblodai_pk_`/`oblodai_wk_` pair.)
 
 ## Statuses
 
@@ -84,11 +84,10 @@ Verify over the **raw** bytes. `verifyWebhookDelivery(...).isTest` is true for r
 ## Machine-readable surface
 
 `ROUTES` (107 routes: method, path, auth, idempotent, safe, bare, list), `RequestBodies` (typed
-bodies per route), `ERROR_CODES` (471), `NETWORKS`, `PAYMENT_STATUSES`, `PAYOUT_STATUSES`,
+bodies per route), `ERROR_CODES` (469), `NETWORKS`, `PAYMENT_STATUSES`, `PAYOUT_STATUSES`,
 `EVENT_TYPES`, `CONTRACT_CORE_COMMIT`/`CONTRACT_HASH`, and `contract/` in the repository (schemas,
 golden response bodies per route, error samples, signed webhook samples). The published package
 carries `contract.json` and `descriptions.en.json` only.
 
-Environment: `OBLODAI_PUBLIC_ID`, `OBLODAI_SECRET`, `OBLODAI_PAYOUT_PUBLIC_ID`,
-`OBLODAI_PAYOUT_SECRET`, `OBLODAI_BASE_URL`, `OBLODAI_ADMIN_TOKEN`, `OBLODAI_ALLOW_INSECURE`,
-`OBLODAI_LOG`.
+Environment (all six): `OBLODAI_PUBLIC_ID`, `OBLODAI_SECRET`, `OBLODAI_ADMIN_TOKEN`,
+`OBLODAI_BASE_URL`, `OBLODAI_LOG`, `OBLODAI_ALLOW_INSECURE`.

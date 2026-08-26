@@ -1,10 +1,8 @@
 // Validate first (free, no side effects), then create with your own idempotency key.
 import { Oblodai, OblodaiError } from "@oblodai-npm/sdk";
 
-const oblodai = new Oblodai({
-  publicId: process.env.OBLODAI_PAYOUT_PUBLIC_ID,
-  secret: process.env.OBLODAI_PAYOUT_SECRET,
-});
+// The same API key that takes payments sends payouts — OBLODAI_PUBLIC_ID / OBLODAI_SECRET.
+const oblodai = new Oblodai();
 const params = {
   amount: "10",
   currency: "USDT",

@@ -80,7 +80,7 @@ export class Settings extends Resource {
     return this.call<PaymentFeeConfig>("POST /v1/payment/fee-config/set", params, opts);
   }
 
-  /** `POST /v1/auto-withdraw/list`. Payout key. */
+  /** `POST /v1/auto-withdraw/list`. */
   async listAutoWithdraw(opts?: RequestOptions): Promise<AutoWithdrawRule[]> {
     return (await this.plainList<AutoWithdrawRule>("POST /v1/auto-withdraw/list", undefined, opts))
       .items;
@@ -100,7 +100,7 @@ export class Settings extends Resource {
     ).items;
   }
 
-  /** `POST /v1/api-allowlist/list` — source IPs allowed to use the API keys. Payout key. */
+  /** `POST /v1/api-allowlist/list` — source IPs allowed to use the API key. */
   listApiAllowlist(opts?: RequestOptions): Promise<ApiAllowlist> {
     return this.call<ApiAllowlist>("POST /v1/api-allowlist/list", undefined, opts);
   }

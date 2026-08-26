@@ -19,7 +19,7 @@ export type PaymentHistoryParams = Omit<RequestBodies["POST /v1/payment/history"
 export type SelectPaymentMethodParams = RequestBodies["POST /v1/pay/{id}/select"];
 export type PaymentBatchParams = RequestBodies["POST /v1/payment/batch"];
 
-/** Invoices: create, look up, cancel, list, and the payer-facing checkout endpoints. Payment key. */
+/** Invoices: create, look up, cancel, list, and the payer-facing checkout endpoints. */
 export class Payments extends Resource {
   /**
    * `POST /v1/payment` — create an invoice. Idempotent by `order_id` and by Idempotency-Key.

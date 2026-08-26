@@ -5,7 +5,7 @@ import { Resource, type RequestOptions } from "./base.js";
 
 export type CreateSplitRuleParams = RequestBodies["POST /v1/split/rule"];
 
-/** Revenue splits: a percentage of every payment forwarded to a partner. Payout key. */
+/** Revenue splits: a percentage of every payment forwarded to a partner. */
 export class Splits extends Resource {
   /** `POST /v1/split/rule` — to an external address (`address`+`network`) or a platform merchant (`merchant_id`). */
   createRule(params: CreateSplitRuleParams, opts?: RequestOptions): Promise<SplitRule> {

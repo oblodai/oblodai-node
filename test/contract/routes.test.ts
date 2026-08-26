@@ -199,7 +199,14 @@ describe("route registry", () => {
     expect(specOf({ ...ROUTES["POST /v1/payout"], idempotent: false })).not.toEqual(
       specOf(declared),
     );
-    expect(specOf({ ...ROUTES["POST /v1/payout"], auth: "payment" })).not.toEqual(specOf(declared));
+    expect(specOf({ ...ROUTES["POST /v1/payout"], auth: "public" })).not.toEqual(specOf(declared));
+  });
+
+  it("the core declares only the three auth gates the SDK knows", () => {
+    const KNOWN = new Set(["public", "key", "onboard"]);
+    for (const r of contract.routes) expect(KNOWN, `${r.method} ${r.path}`).toContain(r.auth);
+    for (const key of Object.keys(ROUTES) as RouteKey[])
+      expect(KNOWN, key).toContain(ROUTES[key].auth);
   });
 
   it("no route is left unclassified for retry safety", () => {
@@ -221,8 +228,6 @@ describe("route registry", () => {
       const ob = new Oblodai({
         publicId: "pk",
         secret: "s",
-        payoutPublicId: "wk",
-        payoutSecret: "s2",
         adminToken: "adm",
         baseUrl: "https://api.test",
         fetch,
@@ -234,11 +239,20 @@ describe("route registry", () => {
       const url = new URL(call.url);
       const pattern = new RegExp("^" + spec.path.replace(/\{[a-z]+\}/g, "[^/]+") + "$");
       expect(url.pathname).toMatch(pattern);
-      if (spec.auth === "public") expect(call.headers["x-signature"]).toBeUndefined();
-      else if (spec.auth === "onboard") {
+      // One key, three gates: `public` carries no signature at all, `onboard` carries the admin
+      // token instead of one, and every other route is signed with the merchant's single API key.
+      if (spec.auth === "public") {
+        expect(call.headers["x-signature"]).toBeUndefined();
+        expect(call.headers["x-admin-token"]).toBeUndefined();
+      } else if (spec.auth === "onboard") {
         expect(call.headers["x-signature"]).toBeUndefined();
         expect(call.headers["x-admin-token"]).toBe("adm");
-      } else expect(call.headers["x-public-id"]).toBe(spec.auth === "payout" ? "wk" : "pk");
+      } else {
+        expect(spec.auth).toBe("key");
+        expect(call.headers["x-public-id"]).toBe("pk");
+        expect(call.headers["x-signature"]).toBeDefined();
+        expect(call.headers["x-admin-token"]).toBeUndefined();
+      }
       if (spec.idempotent) expect(call.headers["idempotency-key"]).toBeDefined();
       else expect(call.headers["idempotency-key"]).toBeUndefined();
     });

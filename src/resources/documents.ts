@@ -18,7 +18,7 @@ export interface PeriodQuery extends FormatQuery {
 
 /**
  * Generated PDF/CSV documents. Every method returns the bytes (`FileResult`); large ranges go
- * through asynchronous jobs (`createJob` → `jobInfo` → `jobFile`). Payment key.
+ * through asynchronous jobs (`createJob` → `jobInfo` → `jobFile`).
  */
 export class Documents extends Resource {
   /** `POST /v1/documents/jobs` — queue a large report; poll `jobInfo`, then `jobFile`. */
