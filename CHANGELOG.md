@@ -68,7 +68,7 @@ Migration notes: [MIGRATION-1.3.md](MIGRATION-1.3.md).
   instead of throwing when the sequence is missing or not an integer.
 - **Secrets never print.** The client, its transport, the resolved credentials and every
   secret-bearing result (`WebhookEndpoint.secret`, `WebhookSecretRotated.secret`,
-  `ApiKeyPair.secret`, `PayoutLink.claim_token` / `passcode`) render as `[redacted]` in
+  `ApiKeyPair.secret`, `PayoutLink.claim_token` / `claim_url` / `passcode`) render as `[redacted]` in
   `JSON.stringify` and in `console.log` / `util.inspect` at any depth, while still reading normally
   as properties. A logger supplied through `logger:` is wrapped, so it receives fields that were
   redacted before it saw them.
