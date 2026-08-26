@@ -6,10 +6,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The engines floor and the current LTS; the range between them is ABI-identical for this SDK.
+        node-version: ["18.17", "22"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: ${{ matrix.node-version }}
       - run: npm install --no-audit --no-fund
       - run: npm run ci
