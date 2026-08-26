@@ -81,5 +81,11 @@ export * from "./helpers/status.js";
 export * from "./helpers/money.js";
 
 // Webhook verification is also available from the "@oblodai-npm/sdk/webhooks" subpath.
-export { verifyWebhook, verifyWebhookDelivery, parseWebhook, isStaleEvent } from "./webhooks.js";
+export {
+  verifyWebhook,
+  verifyWebhookDelivery,
+  parseWebhook,
+  isStaleEvent,
+  isTestEvent,
+} from "./webhooks.js";
 export type { VerifyWebhookOptions, WebhookHeaders, WebhookDeliveryInfo } from "./webhooks.js";

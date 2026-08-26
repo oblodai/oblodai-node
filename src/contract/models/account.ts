@@ -48,6 +48,8 @@ export interface Wallet {
   /** Hosted page showing the address and QR. */
   url: string;
   document_url: string;
+  /** True once `wallets.block` was called: new deposits are quarantined instead of credited. */
+  blocked: boolean;
   /** XRP destination tag / TON and Stellar memo, when the network needs one. */
   destination_tag?: string;
   memo?: string;
@@ -56,7 +58,7 @@ export interface Wallet {
 }
 export const WalletKeys = defineKeys<
   Omit<Wallet, "destination_tag" | "memo" | "address_xaddress" | "address_muxed">
->()("uuid", "address", "network", "currency", "order_id", "url", "document_url");
+>()("uuid", "address", "network", "currency", "order_id", "url", "document_url", "blocked");
 
 /** `/v1/wallet/block`. */
 export interface WalletBlocked {

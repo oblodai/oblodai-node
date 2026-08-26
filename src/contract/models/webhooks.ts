@@ -79,6 +79,12 @@ interface EventBase {
   /** Global, increasing (gaps are normal); a lower sequence arriving later is stale. */
   sequence: number;
   txid: string;
+  /**
+   * Present and true ONLY on rehearsal deliveries (`webhooks.test`, sandbox). The body is signed
+   * like a live one, so a handler must check this flag (or `X-Webhook-Test`) and never act on a
+   * test event as if money moved.
+   */
+  test?: boolean;
 }
 
 /** `invoice.<status>` — an invoice changed state. */
@@ -96,7 +102,7 @@ export interface PaymentEvent extends EventBase {
   payer_address_is_refundable: boolean;
   additional_data: string;
 }
-export const PaymentEventKeys = defineKeys<PaymentEvent>()(
+export const PaymentEventKeys = defineKeys<Omit<PaymentEvent, "test">>()(
   "type",
   "uuid",
   "order_id",
@@ -120,11 +126,11 @@ export const PaymentEventKeys = defineKeys<PaymentEvent>()(
 export interface PayoutEvent
   extends
     Omit<Payout, "error" | "error_code" | "wallet_uuid">,
-    Pick<EventBase, "event_at" | "sequence"> {
+    Pick<EventBase, "event_at" | "sequence" | "test"> {
   type: "payout";
   status: PayoutStatus;
 }
-export const PayoutEventKeys = defineKeys<PayoutEvent>()(
+export const PayoutEventKeys = defineKeys<Omit<PayoutEvent, "test">>()(
   "type",
   "uuid",
   "order_id",
@@ -161,7 +167,7 @@ export interface WalletEvent extends EventBase {
   payer_currency: string;
   payment_amount: Money;
 }
-export const WalletEventKeys = defineKeys<WalletEvent>()(
+export const WalletEventKeys = defineKeys<Omit<WalletEvent, "test">>()(
   "type",
   "uuid",
   "order_id",

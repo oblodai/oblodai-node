@@ -146,7 +146,7 @@ app.post("/oblodai/webhook", express.raw({ type: "*/*" }), (req, res) => {
 });
 ```
 
-Verify over the **raw** body. `id` (`X-Webhook-Id`) is stable across retries — use it to deduplicate;
+Verify over the **raw** body. Rehearsal deliveries (`webhooks.test`, sandbox) are signed like live ones and carry `test: true` (and `X-Webhook-Test: true`) — check `isTest` and never act on them as if money moved. `id` (`X-Webhook-Id`) is stable across retries — use it to deduplicate;
 `event.sequence` orders events (`isStaleEvent`). After `webhooks.rotateSecret` pass `previousSecret`
 for at least 26 hours.
 
