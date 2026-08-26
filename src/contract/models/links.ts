@@ -29,6 +29,7 @@ export interface PayoutLink {
   created_at: Timestamp;
   /** Present on create and batch-create only — the secret the recipient claims with. */
   claim_token?: string;
+  /** The claim page built around `claim_token`: it embeds the token, so it is a secret too. */
   claim_url?: string;
   batch_id?: string;
   /** Set once claimed: the payout that paid the recipient. */

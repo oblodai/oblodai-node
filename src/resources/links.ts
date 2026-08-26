@@ -16,9 +16,11 @@ import { Resource, type FileResult, type RequestOptions, type Ref } from "./base
 
 /**
  * A payout link is a bearer instrument: whoever reads `claim_token` (and `passcode`) can take the
- * money. Both are returned exactly once, so they must not be the thing a debug log copies.
+ * money. They are returned exactly once, so they must not be the thing a debug log copies.
+ * `claim_url` is the claim page built around the token and therefore carries it verbatim — it is a
+ * secret in exactly the same way, and is redacted with them.
  */
-const PAYOUT_LINK_SECRET_FIELDS = ["claim_token", "passcode"] as const;
+const PAYOUT_LINK_SECRET_FIELDS = ["claim_token", "claim_url", "passcode"] as const;
 
 export type CreatePayoutLinkParams = RequestBodies["POST /v1/payout/link"];
 export type PayoutLinkBatchParams = RequestBodies["POST /v1/payout/link/batch"];

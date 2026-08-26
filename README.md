@@ -189,7 +189,7 @@ wrong. Use `compareAmounts`. An input that is not `-?digits[.digits]` (≤ 64 ch
 ### Secrets never print
 
 The client, its transport, the resolved credentials and every secret-bearing result — a webhook
-`secret`, a freshly minted key pair, a payout link's `claim_token`/`passcode` — render as
+`secret`, a freshly minted key pair, a payout link's `claim_token`/`claim_url`/`passcode` — render as
 `[redacted]` in `JSON.stringify` and `console.log`/`util.inspect`, at any depth. The values are still
 readable as properties (`endpoint.secret` works); only the automatic renderings are scrubbed. A
 logger you inject through `logger:` receives fields that were redacted before they reached it.

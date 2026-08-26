@@ -91,12 +91,12 @@ signed merchant route.
 The client, its transport, the resolved credentials and every secret-bearing result render as
 `[redacted]`:
 
-| object                                  | redacted field(s)            |
-| --------------------------------------- | ---------------------------- |
-| `Oblodai` / `Transport` / `Credentials` | the API secrets, admin token |
-| `webhooks.register` / `rotateSecret`    | `secret`                     |
-| `merchants.create` / `createSandbox`    | `*_key.secret`               |
-| `payoutLinks.create` / `batch`          | `claim_token`, `passcode`    |
+| object                                  | redacted field(s)                      |
+| --------------------------------------- | -------------------------------------- |
+| `Oblodai` / `Transport` / `Credentials` | the API secrets, admin token           |
+| `webhooks.register` / `rotateSecret`    | `secret`                               |
+| `merchants.create` / `createSandbox`    | `*_key.secret`                         |
+| `payoutLinks.create` / `batch`          | `claim_token`, `claim_url`, `passcode` |
 
 The values still read normally as properties — `endpoint.secret`, `link.claim_token` — but they are
 gone from `JSON.stringify` and from `console.log` / `util.inspect`. **If you persisted one of these

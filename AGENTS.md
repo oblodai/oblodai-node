@@ -23,7 +23,8 @@ shipped in `contract/contract.json` (also importable as `@oblodai-npm/sdk/contra
 - Retry safety is `ROUTES[key].safe`, the core's own read-only classification from the contract. The
   SDK never infers it from a path or a verb.
 - Secrets (client, transport, credentials, `WebhookEndpoint.secret`, `WebhookSecretRotated.secret`,
-  `ApiKeyPair.secret`, `PayoutLink.claim_token`/`passcode`) read normally as properties and render as
+  `ApiKeyPair.secret`, `PayoutLink.claim_token`/`claim_url`/`passcode`) read normally as properties and
+  render as
   `[redacted]` in `JSON.stringify`, `console.log` and `util.inspect`.
 
 ## Naming

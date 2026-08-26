@@ -76,8 +76,14 @@ describe("secrets never print", () => {
     expect(rotated.previous_secret_valid_until).toBe("2026-01-01T00:00:00Z");
   });
 
-  it("keeps a payout link's claim token and passcode out of logs", async () => {
-    const link = { link_id: "l1", claim_token: "CLAIM-1", passcode: "PASS-1", amount: "1" };
+  it("keeps a payout link's claim token, claim url and passcode out of logs", async () => {
+    const link = {
+      link_id: "l1",
+      claim_token: "CLAIM-1",
+      claim_url: "https://pay.test/claim/CLAIM-1",
+      passcode: "PASS-1",
+      amount: "1",
+    };
     const { fetch } = mockFetch([
       ok(link),
       ok({ items: [{ idx: 0, ok: true, result: { ...link } }] }),
@@ -85,13 +91,19 @@ describe("secrets never print", () => {
     const ob = new Oblodai({ ...creds, fetch });
     const created = await ob.payoutLinks.create({ amount: "1", currency: "USDT", network: "tron" });
     expect(created.claim_token).toBe("CLAIM-1");
+    // The url embeds the token, so it is a secret too — readable as a property, gone from renderings.
+    expect(created.claim_url).toBe("https://pay.test/claim/CLAIM-1");
     expect(JSON.stringify(created)).not.toContain("CLAIM-1");
     expect(JSON.stringify(created)).not.toContain("PASS-1");
+    expect(JSON.parse(JSON.stringify(created)).claim_url).toBe("[redacted]");
     expect(inspect(created, { depth: 5 })).not.toContain("CLAIM-1");
+    expect(Object.keys(created)).not.toContain("claim_url");
 
     const batch = await ob.payoutLinks.batch({ items: [] });
     expect(batch.items[0]!.result!.claim_token).toBe("CLAIM-1");
+    expect(batch.items[0]!.result!.claim_url).toBe("https://pay.test/claim/CLAIM-1");
     expect(JSON.stringify(batch)).not.toContain("CLAIM-1");
+    expect(inspect(batch, { depth: 5 })).not.toContain("CLAIM-1");
   });
 
   it("keeps freshly minted merchant key secrets out of logs", async () => {
