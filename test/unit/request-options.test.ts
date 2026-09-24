@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ConfigError } from "../../src/core/errors.js";
 import { Oblodai } from "../../src/index.js";
 import { apiError, mockFetch, ok } from "../support/mock-fetch.js";
 
@@ -61,6 +62,24 @@ describe("per-call options (spec §3.2)", () => {
     );
     expect(JSON.parse(calls[0]!.body!).idempotency_key).toBe("tap-1");
     expect(calls[0]!.headers["idempotency-key"]).toBeUndefined();
+  });
+
+  it("the faucet key given twice — in the body and as the option — is refused before the network", async () => {
+    const { fetch, calls } = mockFetch([ok({}), ok({})]);
+    const ob = new Oblodai({ ...creds, fetch });
+    // A JavaScript caller (no type check) can still put the field in the body itself.
+    const own = { asset: "USDT", amount: "5", idempotency_key: "own" } as {
+      asset: string;
+      amount: string;
+    };
+    const err = await ob.sandbox.faucet(own, { idempotencyKey: "tap-2" }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConfigError);
+    expect((err as ConfigError).code).toBe("sdk.bad_idempotency_key");
+    expect((err as ConfigError).message).toContain("idempotency_key");
+    expect(calls).toHaveLength(0);
+    // The field alone is sent as given.
+    await ob.sandbox.faucet(own);
+    expect(JSON.parse(calls[0]!.body!).idempotency_key).toBe("own");
   });
 });
 
