@@ -372,7 +372,9 @@ then freshness, then the body — so the freshness window is never an oracle for
 caller. An empty `secret` is a `ConfigError`, never a verification against the empty key.
 `toleranceSec` defaults to 300 and `0` disables the freshness check.
 
-- **Deduplicate on `id`** (`X-Webhook-Id`): it is stable across the gateway's own retries.
+- **Deduplicate on `eventId`** (`X-Webhook-Event-Id`): it names the state and is the same for every
+  retry and every resend of it. `id` (`X-Webhook-Id`) names one delivery and changes on a resend
+  (`webhooks.resendPayment`, a sandbox replay) — keyed on it, a resent `invoice.paid` is processed twice.
 - **Order with `event.sequence`**: `isStaleEvent(event, lastSequence)`.
 - **Rehearsals** are signed like live ones and carry `test: true` (and `X-Webhook-Test: true`);
   `verifyWebhookDelivery(...).isTest` reports it.

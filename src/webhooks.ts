@@ -48,7 +48,8 @@ export function isKnownEvent(event: AnyWebhookEvent): event is WebhookEvent {
  *   X-Webhook-Signature: hex(HMAC-SHA256(secret, "<ts>." + rawBody))
  *   X-Webhook-Signature-Prev: same, with the previous secret — only during a rotation overlap
  *   X-Webhook-Event: invoice.<status> | payout.<status> | wallet.paid | … (`WEBHOOK_EVENTS`)
- *   X-Webhook-Id: stable per delivery (identical across retries) — use it as your idempotency key
+ *   X-Webhook-Id: the delivery — identical across its retries, but a resend is a new delivery
+ *   X-Webhook-Event-Id: the state — identical across retries AND resends of it; deduplicate on it
  *   X-Webhook-Event-Time: unix seconds when the state change committed (order events by it)
  *
  * Always verify over the raw request bytes; a re-serialized parse will not match.
@@ -78,8 +79,16 @@ export interface VerifyWebhookOptions {
 export interface WebhookDeliveryInfo {
   /** Use `isKnownEvent(event)` before switching on `type`: a newer core may send a type this release does not model. */
   event: AnyWebhookEvent;
-  /** `X-Webhook-Id` — stable across retries of the same delivery; use it as your idempotency key. */
+  /**
+   * `X-Webhook-Id` — the delivery: identical across its retries, but a resend
+   * (`webhooks.resendPayment`, a sandbox replay) is a new delivery with a new id. Not a dedup key.
+   */
   id?: string;
+  /**
+   * `X-Webhook-Event-Id` — the state the delivery carries: identical for the original, every retry
+   * and every resend of the same state, different once the state changes. Deduplicate on it.
+   */
+  eventId?: string;
   /** `X-Webhook-Event` — `invoice.<status>`, `payout.<status>`, … (every name: `WEBHOOK_EVENTS`). */
   eventType?: string;
   /** `X-Webhook-Event-Time` — unix seconds when the state change committed. */
@@ -95,6 +104,7 @@ export const HEADER_WEBHOOK_SIGNATURE = "X-Webhook-Signature";
 export const HEADER_WEBHOOK_SIGNATURE_PREV = "X-Webhook-Signature-Prev";
 export const HEADER_WEBHOOK_EVENT = "X-Webhook-Event";
 export const HEADER_WEBHOOK_ID = "X-Webhook-Id";
+export const HEADER_WEBHOOK_EVENT_ID = "X-Webhook-Event-Id";
 export const HEADER_WEBHOOK_EVENT_TIME = "X-Webhook-Event-Time";
 export const HEADER_WEBHOOK_TEST = "X-Webhook-Test";
 
@@ -109,7 +119,7 @@ export function verifyWebhook(
   return verifyWebhookDelivery(rawBody, headers, options).event;
 }
 
-/** Like `verifyWebhook`, and also returns the delivery id, event type and times from the headers. */
+/** Like `verifyWebhook`, and also returns the delivery and event ids, event type and times from the headers. */
 export function verifyWebhookDelivery(
   rawBody: string | Uint8Array,
   headers: WebhookHeaders,
@@ -183,6 +193,7 @@ export function verifyWebhookDelivery(
     event,
     isTest: isTrueHeader(headerValue(headers, HEADER_WEBHOOK_TEST)) || isTestEvent(event),
     id: headerValue(headers, HEADER_WEBHOOK_ID),
+    eventId: headerValue(headers, HEADER_WEBHOOK_EVENT_ID),
     eventType: headerValue(headers, HEADER_WEBHOOK_EVENT),
     eventTime: eventTimeRaw && /^\d+$/.test(eventTimeRaw.trim()) ? Number(eventTimeRaw) : undefined,
     sentAt: ts,

@@ -14,7 +14,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { Oblodai, OblodaiError, SignatureError, WebhookPayloadError } from "../../src/index.js";
 import { canonicalString, signRequest, signWebhook } from "../../src/core/signing.js";
-import { verifyWebhook } from "../../src/webhooks.js";
+import { isKnownEvent, verifyWebhook, verifyWebhookDelivery } from "../../src/webhooks.js";
+import { WEBHOOK_EVENTS } from "../../src/generated/events.js";
 import { conformanceDir } from "../support/backend.js";
 
 const DIR = conformanceDir();
@@ -82,6 +83,42 @@ describe.skipIf(!found)("conformance", () => {
       } else {
         expect(check.kind).toBe("request_signature");
         expect(signRequest(v.secret, input)).toBe(v.signature);
+      }
+    });
+  });
+
+  describe("webhook deliveries", () => {
+    const deliverySuite = found ? suite("webhook_delivery") : { headers: {}, checks: [] };
+    const deliveries: Json[] = found ? source(deliverySuite).vectors : [];
+    const camel = (snake: string) => snake.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+
+    it.skipIf(!found)("has a delivery of every event this release knows", () => {
+      expect(deliveries.map((d) => d.event).sort()).toEqual(
+        Object.values(WEBHOOK_EVENTS).flat().sort(),
+      );
+    });
+
+    const deliveryCases: Array<[string, Json, Json]> = deliverySuite.checks.flatMap((check: Json) =>
+      deliveries.map(
+        (d) => [`${check.name} — ${d.event} (${check.key})`, check, d] as [string, Json, Json],
+      ),
+    );
+    it.each(deliveryCases)("%s", (_, check, d) => {
+      expect(check.kind).toBe("webhook_delivery");
+      const secret = check.key === "previous" ? d.previous_secret : d.secret;
+      const delivery = verifyWebhookDelivery(d.payload, d.headers, { secret, now: () => d.ts });
+      expect(isKnownEvent(delivery.event)).toBe(true);
+      expect(delivery.event.type).toBe(d.kind);
+      expect(WEBHOOK_EVENTS[d.kind as keyof typeof WEBHOOK_EVENTS]).toContain(d.event);
+      for (const [header, field] of Object.entries(
+        deliverySuite.headers as Record<string, string>,
+      )) {
+        if (field === "") continue;
+        const value = (delivery as unknown as Record<string, unknown>)[camel(field)];
+        const want: string = d.headers[header];
+        expect(value, `${camel(field)} ≠ ${header}`).toBe(
+          typeof value === "number" ? Number(want) : want,
+        );
       }
     });
   });
