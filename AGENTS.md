@@ -71,7 +71,8 @@ const { event, id, isTest } = verifyWebhookDelivery(rawBody, req.headers, { secr
 ```
 
 Verify over the raw bytes. Order of checks: headers → HMAC (current, then `previousSecret`) →
-freshness (`toleranceSec`, default 300) → body. Deduplicate on `id`, order by `event.sequence`
+freshness (`toleranceSec`, default 300) → body. Deduplicate on `eventId` (`X-Webhook-Event-Id`,
+stable across retries and resends; `id` changes on a resend), order by `event.sequence`
 (`isStaleEvent`), skip `isTest` rehearsals, narrow with `isKnownEvent(event)` before switching on
 `event.type` (`payment | payout | wallet | conversion`). Answer 4xx to `SignatureError`, 5xx to
 `WebhookPayloadError`.
