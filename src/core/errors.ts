@@ -1,4 +1,4 @@
-import type { ErrorCode } from "../contract/enums.js";
+import type { ErrorCode } from "../generated/enums.js";
 
 /**
  * Error model. One family, `OblodaiError`, mirrors the core's error envelope:
@@ -29,7 +29,10 @@ export type SdkErrorCode =
   | "sdk.bad_path_param"
   | "sdk.bad_header"
   | "sdk.response_too_large"
-  | "sdk.bad_amount";
+  | "sdk.bad_amount"
+  | "sdk.float_amount"
+  | "sdk.bad_body"
+  | "sdk.lro_unresolved";
 
 export type AnyErrorCode =
   ErrorCode | SdkErrorCode | TransportErrorCode | WebhookErrorCode | (string & {});
@@ -83,6 +86,34 @@ export class OblodaiError extends Error {
     this.field = init.field;
     this.synthetic = init.synthetic ?? false;
     Object.defineProperty(this, "raw", { value: init.raw, enumerable: false, writable: false });
+    // An uncaught error prints its stack, whose first line is `name: message` — make it the same
+    // line a log shows for `String(err)`, so the code and request id are never lost.
+    if (typeof this.stack === "string") {
+      const head = `${this.name}: ${this.message}`;
+      if (this.stack.startsWith(head)) {
+        this.stack = `${this.name}: ${this.toString()}${this.stack.slice(head.length)}`;
+      }
+    }
+  }
+
+  /** Attach the id of the call that failed when the answer itself carried none. */
+  withRequestId(requestId: string | undefined): this {
+    if (this.requestId === undefined && requestId) {
+      (this as { requestId?: string }).requestId = requestId;
+      if (typeof this.stack === "string") {
+        const head = `${this.name}: [${this.code}] ${this.message}`;
+        if (this.stack.startsWith(head) && !this.stack.startsWith(`${head} (request_id=`)) {
+          this.stack = `${this.name}: ${this.toString()}${this.stack.slice(head.length)}`;
+        }
+      }
+    }
+    return this;
+  }
+
+  /** `[code] message (request_id=…)`; the suffix only when there is an id. */
+  override toString(): string {
+    const text = `[${this.code}] ${this.message}`;
+    return this.requestId ? `${text} (request_id=${this.requestId})` : text;
   }
 
   /** Code family (`payout` in `payout.insufficient_funds`). */

@@ -22,7 +22,7 @@ describe("transport", () => {
       ok({ items: [], paginate: { total: 0, per_page: 10, offset: 0, has_pages: false } }),
     ]);
     const ob = new Oblodai({ ...creds, fetch });
-    await ob.sandbox.webhooks({ limit: 10, offset: 0 });
+    await ob.sandbox.listWebhooks({ limit: 10, offset: 0 });
     expect(calls[0]!.url).toBe("https://api.test/v1/sandbox/webhooks?limit=10&offset=0");
     expect(calls[0]!.body).toBeUndefined();
     expect(calls[0]!.headers["x-public-id"]).toBe("pk_test_1");
@@ -51,7 +51,7 @@ describe("transport", () => {
       { amount: "1", currency: "USDT", address: "T", order_id: "o" },
       { idempotencyKey: "my-key-1" },
     );
-    await ob.payments.info({ uuid: "u" });
+    await ob.payments.getInfo({ uuid: "u" });
     expect(calls[0]!.headers["idempotency-key"]).toBe("my-key-1");
     expect(calls[1]!.headers["idempotency-key"]).toBeUndefined();
   });
@@ -59,7 +59,7 @@ describe("transport", () => {
   it("does not retry a non-retryable error even on a 5xx", async () => {
     const { fetch, calls } = mockFetch([apiError(500, { code: "internal", retryable: false })]);
     const ob = new Oblodai({ ...creds, fetch });
-    await expect(ob.account.balance()).rejects.toMatchObject({
+    await expect(ob.account.getBalance()).rejects.toMatchObject({
       code: "internal",
       httpStatus: 500,
       retryable: false,
@@ -78,7 +78,7 @@ describe("transport", () => {
       apiError(429, { code: "request.rate_limited", retryable: true, retry_after: 0 }),
     ]);
     const ob = new Oblodai({ ...creds, fetch });
-    const err = await ob.account.balance().catch((e) => e);
+    const err = await ob.account.getBalance().catch((e) => e);
     expect(err).toBeInstanceOf(RateLimitError);
     expect(err.retryAfter).toBe(0);
     expect(calls).toHaveLength(3); // 1 + maxRetries(2)
@@ -87,7 +87,7 @@ describe("transport", () => {
   it("retries a transport failure only when the request is safe to repeat", async () => {
     const boom = new TypeError("fetch failed");
     let f = mockFetch([{ throws: boom }, ok({ balance: { merchant: [] } })]);
-    await new Oblodai({ ...creds, fetch: f.fetch }).account.balance(); // read route → retried
+    await new Oblodai({ ...creds, fetch: f.fetch }).account.getBalance(); // read route → retried
     expect(f.calls).toHaveLength(2);
 
     f = mockFetch([{ throws: boom }, ok({})]);
@@ -127,7 +127,7 @@ describe("transport", () => {
       requestId: "rq-1",
       family: "payment",
     });
-    const e2 = await ob.account.balance().catch((e) => e);
+    const e2 = await ob.account.getBalance().catch((e) => e);
     expect(e2).toBeInstanceOf(AuthenticationError);
     const e3 = await ob.payments.create({ amount: "1", currency: "USDT" }).catch((e) => e);
     expect(e3).toBeInstanceOf(IdempotencyConflictError);
@@ -144,7 +144,7 @@ describe("transport", () => {
       ok({ balance: { merchant: [] } }),
     ]);
     const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
-    await ob.account.balance();
+    await ob.account.getBalance();
     expect(calls).toHaveLength(2);
     const ts = Number(calls[1]!.headers["x-timestamp"]);
     expect(Math.abs(ts - serverNow)).toBeLessThan(5);
@@ -152,8 +152,8 @@ describe("transport", () => {
 
   it("times out and reports transport.timeout", async () => {
     const { fetch } = mockFetch([{ delayMs: 200, body: ok({}).body }]);
-    const ob = new Oblodai({ ...creds, fetch, timeoutMs: 20, retry: { maxRetries: 0 } });
-    const err = await ob.account.balance().catch((e) => e);
+    const ob = new Oblodai({ ...creds, fetch, timeout: 0.02, retry: { maxRetries: 0 } });
+    const err = await ob.account.getBalance().catch((e) => e);
     expect(err).toBeInstanceOf(TransportError);
     expect(err.code).toBe("transport.timeout");
   });
@@ -171,7 +171,9 @@ describe("transport", () => {
   it("refuses a public route call with no credentials only when the route needs them", async () => {
     const { fetch } = mockFetch([ok({ currencies: [], pricing_currencies: [] })]);
     const ob = new Oblodai({ baseUrl: "https://api.test", fetch });
-    await expect(ob.catalog.currencies()).resolves.toBeTruthy();
-    await expect(ob.account.balance()).rejects.toMatchObject({ code: "sdk.missing_credentials" });
+    await expect(ob.checkout.listCurrencies()).resolves.toBeTruthy();
+    await expect(ob.account.getBalance()).rejects.toMatchObject({
+      code: "sdk.missing_credentials",
+    });
   });
 });

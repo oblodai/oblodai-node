@@ -1,4 +1,4 @@
-import type { PaymentStatus, PayoutStatus } from "../contract/enums.js";
+import type { PaymentStatus, PayoutStatus } from "../generated/enums.js";
 
 /** Invoice statuses after which nothing else can happen. */
 export const FINAL_PAYMENT_STATUSES: readonly PaymentStatus[] = [
@@ -20,7 +20,7 @@ export function isPaymentPaid(status: PaymentStatus | string): boolean {
   return status === "paid" || status === "paid_over";
 }
 
-/** The invoice is waiting for a merchant decision (underpaid): call `refunds.resolve`. */
+/** The invoice is waiting for a merchant decision (underpaid): call `payments.resolve`. */
 export function isPaymentUnderpaid(status: PaymentStatus | string): boolean {
   return status === "wrong_amount";
 }

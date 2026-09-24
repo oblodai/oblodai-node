@@ -19,10 +19,12 @@ describe("paths that could double-spend", () => {
   it("rejects a caller idempotency key on a route the core does not deduplicate", async () => {
     const { fetch, calls } = mockFetch([ok({})]);
     const ob = new Oblodai({ ...creds, fetch });
-    await expect(ob.payouts.approve("p1", { idempotencyKey: "k1" })).rejects.toBeInstanceOf(
-      ConfigError,
-    );
-    await expect(ob.payouts.approve("p1", { idempotencyKey: "k1" })).rejects.toMatchObject({
+    await expect(
+      ob.payouts.approve({ uuid: "p1" }, { idempotencyKey: "k1" }),
+    ).rejects.toBeInstanceOf(ConfigError);
+    await expect(
+      ob.payouts.approve({ uuid: "p1" }, { idempotencyKey: "k1" }),
+    ).rejects.toMatchObject({
       code: "sdk.idempotency_unsupported",
     });
     expect(calls).toHaveLength(0);
@@ -30,7 +32,9 @@ describe("paths that could double-spend", () => {
 
   it("never re-sends an unsafe write after a proxy 503 without an envelope", async () => {
     const { fetch, calls } = mockFetch([html(503), ok({})]);
-    const err = await new Oblodai({ ...creds, fetch }).payouts.approve("p1").catch((e) => e);
+    const err = await new Oblodai({ ...creds, fetch }).payouts
+      .approve({ uuid: "p1" })
+      .catch((e) => e);
     expect(err).toMatchObject({ httpStatus: 503, synthetic: true, retryable: true });
     expect(calls).toHaveLength(1);
   });
@@ -41,12 +45,12 @@ describe("paths that could double-spend", () => {
       html(504, { "retry-after": "0" }),
       ok({ balance: { merchant: [] } }),
     ]);
-    await new Oblodai({ ...creds, fetch }).account.balance();
+    await new Oblodai({ ...creds, fetch }).account.getBalance();
     expect(calls).toHaveLength(3);
 
     const one = mockFetch([html(429, { "retry-after": "120" })]);
     const err = await new Oblodai({ ...creds, fetch: one.fetch, retry: { maxRetries: 0 } }).account
-      .balance()
+      .getBalance()
       .catch((e) => e);
     expect(err.retryAfter).toBe(120);
   });
@@ -56,22 +60,22 @@ describe("paths that could double-spend", () => {
       apiError(409, { code: "payout.funds_maturing", retryable: true, retry_after: 0 }),
       ok({ uuid: "p" }),
     ]);
-    await new Oblodai({ ...creds, fetch }).payouts.approve("p1");
+    await new Oblodai({ ...creds, fetch }).payouts.approve({ uuid: "p1" });
     expect(calls).toHaveLength(2);
   });
 });
 
-describe("PagePromise", () => {
+describe("Page", () => {
   it("requests nothing until consumed and exposes catch/finally", async () => {
     const { fetch, calls } = mockFetch([
       apiError(404, { code: "payment.not_found", retryable: false }),
     ]);
     const ob = new Oblodai({ ...creds, fetch });
-    const p = ob.payments.history();
+    const p = ob.payments.listHistory();
     expect(calls).toHaveLength(0);
     expect(typeof p.catch).toBe("function");
     expect(typeof p.finally).toBe("function");
-    const err = await p.catch((e) => e);
+    const err = (await p.catch((e: unknown) => e)) as { code: string };
     expect(err.code).toBe("payment.not_found");
     expect(calls).toHaveLength(1);
   });
@@ -82,7 +86,7 @@ describe("PagePromise", () => {
     ]);
     const ob = new Oblodai({ ...creds, fetch });
     // Silently dropping it would leave the caller believing a re-send is deduplicated when it is not.
-    expect(() => ob.payouts.history({}, { idempotencyKey: "k" })).toThrow(
+    expect(() => ob.payouts.listHistory({}, { idempotencyKey: "k" })).toThrow(
       /does not deduplicate by Idempotency-Key/,
     );
     expect(calls).toHaveLength(0);
@@ -97,7 +101,7 @@ describe("clock skew", () => {
       apiError(401, { code: "auth.ip_not_allowed", retryable: false }, dateFar()),
     ]);
     const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
-    await expect(ob.account.balance()).rejects.toMatchObject({ code: "auth.ip_not_allowed" });
+    await expect(ob.account.getBalance()).rejects.toMatchObject({ code: "auth.ip_not_allowed" });
     expect(calls).toHaveLength(1);
   });
 
@@ -108,8 +112,8 @@ describe("clock skew", () => {
       ok({ balance: { merchant: [] } }),
     ]);
     const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
-    await expect(ob.account.balance()).rejects.toMatchObject({ code: "merchant.bad_signature" });
-    await ob.account.balance();
+    await expect(ob.account.getBalance()).rejects.toMatchObject({ code: "merchant.bad_signature" });
+    await ob.account.getBalance();
     const ts = Number(calls[2]!.headers["x-timestamp"]);
     expect(Math.abs(ts - Math.floor(Date.now() / 1000))).toBeLessThan(5);
   });
@@ -118,7 +122,11 @@ describe("clock skew", () => {
 describe("request construction", () => {
   it("keeps a path prefix on baseUrl and signs over the full path", async () => {
     const { fetch, calls } = mockFetch([ok({ balance: { merchant: [] } })]);
-    await new Oblodai({ ...creds, baseUrl: "https://gw.corp/oblodai/", fetch }).account.balance();
+    await new Oblodai({
+      ...creds,
+      baseUrl: "https://gw.corp/oblodai/",
+      fetch,
+    }).account.getBalance();
     expect(calls[0]!.url).toBe("https://gw.corp/oblodai/v1/balance");
   });
 
@@ -128,17 +136,17 @@ describe("request construction", () => {
       ...creds,
       fetch,
       headers: { "x-signature": "zz", "X-Trace": "t1" },
-    }).account.balance();
+    }).account.getBalance();
     expect(calls[0]!.headers["x-signature"]).toMatch(/^[0-9a-f]{64}$/);
     expect(calls[0]!.headers["x-trace"]).toBe("t1");
   });
 
   it("refuses path parameters that would rewrite the URL", async () => {
     const ob = new Oblodai({ ...creds, fetch: mockFetch([]).fetch });
-    await expect(ob.payments.publicView("..")).rejects.toMatchObject({
+    await expect(ob.checkout.get("..")).rejects.toMatchObject({
       code: "sdk.bad_path_param",
     });
-    await expect(ob.payments.publicView("a/b")).rejects.toMatchObject({
+    await expect(ob.checkout.get("a/b")).rejects.toMatchObject({
       code: "sdk.bad_path_param",
     });
   });
@@ -147,7 +155,7 @@ describe("request construction", () => {
     const { fetch, calls } = mockFetch([
       { status: 200, body: "%PDF", headers: { "content-type": "application/pdf" } },
     ]);
-    await new Oblodai({ ...creds, fetch }).documents.batchReport("b-1", { format: "csv" });
+    await new Oblodai({ ...creds, fetch }).documents.getBatch({ uuid: "b-1", format: "csv" });
     expect(new URL(calls[0]!.url).searchParams.get("uuid")).toBe("b-1");
   });
 });
@@ -160,7 +168,7 @@ describe("abort, deadline, redirects, serialization", () => {
     ]);
     const ac = new AbortController();
     const ob = new Oblodai({ ...creds, fetch, retry: { maxRetryAfterMs: 5000 } });
-    const pending = ob.account.balance({ signal: ac.signal });
+    const pending = ob.account.getBalance({ signal: ac.signal });
     setTimeout(() => ac.abort(), 10);
     const err = await pending.catch((e) => e);
     expect(err).toBeInstanceOf(TransportError);
@@ -172,8 +180,8 @@ describe("abort, deadline, redirects, serialization", () => {
       apiError(503, { code: "db.unavailable", retryable: true, retry_after: 2 }),
       ok({}),
     ]);
-    const err = await new Oblodai({ ...creds, fetch, deadlineMs: 100 }).account
-      .balance()
+    const err = await new Oblodai({ ...creds, fetch, deadline: 0.1 }).account
+      .getBalance()
       .catch((e) => e);
     expect(err.code).toBe("transport.deadline");
     expect(calls).toHaveLength(1);
@@ -184,7 +192,7 @@ describe("abort, deadline, redirects, serialization", () => {
       { status: 301, body: "", headers: { location: "https://www.api.test/v1/balance" } },
     ]);
     const err = await new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } }).account
-      .balance()
+      .getBalance()
       .catch((e) => e);
     expect(err.httpStatus).toBe(301);
     expect(err.message).toMatch(/redirect.*www\.api\.test/);

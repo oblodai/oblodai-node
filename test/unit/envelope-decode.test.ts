@@ -24,7 +24,7 @@ describe("error envelope decoded field by field", () => {
   it("keeps `family` working when the peer sends a numeric code", async () => {
     const { fetch } = mockFetch([apiError(400, { code: 123, message: "nope" })]);
     const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
-    const err = await ob.account.balance().catch((e) => e);
+    const err = await ob.account.getBalance().catch((e) => e);
     expect(typeof err.code).toBe("string");
     expect(() => err.family).not.toThrow();
     expect(err.synthetic).toBe(true); // no usable code == no usable envelope
@@ -33,7 +33,7 @@ describe("error envelope decoded field by field", () => {
   it("does not stringify a non-string message into [object Object]", async () => {
     const { fetch } = mockFetch([apiError(400, { code: "payment.bad_amount", message: { a: 1 } })]);
     const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
-    const err = await ob.account.balance().catch((e) => e);
+    const err = await ob.account.getBalance().catch((e) => e);
     expect(err.code).toBe("payment.bad_amount");
     expect(err.message).not.toContain("[object Object]");
     expect(err.message).toContain("HTTP 400");
@@ -45,7 +45,7 @@ describe("error envelope decoded field by field", () => {
       ok({ balance: { merchant: [] } }),
     ]);
     const ob = new Oblodai({ ...creds, fetch });
-    const err = await ob.account.balance().catch((e) => e);
+    const err = await ob.account.getBalance().catch((e) => e);
     expect(err.retryable).toBe(false);
     expect(calls).toHaveLength(1); // the string must not buy a retry
   });
@@ -94,7 +94,7 @@ describe("error envelope decoded field by field", () => {
     for (const body of ['{"error":null}', '{"error":[]}', '{"error":{}}', "null", "[]", '"x"']) {
       const { fetch } = mockFetch([{ status: 502, body }]);
       const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
-      const err = await ob.account.balance().catch((e) => e);
+      const err = await ob.account.getBalance().catch((e) => e);
       expect(err, body).toBeInstanceOf(Error);
       expect(typeof err.code, body).toBe("string");
       expect(err.httpStatus, body).toBe(502);

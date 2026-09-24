@@ -1,4 +1,4 @@
-import type { RouteSpec } from "../contract/types.js";
+import type { RouteSpec } from "./route.js";
 import {
   HEADER_IDEMPOTENCY_KEY,
   HEADER_PUBLIC_ID,
@@ -14,7 +14,8 @@ import { protectSecrets } from "./secrets.js";
  * signing material (what is signed) and the wire bytes (what is sent) come from one place and
  * cannot disagree. Nothing here touches the network or the clock.
  */
-export type QueryValue = string | number | boolean | undefined | null;
+export type QueryValue =
+  string | number | boolean | undefined | null | readonly (string | number | boolean)[];
 export type Query = Record<string, QueryValue>;
 
 export interface Credentials {
@@ -46,6 +47,8 @@ export interface BuildInput {
   extraHeaders?: Record<string, string>;
   /** Sent as `X-Admin-Token`; the transport supplies it on `onboard` routes only. */
   adminToken?: string;
+  /** Sent as `X-Request-ID`, replacing a caller header of that name. */
+  requestId?: string;
 }
 
 export interface BuiltRequest {
@@ -58,6 +61,12 @@ export interface BuiltRequest {
 }
 
 export const HEADER_ADMIN_TOKEN = "X-Admin-Token";
+
+/**
+ * Ties one call's attempts to the core's logs; one value for every attempt of a call. Not reserved:
+ * a caller's own `X-Request-ID` header is the call's id when `requestId` is unset.
+ */
+export const HEADER_REQUEST_ID = "X-Request-ID";
 
 /**
  * Headers the SDK owns. A caller-supplied header with one of these names is dropped, matched
@@ -101,7 +110,11 @@ export function buildRequest(input: BuildInput): BuiltRequest {
   if (input.query) {
     for (const [k, v] of Object.entries(input.query)) {
       if (v === undefined || v === null) continue;
-      url.searchParams.set(k, String(v));
+      if (Array.isArray(v)) {
+        for (const item of v) url.searchParams.append(k, String(item));
+      } else {
+        url.searchParams.set(k, String(v));
+      }
     }
   }
   const requestUri = url.pathname + url.search;
@@ -111,6 +124,13 @@ export function buildRequest(input: BuildInput): BuiltRequest {
     if (RESERVED_HEADERS.has(k.toLowerCase())) continue;
     assertHeaderValue(k, v);
     headers[k] = v;
+  }
+  if (input.requestId !== undefined) {
+    for (const k of Object.keys(headers)) {
+      if (k.toLowerCase() === HEADER_REQUEST_ID.toLowerCase()) delete headers[k];
+    }
+    assertHeaderValue(HEADER_REQUEST_ID, input.requestId);
+    headers[HEADER_REQUEST_ID] = input.requestId;
   }
   headers.Accept = "application/json";
   headers["User-Agent"] = input.userAgent;
@@ -175,9 +195,53 @@ export function fillPath(template: string, params: Record<string, string | numbe
   });
 }
 
+/**
+ * Request fields the contract types as a JSON `number` that are not money (a tolerance in
+ * percent). A fractional number anywhere else in a body is an amount losing precision; a unit test
+ * keeps this set equal to the fractional `number` properties of the contract's request schemas.
+ */
+export const NON_MONEY_NUMBERS: ReadonlySet<string> = new Set(["accuracy_payment_percent"]);
+
+/**
+ * Walk a body: a fractional or non-finite number outside `NON_MONEY_NUMBERS` is
+ * `sdk.float_amount`. Amounts are decimal strings; `25.5` has already lost precision by the time
+ * it reaches the SDK (`0.1 + 0.2`), so it is refused before anything is signed or sent.
+ */
+export function rejectFloatAmounts(value: unknown, path = ""): void {
+  if (typeof value === "number") {
+    if (!Number.isInteger(value)) {
+      throw new ConfigError(
+        "sdk.float_amount",
+        `amount passed as a number (${value}); pass the decimal string "${value}" — a float loses precision in money`,
+        path || "body",
+      );
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, i) => rejectFloatAmounts(item, `${path}[${i}]`));
+    return;
+  }
+  if (value !== null && typeof value === "object") {
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (NON_MONEY_NUMBERS.has(key) && typeof item === "number" && Number.isFinite(item)) continue;
+      rejectFloatAmounts(item, path ? `${path}.${key}` : key);
+    }
+  }
+}
+
 /** Serialize a request body once; `undefined` values vanish, a missing POST body becomes `{}`. */
 export function serializeBody(body: unknown, method: string): string {
   if (method === "GET") return "";
   if (body === undefined || body === null) return "{}";
-  return JSON.stringify(body);
+  rejectFloatAmounts(body);
+  try {
+    return JSON.stringify(body);
+  } catch (err) {
+    throw new ConfigError(
+      "sdk.bad_body",
+      `request body is not JSON-serializable: ${(err as Error).message}; amounts are decimal strings`,
+      "body",
+    );
+  }
 }

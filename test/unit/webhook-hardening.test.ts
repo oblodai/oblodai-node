@@ -6,7 +6,7 @@ import {
   verifyWebhook,
   verifyWebhookDelivery,
 } from "../../src/webhooks.js";
-import { isKnownEvent } from "../../src/contract/models/webhooks.js";
+import { isKnownEvent } from "../../src/webhooks.js";
 import { ConfigError, SignatureError, WebhookPayloadError } from "../../src/core/errors.js";
 import { signWebhook } from "../../src/core/signing.js";
 

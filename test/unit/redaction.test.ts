@@ -40,12 +40,12 @@ describe("secrets never print", () => {
     };
     const { fetch } = mockFetch([ok({ balance: { merchant: [] } })]);
     const ob = new Oblodai({ ...creds, fetch, logger: spy });
-    await ob.account.balance();
+    await ob.account.getBalance();
     expect(seen.length).toBeGreaterThan(0);
     expectNoSecrets(JSON.stringify(seen), "injected logger fields");
     // The logger the transport holds is a wrapper, not the object the caller handed in: a field
     // named like a secret is scrubbed on the way through, whoever wrote the logger.
-    const wrapped = (ob.transport as unknown as { logger: Logger }).logger;
+    const wrapped = (ob.transport as unknown as { s: { logger: Logger } }).s.logger;
     expect(wrapped).not.toBe(spy);
     wrapped.warn("leak?", { secret: "SUPER-SECRET-1", nested: { token: "ADMIN-TOKEN-1" } });
     expectNoSecrets(JSON.stringify(seen), "wrapped logger");
@@ -62,7 +62,7 @@ describe("secrets never print", () => {
       }),
     ]);
     const ob = new Oblodai({ ...creds, fetch });
-    const endpoint = await ob.webhooks.register("https://x");
+    const endpoint = await ob.webhooks.register({ url: "https://x" });
     expect(endpoint.secret).toBe("WHSEC-1"); // still usable
     expect(JSON.stringify(endpoint)).not.toContain("WHSEC-1");
     expect(JSON.stringify(endpoint)).toContain("[redacted]");
@@ -97,7 +97,7 @@ describe("secrets never print", () => {
     expect(inspect(created, { depth: 5 })).not.toContain("CLAIM-1");
     expect(Object.keys(created)).not.toContain("claim_url");
 
-    const batch = await ob.payoutLinks.batch({ items: [] });
+    const batch = await ob.payoutLinks.createBatch({ items: [] });
     expect(batch.items[0]!.result!.claim_token).toBe("CLAIM-1");
     expect(batch.items[0]!.result!.claim_url).toBe("https://pay.test/claim/CLAIM-1");
     expect(JSON.stringify(batch)).not.toContain("CLAIM-1");
@@ -113,7 +113,7 @@ describe("secrets never print", () => {
       }),
     ]);
     const ob = new Oblodai({ ...creds, fetch });
-    const minted = await ob.merchants.create({ email: "a@b.c", name: "A" });
+    const minted = await ob.sandbox.onboardStore("m1");
     expect(minted.api_key.secret).toBe("MINTED-1"); // still usable
     const dumped = JSON.stringify(minted) + inspect(minted, { depth: 10 });
     expect(dumped).not.toContain("MINTED-1");
@@ -122,10 +122,10 @@ describe("secrets never print", () => {
   it("keeps resolved credentials out of JSON and inspect", async () => {
     const { fetch } = mockFetch([]);
     const ob = new Oblodai({ ...creds, fetch });
-    const t = ob.transport as unknown as { opts: { credentials?: { secret: string } } };
-    expect(t.opts.credentials?.secret).toBe("SUPER-SECRET-1"); // signing still works
-    expectNoSecrets(JSON.stringify(t.opts.credentials), "credentials JSON");
-    expectNoSecrets(inspect(t.opts.credentials, { depth: 5 }), "credentials inspect");
-    expect(Object.keys(t.opts.credentials!)).toEqual(["publicId"]);
+    const t = ob.transport as unknown as { s: { credentials?: { secret: string } } };
+    expect(t.s.credentials?.secret).toBe("SUPER-SECRET-1"); // signing still works
+    expectNoSecrets(JSON.stringify(t.s.credentials), "credentials JSON");
+    expectNoSecrets(inspect(t.s.credentials, { depth: 5 }), "credentials inspect");
+    expect(Object.keys(t.s.credentials!)).toEqual(["publicId"]);
   });
 });

@@ -67,3 +67,34 @@ export function defineHidden(target: object, key: string | symbol, value: unknow
 export function describeCredential(publicId: string | undefined): string {
   return publicId ? `${publicId} (secret ${REDACTED})` : "none";
 }
+
+/**
+ * Response fields that carry a credential: a webhook signing secret, a freshly minted API secret,
+ * a payout link's claim token, the claim URL that embeds it, and its passcode.
+ */
+export const SECRET_RESPONSE_FIELDS: readonly string[] = [
+  "secret",
+  "claim_token",
+  "claim_url",
+  "passcode",
+];
+
+/**
+ * Hide every {@link SECRET_RESPONSE_FIELDS} string anywhere in a decoded response, in place:
+ * still readable as properties, gone from JSON and inspect renderings.
+ */
+export function protectResponseSecrets<T>(value: T, depth = 0): T {
+  if (depth > 32 || value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) {
+    for (const item of value) protectResponseSecrets(item, depth + 1);
+    return value;
+  }
+  const record = value as Record<string, unknown>;
+  const present: string[] = [];
+  for (const [key, item] of Object.entries(record)) {
+    if (SECRET_RESPONSE_FIELDS.includes(key) && typeof item === "string") present.push(key);
+    else protectResponseSecrets(item, depth + 1);
+  }
+  if (present.length) protectSecrets(record, present);
+  return value;
+}
