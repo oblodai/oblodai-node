@@ -4,6 +4,9 @@
  * object; an unknown enum value stays a plain string; amounts are decimal strings.
  */
 
+// --- runtime imports: the only names taken from the hand-written runtime; adjust here ---
+import type { FileJobHandle, JobHandle } from "../core/poller.js";
+
 import type {
   AcceptedReason,
   AmountMode,
@@ -302,7 +305,7 @@ export interface BatchInfoResponse {
   updated_at: string;
 }
 
-export interface BatchSubmitResponse {
+export interface BatchSubmitResponse extends JobHandle<BatchInfoResponse> {
   /** Идентификатор батча — с ним идите в POST /v1/batch/info за статусом и результатами. */
   batch_id: string;
   /** Сколько элементов принято в обработку. */
@@ -577,7 +580,7 @@ export interface CurrencyNetwork {
   payout_available: boolean;
 }
 
-export interface DocumentJobAccepted {
+export interface DocumentJobAccepted extends FileJobHandle<DocumentJobView> {
   /** Когда задача поставлена (UTC). */
   created_at: string;
   /** Почему файла нет; есть у задачи в статусе failed или expired. */

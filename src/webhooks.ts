@@ -1,26 +1,14 @@
-import type {
-  ConversionWebhook,
-  PaymentWebhook,
-  PayoutWebhook,
-  WalletWebhook,
-} from "./generated/models.js";
+import { KNOWN_EVENT_KINDS, type WebhookEvent } from "./generated/events.js";
+import { EVENT_ID_FIELDS } from "./generated/facts.js";
 import { ConfigError, OblodaiError, SignatureError, WebhookPayloadError } from "./core/errors.js";
 import { signWebhook } from "./core/signing.js";
 import { constantTimeEqual, headerValue, isRecord } from "./core/util.js";
 
 export { SignatureError, WebhookPayloadError, ConfigError, OblodaiError };
 
-/** An invoice event (`X-Webhook-Event: invoice.<status>`). */
-export type PaymentEvent = PaymentWebhook & { type: "payment" };
-/** A payout event (`payout.<status>`). */
-export type PayoutEvent = PayoutWebhook & { type: "payout" };
-/** A deposit to a static wallet (`wallet.paid`). */
-export type WalletEvent = WalletWebhook & { type: "wallet" };
-/** An economy conversion finished (`conversion.completed` / `conversion.refunded`). */
-export type ConversionEvent = ConversionWebhook & { type: "conversion" };
-
-/** The event kinds this release models field by field. */
-export type WebhookEvent = PaymentEvent | PayoutEvent | WalletEvent | ConversionEvent;
+// The event kinds, their models (`PaymentEvent`, `PayoutEvent`, … and the `WebhookEvent` union),
+// `KNOWN_EVENT_KINDS` and `WEBHOOK_EVENTS` are generated from the contract's webhooks.
+export * from "./generated/events.js";
 
 /**
  * A delivery whose `type` this SDK release does not know. The core adds event types without asking,
@@ -38,15 +26,6 @@ export interface UnknownWebhookEvent {
 
 /** What a verified delivery can be: one of the known events, or one from a newer core. */
 export type AnyWebhookEvent = WebhookEvent | UnknownWebhookEvent;
-
-/** The `type` discriminators this release knows, and the id field each carries. */
-export const KNOWN_EVENT_KINDS = ["payment", "payout", "wallet", "conversion"] as const;
-const EVENT_ID_FIELD: Record<(typeof KNOWN_EVENT_KINDS)[number], string> = {
-  payment: "uuid",
-  payout: "uuid",
-  wallet: "uuid",
-  conversion: "id",
-};
 
 /**
  * Narrow a delivery to the modelled union. Use it before switching on `type` so the compiler keeps
@@ -68,7 +47,7 @@ export function isKnownEvent(event: AnyWebhookEvent): event is WebhookEvent {
  *   X-Webhook-Timestamp: <unix seconds>
  *   X-Webhook-Signature: hex(HMAC-SHA256(secret, "<ts>." + rawBody))
  *   X-Webhook-Signature-Prev: same, with the previous secret — only during a rotation overlap
- *   X-Webhook-Event: invoice.<status> | payout.<status> | wallet.paid
+ *   X-Webhook-Event: invoice.<status> | payout.<status> | wallet.paid | … (`WEBHOOK_EVENTS`)
  *   X-Webhook-Id: stable per delivery (identical across retries) — use it as your idempotency key
  *   X-Webhook-Event-Time: unix seconds when the state change committed (order events by it)
  *
@@ -101,7 +80,7 @@ export interface WebhookDeliveryInfo {
   event: AnyWebhookEvent;
   /** `X-Webhook-Id` — stable across retries of the same delivery; use it as your idempotency key. */
   id?: string;
-  /** `X-Webhook-Event` — `invoice.<status>` | `payout.<status>` | `wallet.paid`. */
+  /** `X-Webhook-Event` — `invoice.<status>`, `payout.<status>`, … (every name: `WEBHOOK_EVENTS`). */
   eventType?: string;
   /** `X-Webhook-Event-Time` — unix seconds when the state change committed. */
   eventTime?: number;
@@ -210,8 +189,11 @@ export function verifyWebhookDelivery(
   };
 }
 
+// isTestEvent and isStaleEvent take any event (`object`): an event kind whose model lacks `test` or
+// `sequence` still passes, so a new kind in the contract never stops a receiver from compiling.
+
 /** True for rehearsal deliveries (`webhooks.test`, sandbox) — never act on them as if money moved. */
-export function isTestEvent(event: { test?: unknown } | null | undefined): boolean {
+export function isTestEvent(event: object | null | undefined): boolean {
   return (event as { test?: unknown } | null | undefined)?.test === true;
 }
 
@@ -239,8 +221,8 @@ export function parseWebhook(rawBody: string | Uint8Array): AnyWebhookEvent {
   // An event kind from a newer core is handed back verbatim rather than rejected; only the kinds
   // this release models are held to their field types.
   if (isKnownEvent(event)) {
-    const idField = EVENT_ID_FIELD[event.type];
-    if (typeof body[idField] !== "string") {
+    const idField = EVENT_ID_FIELDS[event.type];
+    if (idField !== undefined && typeof body[idField] !== "string") {
       throw new WebhookPayloadError(`"${body.type}" event has no \`${idField}\` string`, body);
     }
   }
@@ -253,7 +235,7 @@ export function parseWebhook(rawBody: string | Uint8Array): AnyWebhookEvent {
  * `sequence` is not stale, because nothing about it can be compared.
  */
 export function isStaleEvent(
-  event: { sequence?: unknown } | null | undefined,
+  event: object | null | undefined,
   lastProcessedSequence: number | undefined | null,
 ): boolean {
   if (typeof lastProcessedSequence !== "number" || !Number.isInteger(lastProcessedSequence)) {

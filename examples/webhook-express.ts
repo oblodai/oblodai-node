@@ -33,7 +33,8 @@ app.post("/oblodai/webhook", express.raw({ type: "*/*" }), (req, res) => {
     console.log("unknown event type", event.type);
     return res.sendStatus(200);
   }
-  const objectId = event.type === "conversion" ? event.id : event.uuid;
+  // Invoices, payouts and wallet deposits carry `uuid`; conversions (and kinds added later) `id`.
+  const objectId = "uuid" in event ? event.uuid : event.id;
   if (isStaleEvent(event, lastSequence.get(objectId))) return res.sendStatus(200);
   lastSequence.set(objectId, event.sequence);
 

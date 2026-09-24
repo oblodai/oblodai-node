@@ -82,13 +82,17 @@ describe("long-running operations wait (spec §3.8)", () => {
 
   it("every long-running operation exists and its generated method answers with a waiting model", () => {
     const source = readFileSync(join(__dirname, "../../src/generated/resources.ts"), "utf8");
+    const models = readFileSync(join(__dirname, "../../src/generated/models.ts"), "utf8");
+    expect(Object.keys(LRO).length).toBeGreaterThan(0);
     for (const [create, poll] of Object.entries(LRO)) {
       expect(ROUTES).toHaveProperty(create);
       expect(ROUTES).toHaveProperty(poll);
       const call = source.indexOf(`this._request(ROUTES.${create},`);
       const head = source.lastIndexOf("): Promise<", call);
       const returned = /^\): Promise<(\w+)>/.exec(source.slice(head))?.[1];
-      expect(["BatchSubmitResponse", "DocumentJobAccepted"], create).toContain(returned);
+      expect(models, create).toMatch(
+        new RegExp(`export interface ${returned} extends (File)?JobHandle<\\w+> \\{`),
+      );
     }
     // And the type says so: the waiter is part of the answer's type.
     const typed = (b: Awaited<ReturnType<Oblodai["batches"]["createPayout"]>>) =>

@@ -1,3 +1,4 @@
+import { NON_MONEY_NUMBERS } from "../generated/facts.js";
 import type { RouteSpec } from "./route.js";
 import {
   HEADER_IDEMPOTENCY_KEY,
@@ -195,12 +196,9 @@ export function fillPath(template: string, params: Record<string, string | numbe
   });
 }
 
-/**
- * Request fields the contract types as a JSON `number` that are not money (a tolerance in
- * percent). A fractional number anywhere else in a body is an amount losing precision; a unit test
- * keeps this set equal to the fractional `number` properties of the contract's request schemas.
- */
-export const NON_MONEY_NUMBERS: ReadonlySet<string> = new Set(["accuracy_payment_percent"]);
+// Request fields the contract types as a JSON `number` that are not money: generated from the
+// contract (every `number` property reachable from a request body).
+export { NON_MONEY_NUMBERS };
 
 /**
  * Walk a body: a fractional or non-finite number outside `NON_MONEY_NUMBERS` is

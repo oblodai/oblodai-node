@@ -27,6 +27,12 @@ the backend). Breaking: method names, argument shapes and option units change â€
 - `Page.byPage()`; `PageResult` with `total`, `perPage`, `offset`, `hasPages`.
 - Long-running operations wait: batch and document-job answers carry `wait()` (and `download()`).
 - `ConversionEvent` webhook kind.
+- Facts of the API generated from the contract instead of kept by hand: the long-running operations
+  (`LRO`, `TERMINAL_STATUSES`; each waiter ends on its own operation's terminal statuses), the
+  webhook event kinds (`KNOWN_EVENT_KINDS`, `KnownEventKind`, `WEBHOOK_EVENTS`, one `<Kind>Event`
+  per kind), and status helpers for every classified status enum (`FINAL_<X>_STATUSES`,
+  `SUCCESS_<X>_STATUSES`, `is<X>Final`, `is<X>Success` â€” e.g. `isBatchFinal`,
+  `isDocumentJobSuccess`).
 - The shared conformance suite of the backend runs in `npm test`; README blocks and `examples/`
   execute in tests; `make ci`; a packaging gate installs the tarball and type-checks ESM and CJS.
 
