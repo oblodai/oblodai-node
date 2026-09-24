@@ -56,7 +56,7 @@ describe("per-call options (spec §3.2)", () => {
   it("idempotencyKey fills the route's own idempotency_key field where it has one (Ruling 10)", async () => {
     const { fetch, calls } = mockFetch([ok({})]);
     await new Oblodai({ ...creds, fetch }).sandbox.faucet(
-      { currency: "USDT", amount: "5" } as never,
+      { asset: "USDT", amount: "5" },
       { idempotencyKey: "tap-1" },
     );
     expect(JSON.parse(calls[0]!.body!).idempotency_key).toBe("tap-1");

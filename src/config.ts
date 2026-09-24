@@ -55,11 +55,11 @@ export function resolveConfig(
   opts: ClientOptions = {},
   env: Record<string, string | undefined> = opts.env ?? process.env,
 ): ResolvedConfig {
-  const baseUrl = (opts.baseUrl ?? env.OBLODAI_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const baseUrl = (opts.baseUrl ?? (env.OBLODAI_BASE_URL || DEFAULT_BASE_URL)).replace(/\/+$/, "");
   assertBaseUrl(baseUrl, opts.allowInsecureBaseUrl ?? env.OBLODAI_ALLOW_INSECURE === "1");
 
-  const publicId = opts.publicId ?? env.OBLODAI_PUBLIC_ID;
-  const secret = opts.secret ?? env.OBLODAI_SECRET;
+  const publicId = opts.publicId ?? (env.OBLODAI_PUBLIC_ID || undefined);
+  const secret = opts.secret ?? (env.OBLODAI_SECRET || undefined);
   if ((publicId && !secret) || (!publicId && secret)) {
     throw new ConfigError(
       "sdk.bad_config",
@@ -82,7 +82,7 @@ export function resolveConfig(
     retry: opts.retry,
     logger,
     headers: opts.headers,
-    adminToken: opts.adminToken ?? env.OBLODAI_ADMIN_TOKEN,
+    adminToken: opts.adminToken ?? (env.OBLODAI_ADMIN_TOKEN || undefined),
     hooks: opts.hooks,
   };
 }

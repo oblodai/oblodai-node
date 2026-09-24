@@ -8,9 +8,9 @@ import {
   WebhookPayloadError,
 } from "@oblodai-npm/sdk/webhooks";
 
-const app = express();
+export const app = express();
 const seenDeliveries = new Set<string>(); // X-Webhook-Id; use your database in production
-const lastSequence = new Map<string, number>(); // per object uuid
+const lastSequence = new Map<string, number>(); // per object id
 
 app.post("/oblodai/webhook", express.raw({ type: "*/*" }), (req, res) => {
   let delivery;
@@ -26,15 +26,16 @@ app.post("/oblodai/webhook", express.raw({ type: "*/*" }), (req, res) => {
     throw err;
   }
   const { event, id } = delivery;
-  if (id && seenDeliveries.has(id)) return res.sendStatus(200); // retry of a delivery we already handled
+  if (id && seenDeliveries.has(id)) return res.sendStatus(200); // a retry we already handled
   if (id) seenDeliveries.add(id);
   // An event type this SDK release does not model: log it and acknowledge, never crash.
   if (!isKnownEvent(event)) {
     console.log("unknown event type", event.type);
     return res.sendStatus(200);
   }
-  if (isStaleEvent(event, lastSequence.get(event.uuid))) return res.sendStatus(200);
-  lastSequence.set(event.uuid, event.sequence);
+  const objectId = event.type === "conversion" ? event.id : event.uuid;
+  if (isStaleEvent(event, lastSequence.get(objectId))) return res.sendStatus(200);
+  lastSequence.set(objectId, event.sequence);
 
   switch (event.type) {
     case "payment":
@@ -47,8 +48,11 @@ app.post("/oblodai/webhook", express.raw({ type: "*/*" }), (req, res) => {
     case "wallet":
       console.log("deposit on static wallet", event.address, event.payment_amount);
       break;
+    case "conversion":
+      console.log("conversion", event.id, event.status);
+      break;
   }
-  res.sendStatus(200);
+  return res.sendStatus(200);
 });
 
-app.listen(3000);
+if (import.meta.url === `file://${process.argv[1]}`) app.listen(3000);
