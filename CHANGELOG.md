@@ -27,6 +27,9 @@ the backend). Breaking: method names, argument shapes and option units change â€
 - `Page.byPage()`; `PageResult` with `total`, `perPage`, `offset`, `hasPages`.
 - Long-running operations wait: batch and document-job answers carry `wait()` (and `download()`).
 - `ConversionEvent` webhook kind.
+- `verifyWebhookDelivery(...).eventId` (`X-Webhook-Event-Id`, `HEADER_WEBHOOK_EVENT_ID`): the id of
+  the state a delivery carries, the same across retries and resends â€” the key to deduplicate on
+  (`id`, `X-Webhook-Id`, changes on a resend).
 - Facts of the API generated from the contract instead of kept by hand: the long-running operations
   (`LRO`, `TERMINAL_STATUSES`; each waiter ends on its own operation's terminal statuses), the
   webhook event kinds (`KNOWN_EVENT_KINDS`, `KnownEventKind`, `WEBHOOK_EVENTS`, one `<Kind>Event`

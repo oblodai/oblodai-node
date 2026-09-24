@@ -21,12 +21,13 @@ describe("verifyWebhook against real deliveries", () => {
     it(`verifies ${s.headers["X-Webhook-Event"]}`, () => {
       const raw = s.raw ?? JSON.stringify(s.body); // the recorder keeps the exact delivered bytes
       const ts = Number(s.headers["X-Webhook-Timestamp"]);
-      const { event, id, eventType } = verifyWebhookDelivery(raw, s.headers, {
+      const { event, id, eventId, eventType } = verifyWebhookDelivery(raw, s.headers, {
         secret,
         now: () => ts,
       });
       expect(uuidOf(event)).toBe(s.body.uuid);
       expect(id).toBe(s.headers["X-Webhook-Id"]);
+      expect(eventId).toBe(s.headers["X-Webhook-Event-Id"]);
       expect(eventType).toBe(s.headers["X-Webhook-Event"]);
       expect(() =>
         verifyWebhook(raw, s.headers, {
@@ -101,6 +102,15 @@ describe("verifyWebhook rules", () => {
     expect(
       verifyWebhook(body, rotated, { secret: "unrelated", previousSecret: "old", now: () => ts }),
     ).toMatchObject({ uuid: "u1" });
+  });
+
+  it("reads the event id apart from the delivery id", () => {
+    const withIds = headers({ "x-webhook-id": "d-1", "x-webhook-event-id": "e-1" });
+    const delivery = verifyWebhookDelivery(body, withIds, { secret: "whsec", now: () => ts });
+    expect([delivery.id, delivery.eventId]).toEqual(["d-1", "e-1"]);
+    expect(
+      verifyWebhookDelivery(body, headers(), { secret: "whsec", now: () => ts }).eventId,
+    ).toBeUndefined();
   });
 
   it("parses the discriminated union and detects stale sequences", () => {

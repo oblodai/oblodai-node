@@ -376,7 +376,10 @@ export const server = createServer((req, res) => {
 для неаутентифицированного отправителя. Пустой `secret` — `ConfigError`, а не проверка пустым
 ключом. `toleranceSec` по умолчанию 300, `0` отключает проверку свежести.
 
-- **Дедуплицируйте по `id`** (`X-Webhook-Id`): он стабилен между повторами самого шлюза.
+- **Дедуплицируйте по `eventId`** (`X-Webhook-Event-Id`): он называет состояние и одинаков у всех
+  повторов и переотправок. `id` (`X-Webhook-Id`) называет одну доставку и меняется при переотправке
+  (`webhooks.resendPayment`, повтор в песочнице) — с ним ключом переотправленный `invoice.paid`
+  обработается дважды.
 - **Упорядочивайте по `event.sequence`**: `isStaleEvent(event, lastSequence)`.
 - **Репетиции** подписаны как боевые и несут `test: true` (и `X-Webhook-Test: true`);
   `verifyWebhookDelivery(...).isTest` об этом сообщает.
