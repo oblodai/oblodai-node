@@ -235,7 +235,7 @@ function keyIntoBody(body: unknown, key: string): Record<string, unknown> {
   }
   if (body?.idempotency_key !== undefined) {
     throw new ConfigError(
-      "sdk.bad_idempotency_key",
+      "sdk.bad_config",
       "idempotency_key is given twice: in the parameters and as the idempotencyKey option; pass one",
       "idempotencyKey",
     );
