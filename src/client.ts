@@ -3,7 +3,6 @@ import { INSPECT_CUSTOM } from "./core/secrets.js";
 import { Transport } from "./core/transport.js";
 import { RESOURCES } from "./generated/resources.js";
 import { SDK_VERSION } from "./version.js";
-import "./lro.js";
 
 export { SDK_VERSION };
 

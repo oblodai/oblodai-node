@@ -28,6 +28,14 @@ export class PageResult<T> {
     return this.paginate.total ?? 0;
   }
 
+  get perPage(): number {
+    return this.paginate.per_page ?? this.items.length;
+  }
+
+  get offset(): number {
+    return this.paginate.offset ?? 0;
+  }
+
   get hasPages(): boolean {
     return this.paginate.has_pages === true;
   }
