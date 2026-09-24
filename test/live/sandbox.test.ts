@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { Oblodai, isPaymentPaid, verifyWebhook, type Payment } from "../../src/index.js";
+import { Oblodai, isPaymentPaid, verifyWebhook, type PaymentView } from "../../src/index.js";
 
 /**
  * Live contract test: the SDK against a REAL core (OBLODAI_LIVE_URL, e.g. a local stack booted by
@@ -24,7 +24,7 @@ async function onboardSandbox(): Promise<{ publicId: string; secret: string }> {
 
 describe("live sandbox journey", () => {
   let ob: Oblodai;
-  let invoice: Payment;
+  let invoice: PaymentView;
 
   beforeAll(async () => {
     const key = await onboardSandbox();
@@ -32,7 +32,10 @@ describe("live sandbox journey", () => {
   });
 
   it("reads public catalog data without credentials", async () => {
-    const c = await new Oblodai({ baseUrl: BASE, allowInsecureBaseUrl: true }).catalog.currencies();
+    const c = await new Oblodai({
+      baseUrl: BASE,
+      allowInsecureBaseUrl: true,
+    }).checkout.listCurrencies();
     expect(c.currencies.length).toBeGreaterThan(0);
   });
 
@@ -44,10 +47,10 @@ describe("live sandbox journey", () => {
       order_id: `sdk-live-${Date.now()}`,
     });
     expect(invoice.status).toBe("created");
-    expect((await ob.payments.info({ order_id: invoice.order_id })).uuid).toBe(invoice.uuid);
-    const page = await ob.payments.history({ limit: 5 });
+    expect((await ob.payments.getInfo({ order_id: invoice.order_id })).uuid).toBe(invoice.uuid);
+    const page = await ob.payments.listHistory({ limit: 5 });
     expect(page.items.some((p) => p.uuid === invoice.uuid)).toBe(true);
-    const hooks = await ob.sandbox.webhooks({ limit: 5, offset: 0 }); // GET with query → signed over path+query
+    const hooks = await ob.sandbox.listWebhooks({ limit: 5, offset: 0 }); // GET with query → signed over path+query
     expect(Array.isArray(hooks.items)).toBe(true);
   });
 
@@ -74,17 +77,17 @@ describe("live sandbox journey", () => {
   });
 
   it("simulates a deposit, sees the invoice paid, and funds/validates/creates a payout", async () => {
-    await ob.sandbox.deposit({
+    await ob.sandbox.simulateDeposit({
       invoice_id: invoice.uuid,
       amount: "25",
       confirmations: 20,
       txid: `sdk-tx-${Date.now()}`,
     });
-    const paid = await ob.payments.info({ uuid: invoice.uuid });
+    const paid = await ob.payments.getInfo({ uuid: invoice.uuid });
     expect(isPaymentPaid(paid.status)).toBe(true);
 
     await ob.sandbox.faucet({ asset: "USDT", amount: "100" });
-    const bal = await ob.account.balance();
+    const bal = await ob.account.getBalance();
     expect(bal.balance.merchant.find((b) => b.currency === "USDT")).toBeTruthy();
 
     const calc = await ob.payouts.calculate({ amount: "10", currency: "USDT", network: "tron" });
@@ -104,7 +107,7 @@ describe("live sandbox journey", () => {
       order_id: `sdk-po-${Date.now()}`,
     });
     expect(po.uuid).toBeTruthy();
-    expect((await ob.payouts.info({ uuid: po.uuid })).order_id).toBe(po.order_id);
+    expect((await ob.payouts.getInfo({ uuid: po.uuid })).order_id).toBe(po.order_id);
   });
 
   it("classifies a domain refusal with the core's own retryable flag", async () => {
@@ -124,8 +127,8 @@ describe("live sandbox journey", () => {
 
   it("verifies a webhook the core signs for a registered endpoint", async () => {
     if (!process.env.OBLODAI_LIVE_HOOK_URL) return; // needs a reachable receiver; covered by contract samples otherwise
-    const ep = await ob.webhooks.register(process.env.OBLODAI_LIVE_HOOK_URL);
-    const res = await ob.webhooks.test("payment", {
+    const ep = await ob.webhooks.register({ url: process.env.OBLODAI_LIVE_HOOK_URL });
+    const res = await ob.webhooks.sendTestPayment({
       url_callback: process.env.OBLODAI_LIVE_HOOK_URL,
       currency: "USDT",
       network: "tron",
