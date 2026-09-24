@@ -1,12 +1,65 @@
-import type { AnyWebhookEvent } from "./contract/models/webhooks.js";
-import { isKnownEvent } from "./contract/models/webhooks.js";
+import type {
+  ConversionWebhook,
+  PaymentWebhook,
+  PayoutWebhook,
+  WalletWebhook,
+} from "./generated/models.js";
 import { ConfigError, OblodaiError, SignatureError, WebhookPayloadError } from "./core/errors.js";
 import { signWebhook } from "./core/signing.js";
 import { constantTimeEqual, headerValue, isRecord } from "./core/util.js";
 
 export { SignatureError, WebhookPayloadError, ConfigError, OblodaiError };
-export { isKnownEvent };
-export type { AnyWebhookEvent };
+
+/** An invoice event (`X-Webhook-Event: invoice.<status>`). */
+export type PaymentEvent = PaymentWebhook & { type: "payment" };
+/** A payout event (`payout.<status>`). */
+export type PayoutEvent = PayoutWebhook & { type: "payout" };
+/** A deposit to a static wallet (`wallet.paid`). */
+export type WalletEvent = WalletWebhook & { type: "wallet" };
+/** An economy conversion finished (`conversion.completed` / `conversion.refunded`). */
+export type ConversionEvent = ConversionWebhook & { type: "conversion" };
+
+/** The event kinds this release models field by field. */
+export type WebhookEvent = PaymentEvent | PayoutEvent | WalletEvent | ConversionEvent;
+
+/**
+ * A delivery whose `type` this SDK release does not know. The core adds event types without asking,
+ * and a receiver that throws on one it has not heard of turns a new feature into an outage — so an
+ * unknown type is returned verbatim, with the raw `type` string, for the handler to ignore or log.
+ */
+export interface UnknownWebhookEvent {
+  type: string;
+  uuid?: string;
+  sequence?: number;
+  event_at?: string;
+  test?: boolean;
+  [field: string]: unknown;
+}
+
+/** What a verified delivery can be: one of the known events, or one from a newer core. */
+export type AnyWebhookEvent = WebhookEvent | UnknownWebhookEvent;
+
+/** The `type` discriminators this release knows, and the id field each carries. */
+export const KNOWN_EVENT_KINDS = ["payment", "payout", "wallet", "conversion"] as const;
+const EVENT_ID_FIELD: Record<(typeof KNOWN_EVENT_KINDS)[number], string> = {
+  payment: "uuid",
+  payout: "uuid",
+  wallet: "uuid",
+  conversion: "id",
+};
+
+/**
+ * Narrow a delivery to the modelled union. Use it before switching on `type` so the compiler keeps
+ * the per-kind fields:
+ *
+ * ```ts
+ * if (!isKnownEvent(event)) return void log.info("unknown event type", event.type);
+ * if (event.type === "payment") console.log(event.payer_amount);
+ * ```
+ */
+export function isKnownEvent(event: AnyWebhookEvent): event is WebhookEvent {
+  return (KNOWN_EVENT_KINDS as readonly string[]).includes(event.type);
+}
 
 /**
  * Webhook verification — usable on its own (`import { verifyWebhook } from "@oblodai-npm/sdk/webhooks"`),
@@ -185,8 +238,11 @@ export function parseWebhook(rawBody: string | Uint8Array): AnyWebhookEvent {
   const event = body as unknown as AnyWebhookEvent;
   // An event kind from a newer core is handed back verbatim rather than rejected; only the kinds
   // this release models are held to their field types.
-  if (isKnownEvent(event) && typeof body.uuid !== "string") {
-    throw new WebhookPayloadError(`"${body.type}" event has no \`uuid\` string`, body);
+  if (isKnownEvent(event)) {
+    const idField = EVENT_ID_FIELD[event.type];
+    if (typeof body[idField] !== "string") {
+      throw new WebhookPayloadError(`"${body.type}" event has no \`${idField}\` string`, body);
+    }
   }
   return event;
 }

@@ -1,24 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { canonicalString, signRequest, signWebhook } from "../../src/core/signing.js";
-import { loadContract } from "../support/fixtures.js";
+import { canonicalString, signRequest } from "../../src/core/signing.js";
 
-const contract = loadContract();
-
-describe("request signing (vectors exported from the core test suite)", () => {
-  for (const v of contract.signing_vectors) {
-    it(v.name, () => {
-      const input = {
-        ts: v.ts,
-        method: v.method,
-        requestUri: v.request_uri,
-        idempotencyKey: v.idempotency_key || undefined,
-        body: v.body,
-      };
-      expect(canonicalString(input)).toBe(v.canonical);
-      expect(signRequest(v.secret, input)).toBe(v.signature);
-    });
-  }
-
+// The core's own vectors (x-oblodai-signing of the contract) run in test/conformance.
+describe("request signing", () => {
   it("the idempotency slot is empty, not absent, when no key is sent", () => {
     const withSlot = signRequest("s", { ts: 1, method: "POST", requestUri: "/v1/x", body: "{}" });
     const legacy = signRequest("s", {
@@ -46,12 +30,4 @@ describe("request signing (vectors exported from the core test suite)", () => {
     });
     expect(a).toBe(b);
   });
-});
-
-describe("webhook signing", () => {
-  for (const [i, v] of contract.webhook_vectors.entries()) {
-    it(`vector ${i}`, () => {
-      expect(signWebhook(v.secret, v.ts, v.payload)).toBe(v.signature);
-    });
-  }
 });

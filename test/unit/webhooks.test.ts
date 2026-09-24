@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isKnownEvent } from "../../src/contract/models/webhooks.js";
+import { isKnownEvent } from "../../src/webhooks.js";
 import {
   isStaleEvent,
   parseWebhook,
@@ -8,12 +8,13 @@ import {
 } from "../../src/webhooks.js";
 import { SignatureError } from "../../src/core/errors.js";
 import { signWebhook } from "../../src/core/signing.js";
-import { loadWebhookSamples, resultOf } from "../support/fixtures.js";
+import { WEBHOOK_SAMPLES_SECRET, loadWebhookSamples } from "../support/fixtures.js";
 
 // The samples were delivered by the core's real dispatcher to the recorder, signed with the
 // endpoint secret in force at that moment — the one returned by the rotate-secret call.
 const samples = loadWebhookSamples();
-const secret = resultOf<{ secret: string }>("POST /v1/webhooks/rotate-secret").secret;
+const secret = WEBHOOK_SAMPLES_SECRET;
+const uuidOf = (event: object) => (event as { uuid?: unknown }).uuid;
 
 describe("verifyWebhook against real deliveries", () => {
   for (const s of samples) {
@@ -24,7 +25,7 @@ describe("verifyWebhook against real deliveries", () => {
         secret,
         now: () => ts,
       });
-      expect(event.uuid).toBe(s.body.uuid);
+      expect(uuidOf(event)).toBe(s.body.uuid);
       expect(id).toBe(s.headers["X-Webhook-Id"]);
       expect(eventType).toBe(s.headers["X-Webhook-Event"]);
       expect(() =>
@@ -82,9 +83,8 @@ describe("verifyWebhook rules", () => {
       /outside/,
     );
     expect(
-      verifyWebhook(body, headers(), { secret: "whsec", now: () => ts + 600, toleranceSec: 0 })
-        .uuid,
-    ).toBe("u1");
+      verifyWebhook(body, headers(), { secret: "whsec", now: () => ts + 600, toleranceSec: 0 }),
+    ).toMatchObject({ uuid: "u1" });
   });
 
   it("verifies during a secret rotation via the Prev header or the previousSecret option", () => {
@@ -92,12 +92,15 @@ describe("verifyWebhook rules", () => {
       "x-webhook-signature": signWebhook("new", ts, body),
       "x-webhook-signature-prev": signWebhook("old", ts, body),
     });
-    expect(verifyWebhook(body, rotated, { secret: "old", now: () => ts }).uuid).toBe("u1"); // not yet swapped
-    expect(verifyWebhook(body, rotated, { secret: "new", now: () => ts }).uuid).toBe("u1"); // swapped
+    expect(verifyWebhook(body, rotated, { secret: "old", now: () => ts })).toMatchObject({
+      uuid: "u1",
+    }); // not yet swapped
+    expect(verifyWebhook(body, rotated, { secret: "new", now: () => ts })).toMatchObject({
+      uuid: "u1",
+    }); // swapped
     expect(
-      verifyWebhook(body, rotated, { secret: "unrelated", previousSecret: "old", now: () => ts })
-        .uuid,
-    ).toBe("u1");
+      verifyWebhook(body, rotated, { secret: "unrelated", previousSecret: "old", now: () => ts }),
+    ).toMatchObject({ uuid: "u1" });
   });
 
   it("parses the discriminated union and detects stale sequences", () => {

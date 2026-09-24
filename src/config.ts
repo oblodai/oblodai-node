@@ -1,4 +1,5 @@
 import { makeCredentials, type Credentials } from "./core/request.js";
+import type { Hooks } from "./core/hooks.js";
 import type { FetchLike } from "./core/transport.js";
 import type { Logger } from "./core/logger.js";
 import type { RetryOptions } from "./core/retry.js";
@@ -16,10 +17,10 @@ export interface ClientOptions {
   baseUrl?: string;
   /** Custom fetch (undici with a proxy agent, a recording stub in tests). */
   fetch?: FetchLike;
-  /** Per-attempt timeout, ms. Default 30000. */
-  timeoutMs?: number;
-  /** Overall budget per call including retries, ms. Default 90000. */
-  deadlineMs?: number;
+  /** Per-attempt timeout, seconds. Default 30. */
+  timeout?: number;
+  /** Overall budget per call including retries and pauses, seconds. Default 90. */
+  deadline?: number;
   /** Retry policy overrides; `{ maxRetries: 0 }` disables retries. */
   retry?: Partial<RetryOptions>;
   /** Structured logger; `OBLODAI_LOG=debug` enables a console logger when omitted. */
@@ -30,24 +31,29 @@ export interface ClientOptions {
   adminToken?: string;
   /** Permit plain http:// base URLs (local core, CI). Default false. */
   allowInsecureBaseUrl?: boolean;
+  /** Called once per attempt: before it is sent and when it ends. */
+  hooks?: Hooks;
+  /** The environment to read `OBLODAI_*` from; `process.env` by default. */
+  env?: Record<string, string | undefined>;
 }
 
 export interface ResolvedConfig {
   baseUrl: string;
   credentials?: Credentials;
   fetch?: FetchLike;
-  timeoutMs?: number;
-  deadlineMs?: number;
+  timeout?: number;
+  deadline?: number;
   retry?: Partial<RetryOptions>;
   logger?: Logger;
   headers?: Record<string, string>;
   adminToken?: string;
+  hooks?: Hooks;
 }
 
 /** Merge explicit options with the environment and validate what can be validated up front. */
 export function resolveConfig(
   opts: ClientOptions = {},
-  env: NodeJS.ProcessEnv = process.env,
+  env: Record<string, string | undefined> = opts.env ?? process.env,
 ): ResolvedConfig {
   const baseUrl = (opts.baseUrl ?? env.OBLODAI_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
   assertBaseUrl(baseUrl, opts.allowInsecureBaseUrl ?? env.OBLODAI_ALLOW_INSECURE === "1");
@@ -71,12 +77,13 @@ export function resolveConfig(
     baseUrl,
     credentials: publicId && secret ? makeCredentials(publicId, secret) : undefined,
     fetch: opts.fetch,
-    timeoutMs: opts.timeoutMs,
-    deadlineMs: opts.deadlineMs,
+    timeout: opts.timeout,
+    deadline: opts.deadline,
     retry: opts.retry,
     logger,
     headers: opts.headers,
     adminToken: opts.adminToken ?? env.OBLODAI_ADMIN_TOKEN,
+    hooks: opts.hooks,
   };
 }
 
