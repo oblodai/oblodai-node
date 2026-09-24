@@ -1,6 +1,7 @@
 import { ROUTES } from "../generated/routes.js";
 import { POLLS } from "../generated/facts.js";
 import { ConfigError } from "../core/errors.js";
+import { assertIdempotencyKey } from "../core/idempotency.js";
 import { fileResult, type FileResult } from "../core/file.js";
 import { mergeOptions, type RequestOptions } from "../core/options.js";
 import { DEFAULT_PAGE_LIMIT, Page, toPageResult, type PageResult } from "../core/pagination.js";
@@ -22,6 +23,11 @@ export type { FileResult, RequestOptions };
 export interface RequestExtra {
   pathParams?: Record<string, string>;
   query?: Record<string, unknown>;
+  /**
+   * The route's body has its own `idempotency_key` field (Ruling 10): the `idempotencyKey` option
+   * fills it and no `Idempotency-Key` header is sent. Set by the generator from the contract.
+   */
+  idempotencyKeyInBody?: boolean;
 }
 
 /** What `withRawResponse` turns a method's result into: a list stays a {@link Page}. */
@@ -85,7 +91,16 @@ export abstract class Resource {
     options?: RequestOptions,
     extra?: RequestExtra,
   ): R {
-    const opts = mergeOptions(this._defaults, options);
+    let opts = mergeOptions(this._defaults, options);
+    if (extra?.idempotencyKeyInBody && opts.idempotencyKey !== undefined) {
+      try {
+        body = keyIntoBody(body, opts.idempotencyKey);
+      } catch (err) {
+        if (route.listKind === "paged") throw err;
+        return Promise.reject(err) as R;
+      }
+      opts = { ...opts, idempotencyKey: undefined };
+    }
     if (route.listKind === "paged") return this._paged(route, body, opts, extra) as R;
     const call = this.transport.call(route, callOptions(opts, body, extra));
     let decode: (raw: RawResponse) => unknown;
@@ -209,6 +224,25 @@ export abstract class Resource {
 }
 
 /** What the transport runs one call with: the request itself plus the caller's overrides. */
+/**
+ * The body with the `idempotencyKey` option in its own `idempotency_key` field. The key given both
+ * ways is refused rather than silently picking one — in every Oblodai SDK, before the network.
+ */
+function keyIntoBody(body: unknown, key: string): Record<string, unknown> {
+  assertIdempotencyKey(key);
+  if (body !== undefined && !isRecord(body)) {
+    throw new ConfigError("sdk.bad_body", "the call's parameters must be an object", "params");
+  }
+  if (body?.idempotency_key !== undefined) {
+    throw new ConfigError(
+      "sdk.bad_idempotency_key",
+      "idempotency_key is given twice: in the parameters and as the idempotencyKey option; pass one",
+      "idempotencyKey",
+    );
+  }
+  return { ...body, idempotency_key: key };
+}
+
 export function callOptions(
   options: RequestOptions,
   body: unknown,

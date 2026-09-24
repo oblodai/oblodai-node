@@ -3134,9 +3134,9 @@ export class Sandbox extends Resource {
     params: Omit<FaucetRequest, "idempotency_key">,
     options?: RequestOptions,
   ): Promise<FaucetResult> {
-    const { idempotencyKey, ...callOptions } = options ?? {};
-    const body = { ...params, idempotency_key: idempotencyKey };
-    return this._request(ROUTES.sandboxFaucet, body, callOptions);
+    return this._request(ROUTES.sandboxFaucet, params, options, {
+      idempotencyKeyInBody: true,
+    });
   }
 
   /**
