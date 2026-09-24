@@ -4,6 +4,46 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] — 2026-09-25
+
+Generated from the gateway's OpenAPI contract (`services/core/api/openapi.json`, `tools/sdkgen` in
+the backend). Breaking: method names, argument shapes and option units change — see
+[MIGRATION-2.0.md](MIGRATION-2.0.md).
+
+### Added
+
+- Every route of the contract — 120, in 16 resources (`account`, `apiAllowlist`, `batches`,
+  `checkout`, `documents`, `paymentLinks`, `payments`, `payoutLinks`, `payouts`, `referrals`,
+  `refunds`, `sandbox`, `settings`, `splits`, `wallets`, `webhooks`), named
+  `client.<resource>.<method>` after the `operationId` and pinned in `names.lock`.
+- Request and response models, enums (`OpenEnum<T>`: an unknown value stays a string) and the route
+  table `ROUTES` generated from the contract; retry safety is the contract's `x-retry-safe`.
+- Per-call `RequestOptions`: `idempotencyKey`, `timeout` (seconds), `maxRetries`, `extraHeaders`,
+  `requestId`, `signal`.
+- `X-Request-ID` on every call (one id for all attempts); errors carry it and print as
+  `[code] message (request_id=…)`.
+- `withRawResponse` on every resource (`RawAPIResponse`: status, headers, request id, `parse()`),
+  `withOptions` on the client and on resources, `hooks: { onRequest, onResponse }`.
+- `Page.byPage()`; `PageResult` with `total`, `perPage`, `offset`, `hasPages`.
+- Long-running operations wait: batch and document-job answers carry `wait()` (and `download()`).
+- `ConversionEvent` webhook kind.
+- The shared conformance suite of the backend runs in `npm test`; README blocks and `examples/`
+  execute in tests; `make ci`; a packaging gate installs the tarball and type-checks ESM and CJS.
+
+### Changed
+
+- Node.js 20 or newer.
+- Timeouts are seconds: `timeout`/`deadline` on the client, `timeout` per call (were `timeoutMs`,
+  `deadlineMs`).
+- A fractional number in a request body is refused before sending (`sdk.float_amount`).
+- Documents resolve to `FileResult { content, contentType, filename }` (was `bytes`).
+- An undici timeout is `transport.timeout` (was `transport.network`).
+
+### Removed
+
+- The hand-written resources and models of 1.x, the `contract/` snapshot and its codegen,
+  `merchants.create`, `ERROR_CODES`, `CONTRACT_*` constants and every 1.x method alias.
+
 ## [1.3.0] — 2026-08-26
 
 A rewrite, generated from the gateway's contract snapshot (core `2cc44c1`) and verified against it.

@@ -16,22 +16,24 @@
 <img src="https://img.shields.io/badge/types-TypeScript-3178C6?style=flat-square" alt="TypeScript">
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-000000?style=flat-square" alt="License: MIT"></a>
 
-[Documentation](https://docs.oblodai.com) · [Dashboard](https://my.oblodai.com) · [Read in English →](README.md)
+[Документация](https://docs.oblodai.com) · [Кабинет](https://my.oblodai.com) · [Read in English →](README.md)
 
 </div>
 
 ---
 
-Официальный TypeScript / Node.js SDK платёжного шлюза **Oblodai**: приём платежей, выплаты, массовые
-операции (батчи), платёжные ссылки, выплатные ссылки (крипточеки), сплиты, статические кошельки,
-переводы, вебхуки. Подпись запросов, разбор ответов, типизированные ошибки, идемпотентность и
-ретраи — из коробки. Node.js ≥ 18.17, ESM и CommonJS в одном пакете, типы TypeScript сгенерированы из
-контрактного снимка самого шлюза, runtime-зависимостей нет.
+Официальный TypeScript / Node.js SDK платёжного шлюза **Oblodai**: приём платежей, выплаты,
+массовые операции (батчи), платёжные ссылки, выплатные ссылки (крипточеки), сплиты, статические
+кошельки, переводы, вебхуки. Подпись запросов, разбор ответов, типизированные ошибки,
+идемпотентность и повторы — из коробки.
 
-> **Базовый URL.** По умолчанию `https://api.oblodai.com`. При необходимости переопределите `baseUrl`
-> и передайте свои ключи при инициализации. Схема должна быть `https://`; обычный `http://`
-> принимается только для локальной петли (`http://127.0.0.1:8095`) или с явной опцией
-> `allowInsecureBaseUrl`.
+Node.js ≥ 20, ESM и CommonJS в одном пакете, без runtime-зависимостей. Ресурсы, модели и таблица
+маршрутов сгенерированы из OpenAPI-контракта самого шлюза: у каждого его маршрута (их 120) здесь
+есть метод, у каждого запроса и ответа — тип.
+
+> **Base URL.** По умолчанию `https://api.oblodai.com`. При необходимости задайте свой `baseUrl` и
+> ключи при инициализации. Схема должна быть `https://`; обычный `http://` допускается только для
+> loopback (`http://127.0.0.1:8095`) или с явной опцией `allowInsecureBaseUrl`.
 
 ## Установка
 
@@ -39,26 +41,27 @@
 npm install @oblodai-npm/sdk
 ```
 
-Node.js ≥ 18.17 (SDK использует глобальный `fetch` рантайма). В пакете лежат сборка ESM, сборка
-CommonJS и декларации типов для обеих; в рантайме ничего дополнительного не подтягивается. Проверка
-подписи вебхуков вынесена в подпуть `@oblodai-npm/sdk/webhooks` и не требует ни клиента, ни
-API-ключа. Пишете код с ИИ-агентом? Дайте ему [AGENTS.md](AGENTS.md).
+Node.js 20 или новее (SDK использует глобальный `fetch` рантайма). В пакете — сборка ESM, сборка
+CommonJS и объявления типов для обеих. Проверка вебхуков живёт в подпути `@oblodai-npm/sdk/webhooks`
+и не требует ни клиента, ни API-ключа.
+
+Пишете код с ИИ-агентом? Дайте ему [AGENTS.md](AGENTS.md) — он входит в пакет. Переходите с 1.x?
+[MIGRATION-2.0.md](MIGRATION-2.0.md) сопоставляет каждое старое имя метода новому.
 
 ## Где взять ключи
 
-Ключи выпускаются в кабинете [my.oblodai.com](https://my.oblodai.com) → **API-ключи**. Секрет
-показывается один раз, при создании. Боевая пара — это public id `oblodai_<hex>` и секрет
-`oblodai_live_<hex>`; пара песочницы — `test_oblodai_<hex>` и `oblodai_test_<hex>`.
+Ключи выдаются в кабинете [my.oblodai.com](https://my.oblodai.com) → **API-ключи**. Секрет
+показывается один раз, при создании. Боевая пара — публичный id `oblodai_<hex>` и секрет
+`oblodai_live_<hex>`; песочная — `test_oblodai_<hex>` и `oblodai_test_<hex>`.
 
 **Один API-ключ подписывает всё.** У мерчанта один ключ, и он аутентифицирует каждый подписанный
-маршрут — деньги на вход и на выход, настройки, документы, песочницу. Отдельных выплатных учётных
-данных нет.
+маршрут — приём и выплаты, настройки, документы, песочницу. Отдельного ключа для выплат нет.
 
-| Учётные данные         | Откуда берутся                             | Что подписывают                                                                                                                                                                                                    |
-| ---------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| API-ключ               | кабинет → **API-ключи**                    | Каждый подписанный маршрут: `payments.*`, `payouts.*`, `refunds.*`, `paymentLinks.*`, `payoutLinks.*`, `transfers.*`, `splits.*`, `wallets.*`, `webhooks.*`, `documents.*`, `settings.*`, `account.*`, `batches.*` |
-| API-ключ песочницы     | онбординг песочницы — `test_oblodai_<hex>` | Ту же поверхность, против бесцепочечной копии шлюза                                                                                                                                                                |
-| Админ-токен онбординга | задаётся на self-hosted шлюзе              | Только `merchants.create`, `merchants.createSandbox` — без подписи, уходит как `X-Admin-Token` и ни на одном другом маршруте                                                                                       |
+| Учётные данные         | Задаётся как                                                  | Для чего                                                     |
+| ---------------------- | ------------------------------------------------------------- | ------------------------------------------------------------ |
+| API-ключ               | `publicId` / `secret` (`OBLODAI_PUBLIC_ID`, `OBLODAI_SECRET`) | каждый подписанный маршрут                                   |
+| Песочный API-ключ      | то же, пара `test_oblodai_<hex>`                              | та же поверхность на копии шлюза без блокчейна               |
+| Админ-токен онбординга | `adminToken` (`OBLODAI_ADMIN_TOKEN`)                          | `sandbox.onboardStore` на self-hosted шлюзе, и больше ничего |
 
 ```ts
 import { Oblodai } from "@oblodai-npm/sdk";
@@ -67,17 +70,16 @@ const oblodai = new Oblodai({
   publicId: process.env.OBLODAI_PUBLIC_ID,
   secret: process.env.OBLODAI_SECRET,
 });
+console.log(oblodai.transport.baseUrl);
 ```
 
-Публичные маршруты (страницы для плательщика, каталог валют) не требуют учётных данных вовсе, а
-админ-токен ходит на двух маршрутах `merchants.*` и больше нигде. У мерчантов, заведённых до
-объединения ключей, может до сих пор лежать старая раздельная пара — `oblodai_pk_…` на вход,
-`oblodai_wk_…` на выход, — и только там вызов может быть отклонён с 403 `merchant.wrong_key_kind`;
-выпуск одного актуального ключа в кабинете это снимает.
+Маршруты для плательщика не требуют ключей вовсе: все методы `checkout.*`,
+`account.listExchangeRates`, `payoutLinks.getPayoutClaim` / `claimPayout` и `documents.getSigned`
+(заранее подписанная ссылка).
 
 ## Быстрый старт
 
-Принять платёж. Суммы — десятичные **строки**, никогда не числа с плавающей точкой.
+Примите платёж. Суммы — десятичные **строки**, никогда не числа с плавающей точкой.
 
 ```ts
 import { Oblodai } from "@oblodai-npm/sdk";
@@ -94,19 +96,19 @@ const invoice = await oblodai.payments.create({
 console.log(invoice.url, invoice.address, invoice.status); // "created"
 ```
 
-Чтобы назначать цену в фиате, а получать крипту, передайте оба поля:
-`{ amount: "25", currency: "USD", to_currency: "USDT" }` — `currency` это то, что вы выставляете к
-оплате, `to_currency` — актив, который отправляет плательщик.
+Чтобы выставлять цену в фиате, а получать крипту, передайте оба поля: `{ amount: "25", currency:
+"USD", to_currency: "USDT" }` — `currency` то, что вы берёте, `to_currency` актив, который пришлёт
+плательщик.
 
-Отправить выплату. Сначала валидация (бесплатно, без побочных эффектов), затем создание со своим
+Отправьте выплату. Сначала проверка (бесплатно, без побочных эффектов), затем создание со своим
 ключом идемпотентности.
 
 ```ts
-import { Oblodai } from "@oblodai-npm/sdk";
+import { Oblodai, type PayoutRequest } from "@oblodai-npm/sdk";
 
 const oblodai = new Oblodai(); // the same key that took the payment sends the payout
 
-const params = {
+const params: PayoutRequest = {
   amount: "10",
   currency: "USDT",
   network: "tron",
@@ -117,16 +119,77 @@ const check = await oblodai.payouts.validate(params);
 console.log("will debit", check.payer_amount, "commission", check.commission);
 
 const payout = await oblodai.payouts.create(params, { idempotencyKey: "payout-42" });
-console.log(payout.uuid, payout.status); // "pending"
+console.log(payout.uuid, payout.status);
 ```
 
-Больше сквозных программ — в [`examples/`](examples); запустить одну: `npx tsx examples/sandbox.ts`.
+Больше программ целиком — в [`examples/`](examples); запуск: `npx tsx examples/sandbox.ts`.
 
-## Песочница и тестирование
+### Запросы и ответы типизированы
 
-Ключ песочницы работает против бесцепочечной копии шлюза: фейковый баланс из крана, смоделированные
-депозиты, настоящие подписанные вебхуки. Интегрируйтесь сначала на ней — поверхность API та же самая,
-так что при переходе на боевые ключи ничего не меняется.
+Каждый метод — `client.<ресурс>.<метод>(params, options)`. `params` — тело запроса объектом с
+именами полей как на проводе (`snake_case`); его тип (`PaymentRequest`, `PayoutRequest`, …)
+сгенерирован из контракта, поэтому редактор дополняет поля, а `tsc` ловит опечатку или число в сумме
+до того, как запрос уйдёт. Параметры пути идут первыми (`checkout.get(id)`), параметры строки
+запроса — внутри `params`.
+
+Результаты — JSON-объекты как пришли, типизированные сгенерированными интерфейсами. Поле новее этого
+SDK остаётся в объекте; значение enum новее него — обычная строка (`OpenEnum<T>`); ни то ни другое не
+ошибка. Значения enum экспортируются и константами: `PaymentStatus.PAID === "paid"`.
+
+### Опции вызова
+
+Последний аргумент любого метода — `RequestOptions`:
+
+| Опция            | Смысл                                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------- |
+| `idempotencyKey` | свой ключ; на маршрутах, которые шлюз дедуплицирует, генерируется автоматически               |
+| `timeout`        | секунды на одну попытку (весь вызов по-прежнему ограничен `deadline` клиента)                 |
+| `maxRetries`     | число повторов после первой попытки, для этого вызова                                         |
+| `extraHeaders`   | заголовки этого вызова поверх `headers` клиента                                               |
+| `requestId`      | уходит как `X-Request-ID`; без него генерируется UUID — один и тот же на всех повторах вызова |
+| `signal`         | `AbortSignal`, отменяющий вызов и паузу перед повтором                                        |
+
+```ts
+import { Oblodai } from "@oblodai-npm/sdk";
+
+const oblodai = new Oblodai();
+
+const balance = await oblodai.account.getBalance({
+  timeout: 5, // seconds
+  maxRetries: 0,
+  requestId: "checkout-7f3a", // find this call in our logs by your own id
+  extraHeaders: { "X-Tenant": "eu-1" },
+});
+console.log(balance.balance.merchant);
+
+// A client (or a resource) that starts every call from other defaults:
+const impatient = oblodai.withOptions({ timeout: 3, maxRetries: 1 });
+await impatient.payments.getInfo({ order_id: "order-1001" });
+```
+
+### Суммы
+
+Суммы — десятичные строки в масштабе самого актива. Число — ошибка типов, а дробное число, всё же
+пришедшее из JavaScript, отклоняется до отправки (`ConfigError`, `sdk.float_amount`). Для арифметики —
+точные хелперы:
+
+```ts
+import { addAmounts, amountEquals, compareAmounts, isValidAmount } from "@oblodai-npm/sdk";
+
+console.log(addAmounts("10.000000", "0.5")); // "10.500000"
+console.log(compareAmounts("9", "10")); // -1 — never compare amounts with < or sort()
+console.log(amountEquals("25", "25.000000")); // true
+console.log(isValidAmount("1e3")); // false
+```
+
+Для строк `"9" < "10"` — `false`: никогда не упорядочивайте суммы через `<`, `sort()` или `Math.max`.
+Всё, что не `-?цифры[.цифры]` (≤ 64 символов), — `ConfigError` с кодом `sdk.bad_amount`.
+
+## Песочница / тестирование
+
+Песочный ключ работает с копией шлюза без блокчейна: баланс из крана, имитация поступлений, настоящие
+подписанные вебхуки. Интегрируйтесь сначала с ней — поверхность API та же, поэтому при переходе на
+боевые ключи ничего не меняется.
 
 ```ts
 import { Oblodai } from "@oblodai-npm/sdk";
@@ -140,72 +203,65 @@ const invoice = await oblodai.payments.create({
   network: "tron",
   order_id: `sbx-${Date.now()}`,
 });
-await oblodai.sandbox.deposit({
+await oblodai.sandbox.simulateDeposit({
   invoice_id: invoice.uuid,
   amount: "25",
   confirmations: 20,
   txid: `sbx-tx-${Date.now()}`,
 });
-console.log((await oblodai.payments.info({ uuid: invoice.uuid })).status); // "paid"
+console.log((await oblodai.payments.getInfo({ uuid: invoice.uuid })).status); // "paid"
 
-for await (const delivery of oblodai.sandbox.webhooks({ limit: 20 })) {
-  console.log(delivery.event_type, delivery.status, delivery.payload?.status);
+for await (const delivery of oblodai.sandbox.listWebhooks({ limit: 20 })) {
+  console.log(delivery.event_type, delivery.status);
 }
 await oblodai.sandbox.reset(); // cancel open invoices, zero the balances
 ```
 
-- `sandbox.deposit` зачисляет средства по инвойсу; повторите тот же `txid`, чтобы добавить
-  подтверждения.
-- `sandbox.webhooks` — журнал доставок вместе с телами; `sandbox.replay(deliveryId)` переотправляет
-  доставку в терминальном состоянии (доставлена или мертва).
-- `webhooks.test("payment" | "payout" | "wallet")` прогоняет репетиционную доставку на ваш боевой
-  эндпоинт. Репетиции подписаны точно так же, как настоящие доставки, и несут `test: true` —
-  проверяйте `isTest` и никогда не давайте такой доставке двигать деньги в вашей системе.
+- `sandbox.simulateDeposit` зачисляет на счёт; повтор с тем же `txid` добавляет подтверждения.
+- `sandbox.listWebhooks` — журнал доставок с телами; `sandbox.replayWebhook({ delivery_id })`
+  повторяет завершённую (доставленную или мёртвую) доставку.
+- `webhooks.sendTestPayment` / `sendTestPayout` / `sendTestWallet` / `sendTestConversion` —
+  репетиция доставки на ваш адрес. Репетиции подписаны как настоящие и несут `test: true` —
+  проверяйте `isTest` и никогда не двигайте по ним деньги.
 
 ## Обзор методов
 
-Шестнадцать неймспейсов, 107 мерчантских маршрутов — на каждый маршрут шлюза здесь есть метод.
+Шестнадцать ресурсов, 120 маршрутов — у каждого маршрута шлюза здесь есть метод.
 
-| Неймспейс      | Методы                                                                                                                                                                                                                      | Маршруты                                                                                                              |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `payments`     | create · info/get · cancel · history/list · batch · qr · services · sendEmail · resend · publicView · select · publicQr                                                                                                     | 12 — `/v1/payment*`, `/v1/pay/{id}*`                                                                                  |
-| `refunds`      | create · resolve · batch                                                                                                                                                                                                    | 3 — `/v1/payment/refund`, `/v1/payment/resolve`, `/v1/refund/batch`                                                   |
-| `payouts`      | create · validate · calculate · info/get · cancel · approve · history/list · mass · batch · services · getFeeConfig/setFeeConfig · getRefundFeeConfig/setRefundFeeConfig                                                    | 14 — `/v1/payout*`                                                                                                    |
-| `payoutLinks`  | create · info/get · list · cancel · batch · cheque · claimPreview · claim                                                                                                                                                   | 8 — `/v1/payout/link*`, `/v1/claim/{token}`                                                                           |
-| `paymentLinks` | create · info/get · list · toggle · publicView · checkout                                                                                                                                                                   | 6 — `/v1/payment/link*`, `/v1/link/{id}*`                                                                             |
-| `batches`      | info                                                                                                                                                                                                                        | 1 — `/v1/batch/info`                                                                                                  |
-| `transfers`    | toPersonal · toUser · batch                                                                                                                                                                                                 | 3 — `/v1/transfer/*`                                                                                                  |
-| `wallets`      | create · qr · block · refundBlockedDeposit                                                                                                                                                                                  | 4 — `/v1/wallet*`                                                                                                     |
-| `webhooks`     | register · rotateSecret · deliveries · test · testLegacy                                                                                                                                                                    | 7 — `/v1/webhooks*`, `/v1/test-webhook/*`, `/v1/payment/testing-webhook`                                              |
-| `documents`    | statement · ledger · balanceCertificate · feeSchedule · splitReport · batchReport · linkReport · walletStatement · referralsReport · createJob · jobInfo · jobFile · download                                               | 13 — `/v1/documents/*`                                                                                                |
-| `splits`       | createRule · listRules · deleteRule · getConfig/setConfig · getOptIn/setOptIn                                                                                                                                               | 7 — `/v1/split/*`                                                                                                     |
-| `settings`     | setDiscount · listDiscounts · getAccuracy/setAccuracy · getAutoRefund/setAutoRefund · listAccepted/setAccepted · getPaymentFeeConfig/setPaymentFeeConfig · list/set/deleteAutoWithdraw · list/add/remove/enableApiAllowlist | 17 — `/v1/payment/{discount,accuracy,autorefund,accepted,fee-config}/*`, `/v1/auto-withdraw/*`, `/v1/api-allowlist/*` |
-| `account`      | balance · referral · vrcs                                                                                                                                                                                                   | 3 — `/v1/balance`, `/v1/referral/info`, `/v1/vrcs`                                                                    |
-| `catalog`      | currencies · exchangeRates                                                                                                                                                                                                  | 2 — `/v1/currencies`, `/v1/exchange-rate/list`                                                                        |
-| `sandbox`      | faucet · deposit · webhooks · replay · reset                                                                                                                                                                                | 5 — `/v1/sandbox/*`                                                                                                   |
-| `merchants`    | create · createSandbox                                                                                                                                                                                                      | 2 — `/v1/merchants`, `/v1/merchants/{id}/sandbox`                                                                     |
+| Ресурс         | Методы                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `payments`     | create · getInfo · getQr · listHistory · listServices · cancel · sendEmail · setCheckoutConfig · getCheckoutConfig · getAmlLinks · resolve                                                                                                                                                                                                                                                                     |
+| `paymentLinks` | create · list · get · toggle                                                                                                                                                                                                                                                                                                                                                                                   |
+| `refunds`      | payment · blockedWallet                                                                                                                                                                                                                                                                                                                                                                                        |
+| `payouts`      | create · createMass · getInfo · listHistory · calculate · validate · cancel · approve · listServices · transferToPersonal · transferToUser · createTransferBatch                                                                                                                                                                                                                                               |
+| `payoutLinks`  | create · createBatch · list · get · cancel · getPayoutClaim · claimPayout                                                                                                                                                                                                                                                                                                                                      |
+| `batches`      | createPayment · createRefund · createPayout · getInfo                                                                                                                                                                                                                                                                                                                                                          |
+| `splits`       | createRule · listRules · deleteRule · setConfig · getConfig · setRecipientOptIn · getRecipientOptIn                                                                                                                                                                                                                                                                                                            |
+| `wallets`      | create · block · getQr                                                                                                                                                                                                                                                                                                                                                                                         |
+| `account`      | getBalance · getSummary · listExchangeRates                                                                                                                                                                                                                                                                                                                                                                    |
+| `webhooks`     | resendPayment · register · listDeliveries · requeueDelivery · sendLegacyTest · sendTestPayment · sendTestWallet · sendTestPayout · sendTestConversion · rotateSecret · setActive                                                                                                                                                                                                                               |
+| `settings`     | setAccuracy · getAccuracy · setAutoRefund · getAutoRefund · setDiscount · listDiscounts · listApiLog · getAutoConvert · setAutoConvert · setAcceptedCurrencies · listAcceptedCurrencies · setPayoutFeeConfig · getPayoutFeeConfig · setRefundFeeConfig · getRefundFeeConfig · setPaymentFeeConfig · getPaymentFeeConfig · setAutoWithdrawRule · listAutoWithdrawRules · deleteAutoWithdrawRule · configureVrcs |
+| `apiAllowlist` | list · addEntry · removeEntry · setEnabled                                                                                                                                                                                                                                                                                                                                                                     |
+| `referrals`    | getInfo                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `documents`    | getSigned · getBalance · getFees · getLedger · getSplit · getPayoutLinkCheque · getStatement · getBatch · getPaymentLink · getWalletStatement · getReferrals · createJob · getJob · downloadJobFile                                                                                                                                                                                                            |
+| `checkout`     | getSourceOfFundsForm · submitSourceOfFunds · getPublicPaymentLink · paymentLink · listCurrencies · get · selectMethod · startOnramp · getOnramp · getQr                                                                                                                                                                                                                                                        |
+| `sandbox`      | onboardStore · faucet · simulateDeposit · reset · listWebhooks · replayWebhook                                                                                                                                                                                                                                                                                                                                 |
 
-Соглашения, общие для всех:
+Имена подчиняются одному правилу: OpenAPI `operationId` без имени ресурса, в camelCase
+(`createPayoutBatch` → `batches.createPayout`). Они зафиксированы в [`names.lock`](names.lock);
+переименование — ломающее изменение и роняет сборку SDK.
 
-- Получить один объект: `.info(uuid | { order_id })`, псевдоним `.get`. Получить много:
-  `.history(params)` у платежей и выплат (псевдоним `.list`), `.list(params)` в остальных случаях.
-- Каждый метод принимает один и тот же необязательный последний аргумент —
-  `{ idempotencyKey, signal, timeoutMs, deadlineMs }`.
-- Синхронные массовые вызовы ограничены по числу элементов — `payouts.mass` до 100, `payoutLinks.batch`
-  до 500 — и отчитываются по каждому элементу отдельно (`{ idx, ok, result, message, error_code }`),
-  так что и внутри 200 могут быть отказы. Асинхронные батчи (`payments.batch`, `payouts.batch`,
-  `refunds.batch`, `transfers.batch`) принимают до 5000 элементов, их состояние опрашивается через
-  `batches.info`.
-- Методы документов возвращают `FileResult` — `{ bytes, contentType, filename }`.
-- Методы для плательщика (`payments.publicView/select/publicQr`, `paymentLinks.publicView/checkout`,
-  `payoutLinks.claimPreview/claim`) вообще не требуют учётных данных.
-- Провижининг (`merchants.create`, `merchants.createSandbox`) идёт без подписи и закрыт админ-токеном
-  шлюза.
+- Синхронные массовые вызовы ограничены — `payouts.createMass` до 100 элементов,
+  `payoutLinks.createBatch` до 500 — и отчитываются по каждому элементу отдельно, так что в ответе 200
+  могут быть неудачи. Асинхронные пачки (`batches.*`, `payouts.createTransferBatch`) принимают до
+  5000 элементов, и их можно дождаться (ниже).
+- Методы документов возвращают `FileResult` — `{ content, contentType, filename }`.
 
 ### Списки
 
-Списочные методы возвращают `PagePromise` — настоящий Promise, который вдобавок можно перебирать
-асинхронно. Пока вы его не потребите, запросов не будет.
+Метод-список возвращает `Page` — ленивый, асинхронно итерируемый и ожидаемый (`await`). Ничего не
+запрашивается, пока его не начнут читать, и первая страница запрашивается один раз, как бы её ни
+читали.
 
 ```ts
 import { Oblodai } from "@oblodai-npm/sdk";
@@ -213,122 +269,152 @@ import { Oblodai } from "@oblodai-npm/sdk";
 const oblodai = new Oblodai();
 
 // one page: { items, paginate: { total, per_page, offset, has_pages } }
-const page = await oblodai.payments.history({ limit: 50 });
-console.log(page.items.length, page.paginate.total);
+const page = await oblodai.payments.listHistory({ limit: 50 });
+console.log(page.items.length, page.total);
 
-// every item, page by page
-for await (const payout of oblodai.payouts.history({ status: "confirmed" }))
+// every item, page after page
+for await (const payout of oblodai.payouts.listHistory({ status: "confirmed" })) {
   console.log(payout.uuid);
+}
+
+// page by page
+for await (const p of oblodai.payments.listHistory({ limit: 100 }).byPage()) {
+  console.log(p.offset, p.items.length);
+}
 
 // up to N items as an array
-const refunds = await oblodai.payouts.history({ kind: "refund" }).all(1000);
+const refunds = await oblodai.payouts.listHistory({ kind: "refund" }).all(1000);
+console.log(refunds.length);
+```
+
+### Долгие операции
+
+Пачки и фоновые выгрузки документов отвечают сразу, а завершаются позже. Их ответ несёт ожидатель:
+`wait()` опрашивает статус, пока он не станет конечным, и возвращает последний статус (задача со
+статусом `failed` тоже возвращается — разберите её); выгрузка документа затем отдаёт файл через
+`download()`.
+
+```ts
+import { Oblodai } from "@oblodai-npm/sdk";
+
+const oblodai = new Oblodai();
+
+const batch = await oblodai.batches.createPayout({
+  on_error: "continue",
+  payouts: [
+    {
+      amount: "5",
+      currency: "USDT",
+      network: "tron",
+      address: "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+      order_id: "bonus-1",
+    },
+  ],
+});
+const info = await batch.wait({ timeout: 300, interval: 2 }); // seconds
+console.log(info.status, info.succeeded, info.failed);
+
+const job = await oblodai.documents.createJob({ kind: "statement", format: "pdf", lang: "en" });
+const done = await job.wait();
+if (done.status === "done") {
+  const file = await job.download();
+  console.log(file.filename, file.content.length);
+}
 ```
 
 ### Статусы
 
 - Платёж: `select → created → confirm_check → paid | paid_over | wrong_amount | expired | cancelled`.
   `isPaymentPaid(status)` истинно для `paid`/`paid_over`; `wrong_amount` (недоплата) ждёт
-  `refunds.resolve({ uuid, action: "accept" | "refund" })`; остальное покрывает `isPaymentFinal`.
+  `payments.resolve({ uuid, action: "accept" | "refund" })`; `isPaymentFinal` покрывает остальное.
 - Выплата: `pending → approved → awaiting_cosign → broadcasting → sent → confirmed | failed | cancelled`,
-  для неё есть `isPayoutFinal` и `isPayoutSucceeded`.
+  с `isPayoutFinal` и `isPayoutSucceeded`.
 
-Об изменениях состояния лучше узнавать из вебхуков; `info` опрашивать только как запасной вариант.
-
-### Суммы
-
-`addAmounts`, `subtractAmounts`, `compareAmounts`, `amountEquals`, `isZeroAmount`, `isValidAmount` —
-точная десятичная арифметика над строковыми суммами, которыми оперирует API. Никогда не применяйте
-`parseFloat` к `Money` и никогда не сравнивайте суммы через `<`, `sort()` или `Math.max`: `Money` —
-это `string`, поэтому `"9" < "10"` компилируется и даёт неверный результат. Значение, не подходящее
-под `-?digits[.digits]` (не длиннее 64 символов), поднимает `ConfigError` с кодом `sdk.bad_amount` —
-а не системный `TypeError`.
+Изменения состояния лучше получать вебхуками; опрос `getInfo` — только запасной путь.
 
 ## Вебхуки
 
-Зарегистрируйте эндпоинт через `webhooks.register(url)`, а затем проверяйте каждую доставку по
-**сырому** телу, до его разбора:
+Зарегистрируйте адрес через `webhooks.register({ url })`, затем проверяйте каждую доставку по
+**сырому** телу, до разбора:
 
 ```ts
-import express from "express";
-import { verifyWebhookDelivery, isKnownEvent } from "@oblodai-npm/sdk/webhooks";
+import { createServer } from "node:http";
+import { SignatureError, isKnownEvent, verifyWebhookDelivery } from "@oblodai-npm/sdk/webhooks";
 
-const app = express();
+const paidOrders = new Set<string>();
 
-app.post("/oblodai/webhook", express.raw({ type: "*/*" }), (req, res) => {
-  const { event, id, isTest } = verifyWebhookDelivery(req.body, req.headers, {
-    secret: process.env.OBLODAI_WEBHOOK_SECRET!,
-    previousSecret: process.env.OBLODAI_WEBHOOK_SECRET_PREV, // during rotation
+export const server = createServer((req, res) => {
+  const chunks: Buffer[] = [];
+  req.on("data", (chunk: Buffer) => chunks.push(chunk));
+  req.on("end", () => {
+    try {
+      const { event, isTest } = verifyWebhookDelivery(Buffer.concat(chunks), req.headers, {
+        secret: process.env.OBLODAI_WEBHOOK_SECRET ?? "",
+        previousSecret: process.env.OBLODAI_WEBHOOK_SECRET_PREV || undefined, // during rotation
+      });
+      // A rehearsal never moves money; a type from a newer gateway is acknowledged and skipped.
+      if (!isTest && isKnownEvent(event) && event.type === "payment" && event.status === "paid") {
+        paidOrders.add(event.order_id ?? event.uuid);
+      }
+      res.writeHead(200).end();
+    } catch (err) {
+      res.writeHead(err instanceof SignatureError ? 401 : 500).end();
+    }
   });
-  if (isTest) return res.sendStatus(200); // a rehearsal — never move money on it
-  if (!isKnownEvent(event)) return res.sendStatus(200); // a type from a newer gateway
-  // narrowed: event.type is "payment" | "payout" | "wallet"
-  // order_id is null on refund payouts, so fall back to the uuid
-  if (event.type === "payment" && event.status === "paid")
-    markOrderPaid(event.order_id ?? event.uuid, id);
-  res.sendStatus(200);
 });
+// server.listen(3000);
 ```
 
-Проверки идут в фиксированном порядке — заголовки, затем HMAC (текущим секретом, потом
-`previousSecret`), затем свежесть, затем тело — поэтому окно свежести никогда не становится оракулом
-для неаутентифицированного вызывающего. Пустой `secret` (как и пустой `previousSecret`) — это
-`ConfigError`, а не проверка с пустым ключом. `toleranceSec` по умолчанию 300, значение `0` отключает
-проверку свежести.
+Проверки идут в фиксированном порядке — заголовки, затем HMAC (текущий секрет, затем
+`previousSecret`), затем свежесть, затем тело, — поэтому окно свежести никогда не служит оракулом
+для неаутентифицированного отправителя. Пустой `secret` — `ConfigError`, а не проверка пустым
+ключом. `toleranceSec` по умолчанию 300, `0` отключает проверку свежести.
 
-- **Дедуплицируйте по `id`** (`X-Webhook-Id`): он не меняется между ретраями самого шлюза.
-- **Упорядочивайте по `event.sequence`**: `isStaleEvent(event, lastSequence)` возвращает false, а не
-  бросает исключение, когда пригодной последовательности нет.
-- **Репетиции** (`webhooks.test`, доставки песочницы) подписаны как боевые и несут `test: true` (и
-  `X-Webhook-Test: true`); `verifyWebhookDelivery(...).isTest` об этом сообщает.
-- **Неизвестные типы событий** от более нового шлюза возвращаются как есть, в виде
-  `UnknownWebhookEvent`, а не выбрасываются — вызывайте `isKnownEvent(event)` перед разбором по
-  `type`.
-- **Ротация**: после `webhooks.rotateSecret` продолжайте передавать `previousSecret` минимум 26 часов.
+- **Дедуплицируйте по `id`** (`X-Webhook-Id`): он стабилен между повторами самого шлюза.
+- **Упорядочивайте по `event.sequence`**: `isStaleEvent(event, lastSequence)`.
+- **Репетиции** подписаны как боевые и несут `test: true` (и `X-Webhook-Test: true`);
+  `verifyWebhookDelivery(...).isTest` об этом сообщает.
+- **Незнакомые типы событий** от более нового шлюза возвращаются как есть (`UnknownWebhookEvent`), а
+  не бросаются — вызывайте `isKnownEvent(event)` перед `switch` по `type`.
+- **Ротация**: после `webhooks.rotateSecret()` продолжайте передавать `previousSecret` не меньше
+  26 часов.
 
-Два вида отказа — два ответа. `SignatureError` (`webhook.bad_signature`, `webhook.stale_timestamp`,
-`webhook.missing_header`) означает подделанную или переигранную доставку — отвечайте 4xx, причём
-**401 приберегите только для отказов подписи**. `WebhookPayloadError` (`webhook.bad_payload`) — это
-**подлинная** доставка, тело которой не удалось прочитать: отвечайте 5xx, чтобы шлюз повторил её, и
-идите разбираться.
+`SignatureError` (`webhook.bad_signature`, `webhook.stale_timestamp`, `webhook.missing_header`) —
+поддельная или повторённая доставка: отвечайте 4xx. `WebhookPayloadError` (`webhook.bad_payload`) —
+**подлинная** доставка, тело которой не удалось прочитать: отвечайте 5xx, чтобы шлюз повторил её.
 
 ## Ошибки
 
-Любой отказ — это `OblodaiError`, несущий конверт ошибки API: `code`
-(`payout.insufficient_funds`), `httpStatus`, `retryable`, `retryAfter`, `requestId`, `field`. Все
-классы ниже экспортируются из корня пакета, так что `instanceof` работает.
+Любой сбой — `OblodaiError` с конвертом ошибки API: `code` (`payout.insufficient_funds`),
+`httpStatus`, `retryable`, `retryAfter`, `requestId`, `field`. `String(err)` читается как
+`[код] текст (request_id=…)` — той же строкой начинается стек непойманной ошибки, так что одной
+строки лога достаточно, чтобы найти вызов на нашей стороне.
 
-| Класс                                        | HTTP       | Когда                                                                                                                                                                   |
-| -------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ValidationError`                            | 400        | Запрос некорректен; `field` называет виновника                                                                                                                          |
-| `AuthenticationError`                        | 401        | Неверная подпись, неизвестный public id, разъехавшиеся часы                                                                                                             |
-| `PermissionError`                            | 403        | Ключ верный, но действие ему не разрешено: выключенная функция, IP-список, отсутствующее право                                                                          |
-| `NotFoundError`                              | 404        | Такого объекта нет                                                                                                                                                      |
-| `ConflictError` / `IdempotencyConflictError` | 409        | Конфликт состояния; второй — переиспользованный ключ идемпотентности с другим телом                                                                                     |
-| `RateLimitError`                             | 429        | Троттлинг; `retryAfter` заполнен                                                                                                                                        |
-| `UnavailableError`                           | 503        | Шлюз временно недоступен; можно повторить                                                                                                                               |
-| `InternalError`                              | прочие 5xx | Сбой на стороне шлюза                                                                                                                                                   |
-| `TransportError`                             | —          | Ответа не было вовсе: DNS, TCP, TLS, таймаут, отмена                                                                                                                    |
-| `ConfigError`                                | —          | Отказ до отправки: плохие опции, заголовок, который SDK не отправит, ключ идемпотентности на маршруте, который шлюз не дедуплицирует, сумма не в виде десятичной строки |
-| `ContractError`                              | —          | Ответ не является документированным конвертом или слишком велик для буферизации                                                                                         |
-| `SignatureError` / `WebhookPayloadError`     | —          | Проверка вебхука (см. выше)                                                                                                                                             |
+| Класс                                        | HTTP       | Когда                                                                                             |
+| -------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------- |
+| `ValidationError`                            | 400        | Запрос некорректен; `field` называет поле                                                         |
+| `AuthenticationError`                        | 401        | Неверная подпись, неизвестный публичный id, сбитые часы                                           |
+| `PermissionError`                            | 403        | Ключ верен, но это действие ему не разрешено                                                      |
+| `NotFoundError`                              | 404        | Объекта нет                                                                                       |
+| `ConflictError` / `IdempotencyConflictError` | 409        | Конфликт состояния; второй — повтор ключа идемпотентности с другим телом                          |
+| `RateLimitError`                             | 429        | Ограничение частоты; задан `retryAfter`                                                           |
+| `UnavailableError`                           | 503        | Шлюз временно недоступен; можно повторить                                                         |
+| `InternalError`                              | прочие 5xx | Сбой шлюза                                                                                        |
+| `TransportError`                             | —          | Ответа нет вовсе: DNS, TCP, TLS, таймаут, отмена, дедлайн                                         |
+| `ConfigError`                                | —          | Отклонено до отправки: неверные опции, float в сумме, заголовок или ключ, которые SDK не отправит |
+| `ContractError`                              | —          | Ответ — не документированный конверт или слишком велик                                            |
+| `SignatureError` / `WebhookPayloadError`     | —          | Проверка вебхука (см. выше)                                                                       |
 
-`retryable` авторитетен: SDK уже повторил всё, что можно было повторить безопасно, поэтому дошедшая
-до вас ошибка с `retryable` — та, которую вы вправе переназначить сами. `retryAfter` — подсказка
-самого шлюза в секундах. `requestId` называйте в поддержке. `err.synthetic` истинно, когда в ответе
-не было конверта шлюза: ответил прокси или балансировщик, а не API; при этом небулев `retryable`,
-числовой `code` или бессмысленный `retry_after` наружу не просачиваются — SDK откатывается к тому,
-что оправдывает один только HTTP-статус. `JSON.stringify(err)` сохраняет `message` и выбрасывает
-сырое тело.
-
-Ветвитесь по `code`, а не по сообщению. Полный каталог — 469 кодов, экспортируется как `ERROR_CODES` и
-типизирован как `ErrorCode`:
+Ветвитесь по `code`, а не по тексту. Каждый код, который документирует шлюз, экспортирован как
+`ErrorCode`:
 
 ```ts
-import { Oblodai, OblodaiError, type CreatePayoutParams } from "@oblodai-npm/sdk";
+import { Oblodai, OblodaiError, type PayoutRequest } from "@oblodai-npm/sdk";
 
 const oblodai = new Oblodai();
+const retryLater: number[] = [];
 
-async function sendPayout(params: CreatePayoutParams): Promise<void> {
+export async function sendPayout(params: PayoutRequest): Promise<void> {
   try {
     await oblodai.payouts.create(params);
   } catch (err) {
@@ -336,141 +422,136 @@ async function sendPayout(params: CreatePayoutParams): Promise<void> {
     switch (err.code) {
       case "payout.insufficient_funds": // the balance may still arrive
       case "payout.funds_maturing":
-        return scheduleRetry(err.retryAfter ?? 60);
+        retryLater.push(err.retryAfter ?? 60);
+        return;
       default:
+        console.error(String(err)); // [code] message (request_id=…)
         throw err; // the SDK already retried what was safe to retry
     }
   }
 }
+
+await sendPayout({
+  amount: "10",
+  currency: "USDT",
+  network: "tron",
+  address: "TQrY8bkbpXKPt2LZbU8jqfnpFbUSF15sbx",
+  order_id: "payout-43",
+});
 ```
 
-Коды, которые стоит обрабатывать отдельно: `payout.insufficient_funds`, `payout.funds_maturing`,
-`idempotency.key_reused`, `invoice.not_payable`, `payment.not_found`,
-`merchant.bad_signature`, `request.rate_limited`.
+`retryable` авторитетен — SDK уже повторил то, что было безопасно повторять. `err.synthetic` истинно,
+когда ответ пришёл без конверта шлюза (ответил прокси или балансировщик). `JSON.stringify(err)`
+сохраняет `message` и отбрасывает сырое тело.
 
-## Ретраи, идемпотентность и таймауты
+## Повторы, идемпотентность и таймауты
 
-**Что можно повторить — это не догадка.** `ROUTES[key].safe` — собственная, вручную выверенная
-классификация шлюза «только чтение», поставляемая в `contract/contract.json`. SDK никогда не выводит
-безопасность ретрая из пути или HTTP-метода.
+- **Что безопасно повторять — не догадка.** Флаг `safe` каждого маршрута (`ROUTES.<operationId>.safe`)
+  берётся из контракта шлюза (`x-retry-safe`); SDK никогда не выводит его из пути или метода HTTP.
+- Ошибка повторяется, только если API говорит `retryable: true`. Ответы без конверта API (502/503
+  прокси) и сбои транспорта повторяются только на безопасных маршрутах или на записях с ключом —
+  запись, которую шлюз не дедуплицирует, не отправляется повторно, раз она могла до него дойти.
+- `Retry-After` всегда важнее вычисленной паузы; иначе — экспоненциальная пауза с полным джиттером.
+  По умолчанию: `maxRetries: 2`, `baseDelayMs: 250`, `maxDelayMs: 4000`, `maxRetryAfterMs: 30000`.
+- **Ключи идемпотентности автоматические** на маршрутах, которые шлюз дедуплицирует: один ключ на
+  логический вызов, тот же на каждом повторе, так что таймаут не превратится во вторую выплату.
+  Передайте свой `idempotencyKey`, чтобы повторы были безопасны и между перезапусками процесса. На
+  маршруте без дедупликации ключ отклоняется сразу (`sdk.idempotency_unsupported`), а не теряется.
+- **Таймауты — в секундах**: `timeout` ограничивает одну попытку (по умолчанию 30), `deadline` — весь
+  вызов с повторами и паузами (по умолчанию 90).
+- **Сбитые часы исправляются один раз** по заголовку `Date` ответа при ошибке подписи.
+- **Редиректы никогда не выполняются**, а тела ограничены при чтении (8 МиБ JSON, 64 МиБ файлы).
 
-- Ошибка повторяется только тогда, когда API сказал `retryable: true`. Ответы без конверта API (502/503
-  от прокси) и транспортные сбои повторяются только на читающих маршрутах и на записях с ключом
-  идемпотентности: запись, которую шлюз не дедуплицирует, не переотправляется, если она могла дойти.
-- `Retry-After` всегда важнее вычисленной задержки; иначе — экспоненциальный откат с полным джиттером.
-  Значения по умолчанию: `maxRetries: 2`, `baseDelayMs: 250`, `maxDelayMs: 4000`,
-  `maxRetryAfterMs: 30000`. `retry: { maxRetries: 0 }` отключает ретраи полностью.
-- **Ключи идемпотентности проставляются автоматически** на создающих маршрутах: один ключ на один
-  логический вызов, переиспользуемый при каждом ретрае, — поэтому таймаут не может породить вторую
-  выплату. Передавайте свой `idempotencyKey`, чтобы ретраи оставались безопасными и через перезапуск
-  процесса. На маршруте, который шлюз не дедуплицирует, SDK отвергает ключ сразу (`ConfigError`,
-  `sdk.idempotency_unsupported`), а не молча его выбрасывает, — списочные методы в том числе.
-- **Опции на вызов**: `{ idempotencyKey, signal, timeoutMs, deadlineMs }`.
-  `timeoutMs` ограничивает одну попытку (по умолчанию 30000), `deadlineMs` — весь вызов вместе с
-  ретраями (по умолчанию 90000).
-- **Рассинхрон часов корректируется один раз.** Шлюз отклоняет метки времени, отличающиеся от его
-  собственных больше чем на ±300 с; при отказе подписи SDK узнаёт серверное время из заголовка `Date`,
-  переподписывает запрос один раз и сохраняет смещение, только если эта попытка прошла аутентификацию.
-  Неправдоподобные смещения (> 24 ч) игнорируются.
-- **Редиректы не выполняются никогда** — 3xx с поверхности API это ошибка, а не переход.
-- **Тела ограничены по размеру** при буферизации: 8 МиБ для JSON-конвертов, 64 МиБ для бинарных
-  маршрутов документов (`MAX_JSON_BODY_BYTES`, `MAX_BARE_BODY_BYTES`). Всё, что больше, —
-  `ContractError`.
+### Сырые ответы и хуки
 
-## Конфигурация
+```ts
+import { Oblodai } from "@oblodai-npm/sdk";
+
+const oblodai = new Oblodai({
+  hooks: {
+    onRequest: (r) => console.log("→", r.method, r.url, "attempt", r.attempt, r.requestId),
+    onResponse: (r) => console.log("←", r.status, `${r.elapsed.toFixed(3)} s`),
+  },
+});
+
+const raw = await oblodai.payments.withRawResponse.getInfo({ uuid: "5d6f3a52" });
+console.log(raw.status, raw.requestId, raw.header("content-type"));
+const payment = raw.parse(); // what getInfo() returns
+console.log(payment.status);
+```
+
+Хуки видят каждую попытку (подпись и админ-токен скрыты), с `X-Request-ID` вызова и `operationId`
+маршрута — достаточно для метрик и трассировки без зависимостей.
+
+## Настройка
 
 ```ts
 import { Oblodai, consoleLogger } from "@oblodai-npm/sdk";
 
 const oblodai = new Oblodai({
   baseUrl: "https://api.oblodai.com",
-  timeoutMs: 30_000,
-  deadlineMs: 90_000,
+  timeout: 30, // seconds per attempt
+  deadline: 90, // seconds for the whole call, retries included
   retry: { maxRetries: 2 },
   headers: { "X-Tenant": "eu-1" },
   logger: consoleLogger("info"),
 });
+console.log(JSON.stringify(oblodai)); // redacted: the secret never prints
 ```
 
-| Опция                  | По умолчанию                           | Смысл                                                                            |
-| ---------------------- | -------------------------------------- | -------------------------------------------------------------------------------- |
-| `publicId` / `secret`  | `OBLODAI_PUBLIC_ID` / `OBLODAI_SECRET` | Единственный API-ключ мерчанта; оба или ни одного                                |
-| `baseUrl`              | `https://api.oblodai.com`              | Адрес API; префикс пути сохраняется                                              |
-| `allowInsecureBaseUrl` | `false`                                | Разрешить базовый URL по обычному `http://` вне локальной петли                  |
-| `adminToken`           | `OBLODAI_ADMIN_TOKEN`                  | Токен онбординга self-hosted шлюза; используют только два маршрута `merchants.*` |
-| `timeoutMs`            | `30000`                                | Таймаут одной попытки                                                            |
-| `deadlineMs`           | `90000`                                | Бюджет на весь вызов, включая ретраи                                             |
-| `retry`                | см. выше                               | `{ maxRetries, baseDelayMs, maxDelayMs, maxRetryAfterMs }`                       |
-| `headers`              | —                                      | Дополнительные заголовки на каждом запросе                                       |
-| `logger`               | `OBLODAI_LOG`                          | Структурный логгер; `consoleLogger(level)` идёт в комплекте                      |
-| `fetch`                | глобальный `fetch`                     | Свой fetch — undici с прокси-агентом, записывающая заглушка в тестах             |
+| Опция                  | По умолчанию                           | Смысл                                                                |
+| ---------------------- | -------------------------------------- | -------------------------------------------------------------------- |
+| `publicId` / `secret`  | `OBLODAI_PUBLIC_ID` / `OBLODAI_SECRET` | Единственный API-ключ мерчанта; оба или ни одного                    |
+| `baseUrl`              | `https://api.oblodai.com`              | Адрес API; префикс пути сохраняется                                  |
+| `allowInsecureBaseUrl` | `false`                                | Разрешить обычный `http://` не на loopback                           |
+| `adminToken`           | `OBLODAI_ADMIN_TOKEN`                  | Токен онбординга self-hosted шлюза; только `sandbox.onboardStore`    |
+| `timeout`              | `30`                                   | Таймаут одной попытки, секунды                                       |
+| `deadline`             | `90`                                   | Бюджет всего вызова с повторами, секунды                             |
+| `retry`                | см. выше                               | `{ maxRetries, baseDelayMs, maxDelayMs, maxRetryAfterMs }`           |
+| `headers`              | —                                      | Дополнительные заголовки каждого запроса                             |
+| `hooks`                | —                                      | `{ onRequest, onResponse }`, по разу на попытку                      |
+| `logger`               | `OBLODAI_LOG`                          | Структурный логгер; есть `consoleLogger(level)`                      |
+| `fetch`                | глобальный `fetch`                     | Свой fetch — undici с прокси-агентом, записывающая заглушка в тестах |
 
 | Переменная окружения     | Смысл                                                               |
 | ------------------------ | ------------------------------------------------------------------- |
-| `OBLODAI_PUBLIC_ID`      | Public id API-ключа мерчанта (боевого или песочного)                |
+| `OBLODAI_PUBLIC_ID`      | Публичный id API-ключа мерчанта (боевого или песочного)             |
 | `OBLODAI_SECRET`         | Его секрет                                                          |
 | `OBLODAI_ADMIN_TOKEN`    | Админ-токен онбординга self-hosted шлюза                            |
 | `OBLODAI_BASE_URL`       | Адрес API                                                           |
 | `OBLODAI_LOG`            | `debug` \| `info` \| `warn` \| `error` — включает консольный логгер |
-| `OBLODAI_ALLOW_INSECURE` | `1` разрешает нелокальный базовый URL по обычному `http://`         |
+| `OBLODAI_ALLOW_INSECURE` | `1` разрешает обычный `http://` не на loopback                      |
 
-Заголовки, добавленные через `headers:`, уходят с каждым запросом, кроме тех, которыми владеет сам
-SDK (`Accept`, `Content-Type`, `User-Agent`, `X-Public-Id`, `X-Signature`, `X-Timestamp`,
-`Idempotency-Key`, `X-Admin-Token`, сравнение без учёта регистра) — эти всегда побеждают. Значение
-заголовка с CR/LF или не-ASCII символом — это `ConfigError`.
+Заголовки, которыми владеет SDK (`Accept`, `Content-Type`, `User-Agent`, `X-Public-Id`,
+`X-Signature`, `X-Timestamp`, `Idempotency-Key`, `X-Admin-Token`), всегда важнее ваших; значение
+заголовка с CR/LF или не-ASCII символом — `ConfigError`.
 
-**Секреты не печатаются.** Клиент, его транспорт, разобранные учётные данные и любой результат с
-секретом внутри — `secret` вебхука, только что выпущенный API-ключ, `claim_token`/`claim_url`/`passcode`
-выплатной ссылки — отображаются как `[redacted]` в `JSON.stringify` и `console.log`/`util.inspect`, на
-любой глубине. Сами значения по-прежнему читаются как свойства (`endpoint.secret` работает); вычищается
-только автоматическое отображение. Логгер, переданный через `logger:`, получает поля уже
-отредактированными, так что случайный `logger.info({ client })` не сможет утечь ключом.
-
-Локальный или self-hosted шлюз не требует церемоний: `baseUrl: "http://localhost:8095"` работает
-из коробки, для остальных хостов по обычному `http://` нужен `allowInsecureBaseUrl: true` (или
-`OBLODAI_ALLOW_INSECURE=1`).
-
-## Контрактный снимок
-
-`contract/` выгружается собственным тестовым набором шлюза, а не пишется руками. В нём лежат реестр
-маршрутов — 107 мерчантских маршрутов, у каждого флаги `auth`, `idempotent`, `safe`, `bare` и `list`, —
-схемы DTO запросов с англоязычным описанием полей, перечисления, все коды ошибок (469), векторы
-подписи, эталонные тела ответов, записанные с живого шлюза, и настоящие подписанные доставки вебхуков.
-Этот релиз собран с ядра `2cc44c16f516`.
-
-`src/contract/` генерируется из снимка командой `npm run codegen`. `npm run check-drift` падает, когда
-эти двое разошлись, а `npm test` сверяет каждую модель с эталонными телами и каждый флаг маршрута с
-контрактом — так что документация, тип и шлюз не могут тихо разъехаться. `contract.json` едет внутри
-пакета:
-
-```ts
-import { ROUTES, ERROR_CODES, CONTRACT_CORE_COMMIT } from "@oblodai-npm/sdk";
-
-console.log(Object.keys(ROUTES).length, ERROR_CODES.length, CONTRACT_CORE_COMMIT);
-console.log(ROUTES["POST /v1/payout"].safe); // false — never retried blindly
-```
-
-Эталонные фикстуры и примеры вебхуков лежат в репозитории, а не в опубликованном тарболе. Чтобы
-обновить снимок, выполните `scripts/contract-pull.sh <core checkout>`, а затем `npm run codegen`.
+**Секреты не печатаются.** Клиент, его транспорт и каждый результат с секретом — `secret` вебхука,
+только что выпущенный API-ключ, `claim_token`/`claim_url`/`passcode` выплатной ссылки — выводятся как
+`[redacted]` в `JSON.stringify` и `console.log`/`util.inspect` на любой глубине, а сами значения
+остаются доступны как свойства.
 
 ## Разработка
 
-```bash
-git clone https://github.com/oblodai/oblodai-node.git
-cd oblodai-node
-npm install
+Код в `src/generated/` генерирует `tools/sdkgen` из OpenAPI-контракта шлюза в репозитории бэкенда
+(`make sdk` там) — руками его не правят. Runtime вокруг него (`src/core`, `src/resources/base.ts`,
+`src/lro.ts`, `src/webhooks.ts`) написан руками.
 
-npm run ci          # fmt:check + check-drift + typecheck (src + examples) + build + test
-npm test            # unit + contract tests
-npm run fmt         # prettier
-npm run codegen     # after refreshing contract/ (scripts/contract-pull.sh <core checkout>)
+```bash
+npm install
+make ci             # format, drift, types, tests, conformance, build, package
+npm test            # unit, conformance and documentation tests
+make drift          # fail when src/generated is stale (OBLODAI_BACKEND=<backend checkout>)
 
 # the live tier: runs the full journey against a real gateway
 OBLODAI_LIVE_URL=http://localhost:8095 npm run test:live
 ```
 
-Что почитать дальше: [AGENTS.md](AGENTS.md) (компактный справочник для кодовых агентов),
-[CHANGELOG.md](CHANGELOG.md), [MIGRATION-1.3.md](MIGRATION-1.3.md) — про переход с 1.x.
+`make ci` берёт checkout бэкенда из `OBLODAI_BACKEND` (иначе `../oblodai-backend`) для проверки
+дрейфа и общего набора сценариев conformance (`tools/sdkgen/conformance`); каждый блок TypeScript
+этого README и каждая программа в `examples/` исполняются в тестах на подставном шлюзе.
+
+Дальше: [AGENTS.md](AGENTS.md), [CHANGELOG.md](CHANGELOG.md), [MIGRATION-2.0.md](MIGRATION-2.0.md).
 
 ## Лицензия
 
