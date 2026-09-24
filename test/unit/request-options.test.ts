@@ -74,7 +74,7 @@ describe("per-call options (spec §3.2)", () => {
     };
     const err = await ob.sandbox.faucet(own, { idempotencyKey: "tap-2" }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ConfigError);
-    expect((err as ConfigError).code).toBe("sdk.bad_idempotency_key");
+    expect((err as ConfigError).code).toBe("sdk.bad_config");
     expect((err as ConfigError).message).toContain("idempotency_key");
     expect(calls).toHaveLength(0);
     // The field alone is sent as given.
