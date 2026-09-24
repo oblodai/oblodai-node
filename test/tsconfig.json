@@ -4,7 +4,11 @@
     "rootDir": "..",
     "noEmit": true,
     "declaration": false,
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vitest/globals"],
+    "paths": {
+      "@oblodai-npm/sdk": ["../src/index.ts"],
+      "@oblodai-npm/sdk/webhooks": ["../src/webhooks.ts"]
+    }
   },
   "include": ["./**/*.ts", "../src/**/*"],
   "exclude": ["../node_modules", "../dist"]

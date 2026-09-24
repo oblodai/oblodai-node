@@ -1,5 +1,5 @@
 import { ROUTES } from "../generated/routes.js";
-import { LRO, POLLS } from "../lro.js";
+import { POLLS } from "../generated/facts.js";
 import { ConfigError } from "../core/errors.js";
 import { fileResult, type FileResult } from "../core/file.js";
 import { mergeOptions, type RequestOptions } from "../core/options.js";
@@ -164,11 +164,9 @@ export abstract class Resource {
     route: RouteSpec,
     opts: RequestOptions,
   ): ((result: unknown) => unknown) | undefined {
-    const pollId = LRO[route.operationId];
-    if (pollId === undefined) return undefined;
-    const plan = POLLS[pollId];
-    if (!plan) throw new ConfigError("sdk.lro_unresolved", `no poll plan for ${pollId}`);
-    const pollRoute = this._operation(pollId);
+    const plan = Object.hasOwn(POLLS, route.operationId) ? POLLS[route.operationId] : undefined;
+    if (plan === undefined) return undefined;
+    const pollRoute = this._operation(plan.operation);
     const downloadRoute = plan.download ? this._operation(plan.download) : undefined;
     // The create call's options for the follow-ups: same timeout, retries and headers; no
     // idempotency key (it belongs to the create) and a fresh request id per poll.
@@ -184,6 +182,8 @@ export abstract class Resource {
       const id = jobIdOf(plan.idField, result);
       const ref = { [plan.idField]: id };
       return attachJob(result, id, {
+        statusField: plan.statusField,
+        terminal: plan.terminal,
         poll: () => transport.callResult(pollRoute, callOptions(follow, ref)),
         download: downloadRoute
           ? async () =>

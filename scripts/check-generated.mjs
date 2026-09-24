@@ -1,12 +1,13 @@
 // Fail when src/generated is not what the generator makes of the gateway's contract.
 //
 // Regenerates into a temporary directory with the backend's tools/sdkgen (from
-// services/core/api/openapi.json, checked against names.lock) and compares file by file. The backend
+// services/core/api/openapi.json, checked against names.lock without touching it) and compares file
+// by file, including the generated method tables of README.md and README.ru.md. The backend
 // checkout is $OBLODAI_BACKEND, else ../oblodai-backend next to this repository. Without a backend
 // that has tools/sdkgen the check is skipped, loudly; with --require it fails instead. Fix drift by
 // regenerating (`make sdk` in the backend), never by hand.
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,8 +38,10 @@ const tsFiles = (dir) =>
         .sort()
     : [];
 
+const READMES = ["README.md", "README.ru.md"];
 const tmp = mkdtempSync(join(tmpdir(), "oblodai-node-sdkgen-"));
 try {
+  for (const f of READMES) copyFileSync(join(ROOT, f), join(tmp, f));
   const done = spawnSync(
     "go",
     [
@@ -52,6 +55,7 @@ try {
       tmp,
       "-lock",
       join(ROOT, "names.lock"),
+      "-frozen-lock",
     ],
     {
       cwd: sdkgen,
@@ -78,9 +82,12 @@ try {
       bad.add(f);
     }
   }
+  for (const f of READMES) {
+    if (!readFileSync(join(tmp, f)).equals(readFileSync(join(ROOT, f)))) bad.add(f);
+  }
   if (bad.size) {
     console.error(
-      `check-generated: src/generated is stale (${[...bad].sort().join(", ")}); regenerate with \`make sdk\` in the backend`,
+      `check-generated: generated code is stale (${[...bad].sort().join(", ")}); regenerate with \`make sdk\` in the backend`,
     );
     process.exit(1);
   }

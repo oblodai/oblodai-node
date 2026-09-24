@@ -39,7 +39,7 @@ export type { Paginate } from "./core/pagination.js";
 export { RawAPIResponse } from "./core/raw.js";
 export type { Hooks, RequestInfo, ResponseInfo } from "./core/hooks.js";
 export type { JobHandle, FileJobHandle, WaitOptions } from "./core/poller.js";
-export { LRO, TERMINAL_STATUSES } from "./lro.js";
+export { LRO, TERMINAL_STATUSES } from "./core/poller.js";
 export type { RetryOptions } from "./core/retry.js";
 export type { Logger, LogFields } from "./core/logger.js";
 export { consoleLogger } from "./core/logger.js";
@@ -52,7 +52,8 @@ export type { WithRawResponse, RawResult } from "./resources/base.js";
 export { signRequest, canonicalString, signWebhook } from "./core/signing.js";
 export { newIdempotencyKey } from "./core/idempotency.js";
 
-// Generated from the API contract: resources, route table, enums, models.
+// Generated from the API contract: resources, route table, enums, models, webhook event kinds and
+// status helpers.
 export * from "./generated/index.js";
 
 // Helpers
@@ -67,7 +68,6 @@ export {
   isKnownEvent,
   isStaleEvent,
   isTestEvent,
-  KNOWN_EVENT_KINDS,
   DEFAULT_TOLERANCE_SECONDS,
   HEADER_WEBHOOK_ID,
   HEADER_WEBHOOK_EVENT,
@@ -82,10 +82,5 @@ export type {
   WebhookHeaders,
   WebhookDeliveryInfo,
   AnyWebhookEvent,
-  WebhookEvent,
   UnknownWebhookEvent,
-  PaymentEvent,
-  PayoutEvent,
-  WalletEvent,
-  ConversionEvent,
 } from "./webhooks.js";

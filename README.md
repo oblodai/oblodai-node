@@ -224,26 +224,32 @@ await oblodai.sandbox.reset(); // cancel open invoices, zero the balances
 
 ## Method overview
 
-Sixteen resources, 120 routes — every route the gateway exposes has a method here.
+Every route the gateway exposes has a method here; the table is generated from the contract.
 
-| Resource       | Methods                                                                                                                                                                                                                                                                                                                                                                                                        |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `payments`     | create · getInfo · getQr · listHistory · listServices · cancel · sendEmail · setCheckoutConfig · getCheckoutConfig · getAmlLinks · resolve                                                                                                                                                                                                                                                                     |
-| `paymentLinks` | create · list · get · toggle                                                                                                                                                                                                                                                                                                                                                                                   |
-| `refunds`      | payment · blockedWallet                                                                                                                                                                                                                                                                                                                                                                                        |
-| `payouts`      | create · createMass · getInfo · listHistory · calculate · validate · cancel · approve · listServices · transferToPersonal · transferToUser · createTransferBatch                                                                                                                                                                                                                                               |
-| `payoutLinks`  | create · createBatch · list · get · cancel · getPayoutClaim · claimPayout                                                                                                                                                                                                                                                                                                                                      |
-| `batches`      | createPayment · createRefund · createPayout · getInfo                                                                                                                                                                                                                                                                                                                                                          |
-| `splits`       | createRule · listRules · deleteRule · setConfig · getConfig · setRecipientOptIn · getRecipientOptIn                                                                                                                                                                                                                                                                                                            |
-| `wallets`      | create · block · getQr                                                                                                                                                                                                                                                                                                                                                                                         |
-| `account`      | getBalance · getSummary · listExchangeRates                                                                                                                                                                                                                                                                                                                                                                    |
-| `webhooks`     | resendPayment · register · listDeliveries · requeueDelivery · sendLegacyTest · sendTestPayment · sendTestWallet · sendTestPayout · sendTestConversion · rotateSecret · setActive                                                                                                                                                                                                                               |
-| `settings`     | setAccuracy · getAccuracy · setAutoRefund · getAutoRefund · setDiscount · listDiscounts · listApiLog · getAutoConvert · setAutoConvert · setAcceptedCurrencies · listAcceptedCurrencies · setPayoutFeeConfig · getPayoutFeeConfig · setRefundFeeConfig · getRefundFeeConfig · setPaymentFeeConfig · getPaymentFeeConfig · setAutoWithdrawRule · listAutoWithdrawRules · deleteAutoWithdrawRule · configureVrcs |
-| `apiAllowlist` | list · addEntry · removeEntry · setEnabled                                                                                                                                                                                                                                                                                                                                                                     |
-| `referrals`    | getInfo                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `documents`    | getSigned · getBalance · getFees · getLedger · getSplit · getPayoutLinkCheque · getStatement · getBatch · getPaymentLink · getWalletStatement · getReferrals · createJob · getJob · downloadJobFile                                                                                                                                                                                                            |
-| `checkout`     | getSourceOfFundsForm · submitSourceOfFunds · getPublicPaymentLink · paymentLink · listCurrencies · get · selectMethod · startOnramp · getOnramp · getQr                                                                                                                                                                                                                                                        |
-| `sandbox`      | onboardStore · faucet · simulateDeposit · reset · listWebhooks · replayWebhook                                                                                                                                                                                                                                                                                                                                 |
+<!-- prettier-ignore-start -->
+<!-- sdkgen:methods -->
+16 resources, 120 methods.
+
+| Resource | Methods |
+| --- | --- |
+| `payments` | `create` · `getInfo` · `getQr` · `listHistory` · `listServices` · `cancel` · `sendEmail` · `setCheckoutConfig` · `getCheckoutConfig` · `getAmlLinks` · `resolve` |
+| `paymentLinks` | `create` · `list` · `get` · `toggle` |
+| `refunds` | `payment` · `blockedWallet` |
+| `payouts` | `create` · `createMass` · `getInfo` · `listHistory` · `calculate` · `validate` · `cancel` · `approve` · `listServices` · `transferToPersonal` · `transferToUser` · `createTransferBatch` |
+| `payoutLinks` | `create` · `createBatch` · `list` · `get` · `cancel` · `getPayoutClaim` · `claimPayout` |
+| `batches` | `createPayment` · `createRefund` · `createPayout` · `getInfo` |
+| `splits` | `createRule` · `listRules` · `deleteRule` · `setConfig` · `getConfig` · `setRecipientOptIn` · `getRecipientOptIn` |
+| `wallets` | `create` · `block` · `getQr` |
+| `account` | `getBalance` · `getSummary` · `listExchangeRates` |
+| `webhooks` | `resendPayment` · `register` · `listDeliveries` · `requeueDelivery` · `sendLegacyTest` · `sendTestPayment` · `sendTestWallet` · `sendTestPayout` · `sendTestConversion` · `rotateSecret` · `setActive` |
+| `settings` | `setAccuracy` · `getAccuracy` · `setAutoRefund` · `getAutoRefund` · `setDiscount` · `listDiscounts` · `listApiLog` · `getAutoConvert` · `setAutoConvert` · `setAcceptedCurrencies` · `listAcceptedCurrencies` · `setPayoutFeeConfig` · `getPayoutFeeConfig` · `setRefundFeeConfig` · `getRefundFeeConfig` · `setPaymentFeeConfig` · `getPaymentFeeConfig` · `setAutoWithdrawRule` · `listAutoWithdrawRules` · `deleteAutoWithdrawRule` · `configureVrcs` |
+| `apiAllowlist` | `list` · `addEntry` · `removeEntry` · `setEnabled` |
+| `referrals` | `getInfo` |
+| `documents` | `getSigned` · `getBalance` · `getFees` · `getLedger` · `getSplit` · `getPayoutLinkCheque` · `getStatement` · `getBatch` · `getPaymentLink` · `getWalletStatement` · `getReferrals` · `createJob` · `getJob` · `downloadJobFile` |
+| `checkout` | `getSourceOfFundsForm` · `submitSourceOfFunds` · `getPublicPaymentLink` · `paymentLink` · `listCurrencies` · `get` · `selectMethod` · `startOnramp` · `getOnramp` · `getQr` |
+| `sandbox` | `onboardStore` · `faucet` · `simulateDeposit` · `reset` · `listWebhooks` · `replayWebhook` |
+<!-- /sdkgen:methods -->
+<!-- prettier-ignore-end -->
 
 The names follow one rule: the OpenAPI `operationId` without the resource's name, in camelCase
 (`createPayoutBatch` → `batches.createPayout`). They are pinned in [`names.lock`](names.lock); a
@@ -528,8 +534,10 @@ stay readable as properties.
 ## Development
 
 The code under `src/generated/` is generated from the gateway's OpenAPI contract by `tools/sdkgen`
-in the backend repository (`make sdk` there) — never edit it by hand. The runtime around it
-(`src/core`, `src/resources/base.ts`, `src/lro.ts`, `src/webhooks.ts`) is hand-written.
+in the backend repository (`make sdk` there) — never edit it by hand. That includes the facts the
+runtime acts on: long-running operations, webhook event kinds, status classes and the request
+numbers that are not money, as well as the method table above and new names in `names.lock`. The
+runtime around it (`src/core`, `src/resources/base.ts`, `src/webhooks.ts`) is hand-written.
 
 ```bash
 npm install
