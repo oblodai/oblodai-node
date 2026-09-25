@@ -241,6 +241,23 @@ export function parseWebhook(rawBody: string | Uint8Array): AnyWebhookEvent {
 }
 
 /**
+ * The id of the object the event is about — the field `EVENT_ID_FIELDS` (generated from the
+ * contract) names for its kind: a payment's `uuid`, a conversion's `id`, … Key per-object state on
+ * it, e.g. the last `sequence` for `isStaleEvent`.
+ *
+ * `undefined` for a kind this release does not know (or one without such a field): acknowledge the
+ * delivery, but do not guess which field identifies its object.
+ */
+export function objectId(event: object | null | undefined): string | undefined {
+  if (!isRecord(event) || typeof event.type !== "string") return undefined;
+  const field = Object.hasOwn(EVENT_ID_FIELDS, event.type)
+    ? EVENT_ID_FIELDS[event.type]
+    : undefined;
+  const value = field === undefined ? undefined : event[field];
+  return typeof value === "string" ? value : undefined;
+}
+
+/**
  * Deliveries can arrive out of order (a retried `paid` after a `refund`). Keep the last `sequence`
  * you processed per object and skip anything not newer. Never throws: an event without a usable
  * `sequence` is not stale, because nothing about it can be compared.

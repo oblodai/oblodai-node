@@ -68,6 +68,7 @@ export {
   isKnownEvent,
   isStaleEvent,
   isTestEvent,
+  objectId,
   DEFAULT_TOLERANCE_SECONDS,
   HEADER_WEBHOOK_ID,
   HEADER_WEBHOOK_EVENT_ID,

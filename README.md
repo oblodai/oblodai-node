@@ -375,7 +375,8 @@ caller. An empty `secret` is a `ConfigError`, never a verification against the e
 - **Deduplicate on `eventId`** (`X-Webhook-Event-Id`): it names the state and is the same for every
   retry and every resend of it. `id` (`X-Webhook-Id`) names one delivery and changes on a resend
   (`webhooks.resendPayment`, a sandbox replay) — keyed on it, a resent `invoice.paid` is processed twice.
-- **Order with `event.sequence`**: `isStaleEvent(event, lastSequence)`.
+- **Order with `event.sequence`**: `isStaleEvent(event, lastSequence)`, keeping the last sequence per
+  object — `objectId(event)`, the id field the contract names for the event's kind.
 - **Rehearsals** are signed like live ones and carry `test: true` (and `X-Webhook-Test: true`);
   `verifyWebhookDelivery(...).isTest` reports it.
 - **Unknown event types** from a newer gateway are returned verbatim as `UnknownWebhookEvent` rather

@@ -36,6 +36,8 @@ the backend). Breaking: method names, argument shapes and option units change �
   per kind), and status helpers for every classified status enum (`FINAL_<X>_STATUSES`,
   `SUCCESS_<X>_STATUSES`, `is<X>Final`, `is<X>Success` — e.g. `isBatchFinal`,
   `isDocumentJobSuccess`).
+- `objectId(event)`: the id of the object an event is about, from the generated `EVENT_ID_FIELDS`
+  (`uuid`, or `id` on a conversion); `undefined` for an unknown kind — its id field is not guessed.
 - The shared conformance suite of the backend runs in `npm test`; README blocks and `examples/`
   execute in tests; `make ci`; a packaging gate installs the tarball and type-checks ESM and CJS.
 
