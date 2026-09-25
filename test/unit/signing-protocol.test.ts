@@ -94,3 +94,38 @@ describe("the public names alias the generated values", () => {
     expect(IDEMPOTENCY_LIMIT).toBe(gen.MAX_IDEMPOTENCY_KEY_LENGTH);
   });
 });
+
+// The body and idempotency-key limits as source literals: decimal, and `1 << n` for a power of two
+// (digit separators — 1_048_576 — do not hide one). The skew is not scanned for: its value is also an
+// HTTP status class (`< 300`); the alias assertions above hold it.
+function limitPatterns(): RegExp[] {
+  const pats = [gen.MAX_BODY, gen.MAX_IDEMPOTENCY_KEY_LENGTH].map(
+    (limit) => new RegExp(`(?<![\\w.])${limit}(?![\\w.])`),
+  );
+  if ((gen.MAX_BODY & (gen.MAX_BODY - 1)) === 0) {
+    pats.push(new RegExp(`\\b1\\s*<<\\s*${Math.log2(gen.MAX_BODY)}\\b`));
+  }
+  return pats;
+}
+
+describe("the limits are read from src/generated", () => {
+  it("spells no literal of the body or idempotency-key limit outside src/generated", () => {
+    const pats = limitPatterns();
+    const src = join(__dirname, "..", "..", "src");
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir)) {
+        const path = join(dir, entry);
+        if (statSync(path).isDirectory()) {
+          if (entry !== "generated") walk(path);
+          continue;
+        }
+        const text = readFileSync(path, "utf8").replace(/(?<=\d)_(?=\d)/g, "");
+        for (const p of pats)
+          if (p.test(text)) offenders.push(`${relative(src, path)}: ${p.source}`);
+      }
+    };
+    walk(src);
+    expect(offenders).toEqual([]);
+  });
+});
