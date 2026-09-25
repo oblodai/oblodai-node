@@ -1,3 +1,4 @@
+import { ErrorCode } from "../generated/enums.js";
 import { assertNotRedirected, readCapped } from "./body.js";
 import { SkewCorrectingClock } from "./clock.js";
 import { decodeEnvelope } from "./envelope.js";
@@ -81,8 +82,14 @@ export interface RawResponse {
   requestId: string;
 }
 
-/** Error codes that mean the core rejected the signature because of the timestamp or MAC. */
-const SIGNATURE_FAILURE_CODES = new Set(["merchant.bad_signature", "auth.bad_timestamp"]);
+/**
+ * Error codes that mean the core rejected the signature because of the timestamp or MAC. Taken
+ * from the generated `ErrorCode`, so a code renamed in the contract fails to compile.
+ */
+const SIGNATURE_FAILURE_CODES: ReadonlySet<string> = new Set<string>([
+  ErrorCode.MERCHANT_BAD_SIGNATURE,
+  ErrorCode.AUTH_BAD_TIMESTAMP,
+]);
 
 /**
  * Response body caps. The SDK buffers the whole body, so an endless or mistargeted stream would

@@ -1,4 +1,4 @@
-import type { ErrorCode } from "../generated/enums.js";
+import { ErrorCode } from "../generated/enums.js";
 
 /**
  * Error model. One family, `OblodaiError`, mirrors the core's error envelope:
@@ -298,7 +298,7 @@ export function apiErrorFrom(
     synthetic,
     raw,
   };
-  if (init.code === "idempotency.key_reused") return new IdempotencyConflictError(init);
+  if (init.code === ErrorCode.IDEMPOTENCY_KEY_REUSED) return new IdempotencyConflictError(init);
   switch (httpStatus) {
     case 400:
       return new ValidationError(init);
