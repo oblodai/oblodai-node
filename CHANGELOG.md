@@ -36,6 +36,14 @@ the backend). Breaking: method names, argument shapes and option units change �
   per kind), and status helpers for every classified status enum (`FINAL_<X>_STATUSES`,
   `SUCCESS_<X>_STATUSES`, `is<X>Final`, `is<X>Success` — e.g. `isBatchFinal`,
   `isDocumentJobSuccess`).
+- The signing protocol comes from the contract's `x-oblodai-signing` (`src/generated/signing.ts`,
+  generated): the signed-request and webhook header names, the canonical strings, the clock skew,
+  `MAX_BODY` and `MAX_IDEMPOTENCY_KEY_LENGTH`. The public `HEADER_*` and `HEADER_WEBHOOK_*` names
+  (the rehearsal header `HEADER_WEBHOOK_TEST` too, from `webhook.test_header`),
+  `SIGNATURE_SKEW_SECONDS`, `DEFAULT_TOLERANCE_SECONDS` and `MAX_IDEMPOTENCY_KEY_LENGTH` stay, as
+  aliases of the generated values; a header the gateway renames reaches the SDK by regeneration
+  alone, and the conformance suite checks the request a signed call actually sends — method, path
+  and query, body and the headers under the contract's names.
 - `objectId(event)`: the id of the object an event is about, from the generated `EVENT_ID_FIELDS`
   (`uuid`, or `id` on a conversion); `undefined` for an unknown kind — its id field is not guessed.
 - The shared conformance suite of the backend runs in `npm test`; README blocks and `examples/`

@@ -1,6 +1,16 @@
 import { KNOWN_EVENT_KINDS, type WebhookEvent } from "./generated/events.js";
 import { EVENT_ID_FIELDS } from "./generated/facts.js";
-import { SKEW_SECONDS, WEBHOOK_HEADERS } from "./generated/signing.js";
+import {
+  HEADER_WEBHOOK_EVENT,
+  HEADER_WEBHOOK_EVENT_ID,
+  HEADER_WEBHOOK_EVENT_TIME,
+  HEADER_WEBHOOK_ID,
+  HEADER_WEBHOOK_SIGNATURE,
+  HEADER_WEBHOOK_SIGNATURE_PREV,
+  HEADER_WEBHOOK_TEST,
+  HEADER_WEBHOOK_TIMESTAMP,
+  SKEW_SECONDS,
+} from "./generated/signing.js";
 import { ConfigError, OblodaiError, SignatureError, WebhookPayloadError } from "./core/errors.js";
 import { signWebhook } from "./core/signing.js";
 import { constantTimeEqual, headerValue, isRecord } from "./core/util.js";
@@ -101,19 +111,20 @@ export interface WebhookDeliveryInfo {
   isTest: boolean;
 }
 
-/** Delivery headers — names from the contract (`x-oblodai-signing.webhook.headers`). */
-export const HEADER_WEBHOOK_TIMESTAMP = WEBHOOK_HEADERS.timestamp;
-export const HEADER_WEBHOOK_SIGNATURE = WEBHOOK_HEADERS.signature;
-export const HEADER_WEBHOOK_SIGNATURE_PREV = WEBHOOK_HEADERS.signaturePrev;
-export const HEADER_WEBHOOK_EVENT = WEBHOOK_HEADERS.event;
-export const HEADER_WEBHOOK_ID = WEBHOOK_HEADERS.id;
-export const HEADER_WEBHOOK_EVENT_ID = WEBHOOK_HEADERS.eventId;
-export const HEADER_WEBHOOK_EVENT_TIME = WEBHOOK_HEADERS.eventTime;
 /**
- * The rehearsal flag. Not part of the signing protocol (`x-oblodai-signing` does not list it, and the
- * body's own `test: true` is the signed marker), so it is not generated.
+ * Delivery headers — names from the contract (`x-oblodai-signing.webhook.headers`), and the rehearsal
+ * header (`webhook.test_header`): `"true"` on a test delivery, next to the body's signed `test: true`.
  */
-export const HEADER_WEBHOOK_TEST = "X-Webhook-Test";
+export {
+  HEADER_WEBHOOK_EVENT,
+  HEADER_WEBHOOK_EVENT_ID,
+  HEADER_WEBHOOK_EVENT_TIME,
+  HEADER_WEBHOOK_ID,
+  HEADER_WEBHOOK_SIGNATURE,
+  HEADER_WEBHOOK_SIGNATURE_PREV,
+  HEADER_WEBHOOK_TEST,
+  HEADER_WEBHOOK_TIMESTAMP,
+};
 
 /** The freshness window: the contract's skew (`x-oblodai-signing.skew_seconds`). */
 export const DEFAULT_TOLERANCE_SECONDS = SKEW_SECONDS;

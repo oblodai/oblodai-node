@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ConfigError } from "../../src/core/errors.js";
 import { Oblodai } from "../../src/index.js";
 import { apiError, mockFetch, ok } from "../support/mock-fetch.js";
+import { HEADER_IDEMPOTENCY_KEY, HEADER_SIGNATURE } from "../../src/generated/signing.js";
 
 const creds = {
   publicId: "pk_test_1",
@@ -39,10 +40,10 @@ describe("per-call options (spec §3.2)", () => {
   it("extraHeaders merge over the client's headers; the SDK's own names stay the SDK's", async () => {
     const { fetch, calls } = mockFetch([balance()]);
     const ob = new Oblodai({ ...creds, fetch, headers: { "X-Team": "a", "X-Keep": "k" } });
-    await ob.account.getBalance({ extraHeaders: { "X-Team": "b", "X-Signature": "forged" } });
+    await ob.account.getBalance({ extraHeaders: { "X-Team": "b", [HEADER_SIGNATURE]: "forged" } });
     expect(calls[0]!.headers["x-team"]).toBe("b");
     expect(calls[0]!.headers["x-keep"]).toBe("k");
-    expect(calls[0]!.headers["x-signature"]).toMatch(/^[0-9a-f]{64}$/);
+    expect(calls[0]!.headers[HEADER_SIGNATURE.toLowerCase()]).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("idempotencyKey is sent as the header on a route the core deduplicates", async () => {
@@ -51,7 +52,7 @@ describe("per-call options (spec §3.2)", () => {
       { amount: "1", currency: "USDT" },
       { idempotencyKey: "order-1" },
     );
-    expect(calls[0]!.headers["idempotency-key"]).toBe("order-1");
+    expect(calls[0]!.headers[HEADER_IDEMPOTENCY_KEY.toLowerCase()]).toBe("order-1");
   });
 
   it("idempotencyKey fills the route's own idempotency_key field where it has one (Ruling 10)", async () => {
@@ -61,7 +62,7 @@ describe("per-call options (spec §3.2)", () => {
       { idempotencyKey: "tap-1" },
     );
     expect(JSON.parse(calls[0]!.body!).idempotency_key).toBe("tap-1");
-    expect(calls[0]!.headers["idempotency-key"]).toBeUndefined();
+    expect(calls[0]!.headers[HEADER_IDEMPOTENCY_KEY.toLowerCase()]).toBeUndefined();
   });
 
   it("the faucet key given twice — in the body and as the option — is refused before the network", async () => {

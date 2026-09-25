@@ -9,6 +9,11 @@ import {
 import { isKnownEvent } from "../../src/webhooks.js";
 import { ConfigError, SignatureError, WebhookPayloadError } from "../../src/core/errors.js";
 import { signWebhook } from "../../src/core/signing.js";
+import {
+  HEADER_WEBHOOK_SIGNATURE,
+  HEADER_WEBHOOK_TEST,
+  HEADER_WEBHOOK_TIMESTAMP,
+} from "../../src/generated/signing.js";
 
 const SECRET = "whsec_live_1";
 const ts = 1_755_600_000;
@@ -22,8 +27,8 @@ const body = JSON.stringify({
   event_at: "2026-01-01T00:00:00Z",
 });
 const headers = (overrides: Record<string, string> = {}) => ({
-  "x-webhook-timestamp": String(ts),
-  "x-webhook-signature": signWebhook(SECRET, ts, body),
+  [HEADER_WEBHOOK_TIMESTAMP.toLowerCase()]: String(ts),
+  [HEADER_WEBHOOK_SIGNATURE.toLowerCase()]: signWebhook(SECRET, ts, body),
   ...overrides,
 });
 const now = () => ts;
@@ -65,7 +70,10 @@ describe("webhook configuration is checked before any crypto", () => {
 
 describe("the MAC is checked before the timestamp", () => {
   it("answers a forged delivery with bad_signature even when it is also stale", () => {
-    const stale = { ...headers(), "x-webhook-signature": signWebhook("wrong-key", ts, body) };
+    const stale = {
+      ...headers(),
+      [HEADER_WEBHOOK_SIGNATURE.toLowerCase()]: signWebhook("wrong-key", ts, body),
+    };
     const err = (() => {
       try {
         verifyWebhook(body, stale, { secret: SECRET, now: () => ts + 100_000 });
@@ -94,16 +102,20 @@ describe("signature header shapes", () => {
 
   it("accepts surrounding whitespace and upper-case hex", () => {
     expect(
-      verifyWebhook(body, headers({ "x-webhook-signature": `  ${good}\t` }), {
+      verifyWebhook(body, headers({ [HEADER_WEBHOOK_SIGNATURE.toLowerCase()]: `  ${good}\t` }), {
         secret: SECRET,
         now,
       }).type,
     ).toBe("payment");
     expect(
-      verifyWebhook(body, headers({ "x-webhook-signature": good.toUpperCase() }), {
-        secret: SECRET,
-        now,
-      }).type,
+      verifyWebhook(
+        body,
+        headers({ [HEADER_WEBHOOK_SIGNATURE.toLowerCase()]: good.toUpperCase() }),
+        {
+          secret: SECRET,
+          now,
+        },
+      ).type,
     ).toBe("payment");
   });
 
@@ -111,7 +123,10 @@ describe("signature header shapes", () => {
     for (const sig of [`0x${good}`, `${good}!`, "", "   "]) {
       const err = (() => {
         try {
-          verifyWebhook(body, headers({ "x-webhook-signature": sig }), { secret: SECRET, now });
+          verifyWebhook(body, headers({ [HEADER_WEBHOOK_SIGNATURE.toLowerCase()]: sig }), {
+            secret: SECRET,
+            now,
+          });
         } catch (e) {
           return e as SignatureError;
         }
@@ -124,15 +139,19 @@ describe("signature header shapes", () => {
 
   it("still reports a missing header when the header is truly absent", () => {
     expect(() =>
-      verifyWebhook(body, { "x-webhook-timestamp": String(ts) }, { secret: SECRET }),
+      verifyWebhook(
+        body,
+        { [HEADER_WEBHOOK_TIMESTAMP.toLowerCase()]: String(ts) },
+        { secret: SECRET },
+      ),
     ).toThrow(/missing/);
   });
 });
 
 describe("an authentic body that cannot be read", () => {
   const sign = (raw: string) => ({
-    "x-webhook-timestamp": String(ts),
-    "x-webhook-signature": signWebhook(SECRET, ts, raw),
+    [HEADER_WEBHOOK_TIMESTAMP.toLowerCase()]: String(ts),
+    [HEADER_WEBHOOK_SIGNATURE.toLowerCase()]: signWebhook(SECRET, ts, raw),
   });
 
   it("raises webhook.bad_payload, not a signature error", () => {
@@ -157,7 +176,10 @@ describe("an event type from a newer core", () => {
   it("is returned verbatim rather than thrown", () => {
     const { event, isTest } = verifyWebhookDelivery(
       raw,
-      { "x-webhook-timestamp": String(ts), "x-webhook-signature": signWebhook(SECRET, ts, raw) },
+      {
+        [HEADER_WEBHOOK_TIMESTAMP.toLowerCase()]: String(ts),
+        [HEADER_WEBHOOK_SIGNATURE.toLowerCase()]: signWebhook(SECRET, ts, raw),
+      },
       { secret: SECRET, now },
     );
     expect(event.type).toBe("settlement.completed");
@@ -168,17 +190,21 @@ describe("an event type from a newer core", () => {
   });
 });
 
-describe("the X-Webhook-Test header", () => {
+describe("the rehearsal header (HEADER_WEBHOOK_TEST)", () => {
   it('recognises "true" whatever its case or padding', () => {
     for (const flag of ["true", "True", "TRUE", " true "]) {
-      const info = verifyWebhookDelivery(body, headers({ "x-webhook-test": flag }), {
-        secret: SECRET,
-        now,
-      });
+      const info = verifyWebhookDelivery(
+        body,
+        headers({ [HEADER_WEBHOOK_TEST.toLowerCase()]: flag }),
+        {
+          secret: SECRET,
+          now,
+        },
+      );
       expect(info.isTest, flag).toBe(true);
     }
     expect(
-      verifyWebhookDelivery(body, headers({ "x-webhook-test": "false" }), {
+      verifyWebhookDelivery(body, headers({ [HEADER_WEBHOOK_TEST.toLowerCase()]: "false" }), {
         secret: SECRET,
         now,
       }).isTest,
