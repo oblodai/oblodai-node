@@ -14,7 +14,12 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { Oblodai, OblodaiError, SignatureError, WebhookPayloadError } from "../../src/index.js";
 import { canonicalString, signRequest, signWebhook } from "../../src/core/signing.js";
-import { isKnownEvent, verifyWebhook, verifyWebhookDelivery } from "../../src/webhooks.js";
+import {
+  isKnownEvent,
+  parseWebhook,
+  verifyWebhook,
+  verifyWebhookDelivery,
+} from "../../src/webhooks.js";
 import { WEBHOOK_EVENTS } from "../../src/generated/events.js";
 import { conformanceDir } from "../support/backend.js";
 
@@ -167,6 +172,23 @@ describe.skipIf(!found)("conformance", () => {
       }
       expect(caught).toBeInstanceOf(SignatureError);
       expect((caught as SignatureError).code).toBe(`webhook.${check.expect}`);
+    });
+  });
+
+  // forward_compat webhooks: the body parses, keeps its raw type, and is known exactly as said.
+  describe("webhook bodies", () => {
+    const bodies: Array<[string, Json]> = found
+      ? suite("forward_compat").webhooks.map((b: Json) => [b.name, b] as [string, Json])
+      : [];
+
+    it.skipIf(!found)("has webhook bodies", () => {
+      expect(bodies.length).toBeGreaterThan(0);
+    });
+
+    it.each(bodies)("%s", (_, body) => {
+      const event = parseWebhook(JSON.stringify(body.body));
+      expect(event.type).toBe(body.expect.type);
+      expect(isKnownEvent(event)).toBe(body.expect.known);
     });
   });
 
