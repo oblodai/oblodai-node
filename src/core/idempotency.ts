@@ -1,3 +1,4 @@
+import { MAX_IDEMPOTENCY_KEY_LENGTH } from "../generated/signing.js";
 import { ConfigError } from "./errors.js";
 import { uuid } from "./util.js";
 
@@ -7,7 +8,7 @@ import { uuid } from "./util.js";
  * `idempotency.key_reused`. The SDK generates a key once per logical call and reuses it on every
  * retry, so a timeout never turns into a double payout.
  */
-export const MAX_IDEMPOTENCY_KEY_LENGTH = 255;
+export { MAX_IDEMPOTENCY_KEY_LENGTH };
 
 export function newIdempotencyKey(): string {
   return uuid();

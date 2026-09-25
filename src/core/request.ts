@@ -42,7 +42,7 @@ export interface BuildInput {
   body: string;
   credentials?: Credentials;
   idempotencyKey?: string;
-  /** Unix seconds; signed into X-Timestamp. */
+  /** Unix seconds; sent as `HEADER_TIMESTAMP` and signed. */
   ts: number;
   userAgent: string;
   extraHeaders?: Record<string, string>;

@@ -9,7 +9,7 @@ import { ConfigError } from "./core/errors.js";
 export const DEFAULT_BASE_URL = "https://api.oblodai.com";
 
 export interface ClientOptions {
-  /** Public id of the merchant's one API key (`X-Public-Id`). Falls back to `OBLODAI_PUBLIC_ID`. */
+  /** Public id of the merchant's one API key (sent as `HEADER_PUBLIC_ID`). Falls back to `OBLODAI_PUBLIC_ID`. */
   publicId?: string;
   /** Secret of that key; it signs every signed route. Falls back to `OBLODAI_SECRET`. */
   secret?: string;

@@ -1,5 +1,6 @@
 import { KNOWN_EVENT_KINDS, type WebhookEvent } from "./generated/events.js";
 import { EVENT_ID_FIELDS } from "./generated/facts.js";
+import { SKEW_SECONDS, WEBHOOK_HEADERS } from "./generated/signing.js";
 import { ConfigError, OblodaiError, SignatureError, WebhookPayloadError } from "./core/errors.js";
 import { signWebhook } from "./core/signing.js";
 import { constantTimeEqual, headerValue, isRecord } from "./core/util.js";
@@ -42,15 +43,16 @@ export function isKnownEvent(event: AnyWebhookEvent): event is WebhookEvent {
 
 /**
  * Webhook verification — usable on its own (`import { verifyWebhook } from "@oblodai-npm/sdk/webhooks"`),
- * no client or API key required. Deliveries are signed as:
+ * no client or API key required. Deliveries carry these headers (names from the contract, the
+ * `HEADER_WEBHOOK_*` constants):
  *
- *   X-Webhook-Timestamp: <unix seconds>
- *   X-Webhook-Signature: hex(HMAC-SHA256(secret, "<ts>." + rawBody))
- *   X-Webhook-Signature-Prev: same, with the previous secret — only during a rotation overlap
- *   X-Webhook-Event: invoice.<status> | payout.<status> | wallet.paid | … (`WEBHOOK_EVENTS`)
- *   X-Webhook-Id: the delivery — identical across its retries, but a resend is a new delivery
- *   X-Webhook-Event-Id: the state — identical across retries AND resends of it; deduplicate on it
- *   X-Webhook-Event-Time: unix seconds when the state change committed (order events by it)
+ *   TIMESTAMP: <unix seconds>
+ *   SIGNATURE: `signWebhook(secret, ts, rawBody)` — hex HMAC-SHA256 over the contract's canonical
+ *   SIGNATURE_PREV: same, with the previous secret — only during a rotation overlap
+ *   EVENT: invoice.<status> | payout.<status> | wallet.paid | … (`WEBHOOK_EVENTS`)
+ *   ID: the delivery — identical across its retries, but a resend is a new delivery
+ *   EVENT_ID: the state — identical across retries AND resends of it; deduplicate on it
+ *   EVENT_TIME: unix seconds when the state change committed (order events by it)
  *
  * Always verify over the raw request bytes; a re-serialized parse will not match.
  *
@@ -69,7 +71,7 @@ export interface VerifyWebhookOptions {
    * Supplying an empty string is a configuration error, not "no previous secret" — omit it instead.
    */
   previousSecret?: string;
-  /** Reject deliveries whose timestamp is older/newer than this, seconds. Default 300; 0 disables. */
+  /** Reject deliveries whose timestamp is older/newer than this, seconds. Default `DEFAULT_TOLERANCE_SECONDS`; 0 disables. */
   toleranceSec?: number;
   /** Injectable clock (unix seconds) for tests. */
   now?: () => number;
@@ -80,35 +82,41 @@ export interface WebhookDeliveryInfo {
   /** Use `isKnownEvent(event)` before switching on `type`: a newer core may send a type this release does not model. */
   event: AnyWebhookEvent;
   /**
-   * `X-Webhook-Id` — the delivery: identical across its retries, but a resend
+   * `HEADER_WEBHOOK_ID` — the delivery: identical across its retries, but a resend
    * (`webhooks.resendPayment`, a sandbox replay) is a new delivery with a new id. Not a dedup key.
    */
   id?: string;
   /**
-   * `X-Webhook-Event-Id` — the state the delivery carries: identical for the original, every retry
+   * `HEADER_WEBHOOK_EVENT_ID` — the state the delivery carries: identical for the original, every retry
    * and every resend of the same state, different once the state changes. Deduplicate on it.
    */
   eventId?: string;
-  /** `X-Webhook-Event` — `invoice.<status>`, `payout.<status>`, … (every name: `WEBHOOK_EVENTS`). */
+  /** `HEADER_WEBHOOK_EVENT` — `invoice.<status>`, `payout.<status>`, … (every name: `WEBHOOK_EVENTS`). */
   eventType?: string;
-  /** `X-Webhook-Event-Time` — unix seconds when the state change committed. */
+  /** `HEADER_WEBHOOK_EVENT_TIME` — unix seconds when the state change committed. */
   eventTime?: number;
-  /** `X-Webhook-Timestamp` — unix seconds when this attempt was sent. */
+  /** `HEADER_WEBHOOK_TIMESTAMP` — unix seconds when this attempt was sent. */
   sentAt: number;
-  /** A rehearsal delivery (`X-Webhook-Test: true` / body `test: true`): signed like a live one, but no money moved. */
+  /** A rehearsal delivery (`HEADER_WEBHOOK_TEST: true` / body `test: true`): signed like a live one, but no money moved. */
   isTest: boolean;
 }
 
-export const HEADER_WEBHOOK_TIMESTAMP = "X-Webhook-Timestamp";
-export const HEADER_WEBHOOK_SIGNATURE = "X-Webhook-Signature";
-export const HEADER_WEBHOOK_SIGNATURE_PREV = "X-Webhook-Signature-Prev";
-export const HEADER_WEBHOOK_EVENT = "X-Webhook-Event";
-export const HEADER_WEBHOOK_ID = "X-Webhook-Id";
-export const HEADER_WEBHOOK_EVENT_ID = "X-Webhook-Event-Id";
-export const HEADER_WEBHOOK_EVENT_TIME = "X-Webhook-Event-Time";
+/** Delivery headers — names from the contract (`x-oblodai-signing.webhook.headers`). */
+export const HEADER_WEBHOOK_TIMESTAMP = WEBHOOK_HEADERS.timestamp;
+export const HEADER_WEBHOOK_SIGNATURE = WEBHOOK_HEADERS.signature;
+export const HEADER_WEBHOOK_SIGNATURE_PREV = WEBHOOK_HEADERS.signaturePrev;
+export const HEADER_WEBHOOK_EVENT = WEBHOOK_HEADERS.event;
+export const HEADER_WEBHOOK_ID = WEBHOOK_HEADERS.id;
+export const HEADER_WEBHOOK_EVENT_ID = WEBHOOK_HEADERS.eventId;
+export const HEADER_WEBHOOK_EVENT_TIME = WEBHOOK_HEADERS.eventTime;
+/**
+ * The rehearsal flag. Not part of the signing protocol (`x-oblodai-signing` does not list it, and the
+ * body's own `test: true` is the signed marker), so it is not generated.
+ */
 export const HEADER_WEBHOOK_TEST = "X-Webhook-Test";
 
-export const DEFAULT_TOLERANCE_SECONDS = 300;
+/** The freshness window: the contract's skew (`x-oblodai-signing.skew_seconds`). */
+export const DEFAULT_TOLERANCE_SECONDS = SKEW_SECONDS;
 
 /** Verify the signature and freshness, then parse. Throws SignatureError; never returns an unverified body. */
 export function verifyWebhook(
