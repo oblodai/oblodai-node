@@ -31,6 +31,30 @@ interface SigningSpec {
   webhook: { headers: string[]; test_header: string };
 }
 
+const ROOT = join(__dirname, "..", "..");
+
+/**
+ * Every hand-written TypeScript source that ships or is run: `src` outside `src/generated`, and the
+ * examples (the README points at them and the examples typecheck runs them).
+ */
+function handWritten(): string[] {
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir)) {
+      const path = join(dir, entry);
+      if (statSync(path).isDirectory()) {
+        if (entry !== "generated") walk(path);
+      } else if (path.endsWith(".ts")) {
+        out.push(path);
+      }
+    }
+  };
+  walk(join(ROOT, "src"));
+  walk(join(ROOT, "examples"));
+  expect(out.some((p) => relative(ROOT, p).startsWith("examples"))).toBe(true);
+  return out.sort();
+}
+
 function spec(): SigningSpec {
   const doc = JSON.parse(
     readFileSync(join(backendRoot(), "services", "core", "api", "openapi.json"), "utf8"),
@@ -56,25 +80,16 @@ describe.skipIf(!hasBackend())("the generated signing protocol is the contract's
     expect(gen.SIGNATURE_ALGORITHM).toBe(s.algorithm);
   });
 
-  it("spells no signing header outside src/generated", () => {
+  it("spells no signing header outside src/generated (library and examples)", () => {
     const s = spec();
     const names = [...s.headers, ...s.webhook.headers, s.webhook.test_header].map((n) =>
       n.toLowerCase(),
     );
-    const src = join(__dirname, "..", "..", "src");
     const offenders: string[] = [];
-    const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const path = join(dir, entry);
-        if (statSync(path).isDirectory()) {
-          if (entry !== "generated") walk(path);
-          continue;
-        }
-        const text = readFileSync(path, "utf8").toLowerCase();
-        for (const n of names) if (text.includes(n)) offenders.push(`${relative(src, path)}: ${n}`);
-      }
-    };
-    walk(src);
+    for (const path of handWritten()) {
+      const text = readFileSync(path, "utf8").toLowerCase();
+      for (const n of names) if (text.includes(n)) offenders.push(`${relative(ROOT, path)}: ${n}`);
+    }
     expect(offenders).toEqual([]);
   });
 });
@@ -109,23 +124,14 @@ function limitPatterns(): RegExp[] {
 }
 
 describe("the limits are read from src/generated", () => {
-  it("spells no literal of the body or idempotency-key limit outside src/generated", () => {
+  it("spells no literal of the body or idempotency-key limit outside src/generated (library and examples)", () => {
     const pats = limitPatterns();
-    const src = join(__dirname, "..", "..", "src");
     const offenders: string[] = [];
-    const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const path = join(dir, entry);
-        if (statSync(path).isDirectory()) {
-          if (entry !== "generated") walk(path);
-          continue;
-        }
-        const text = readFileSync(path, "utf8").replace(/(?<=\d)_(?=\d)/g, "");
-        for (const p of pats)
-          if (p.test(text)) offenders.push(`${relative(src, path)}: ${p.source}`);
-      }
-    };
-    walk(src);
+    for (const path of handWritten()) {
+      const text = readFileSync(path, "utf8").replace(/(?<=\d)_(?=\d)/g, "");
+      for (const p of pats)
+        if (p.test(text)) offenders.push(`${relative(ROOT, path)}: ${p.source}`);
+    }
     expect(offenders).toEqual([]);
   });
 });
