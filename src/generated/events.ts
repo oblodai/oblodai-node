@@ -11,7 +11,7 @@ export const KNOWN_EVENT_KINDS = ["conversion", "payment", "payout", "wallet"] a
 /** A `type` this release knows. */
 export type KnownEventKind = (typeof KNOWN_EVENT_KINDS)[number];
 
-/** `event kind → the X-Webhook-Event names it is delivered under`. */
+/** `event kind → the event names it is delivered under` (the value of `HEADER_WEBHOOK_EVENT`). */
 export const WEBHOOK_EVENTS: Readonly<Record<KnownEventKind, readonly string[]>> = {
   conversion: ["conversion.completed", "conversion.refunded"],
   payment: [
@@ -38,24 +38,23 @@ export const WEBHOOK_EVENTS: Readonly<Record<KnownEventKind, readonly string[]>>
   wallet: ["wallet.paid"],
 };
 
-/** A `conversion` delivery (`X-Webhook-Event`: `conversion.completed`, `conversion.refunded`). */
+/** A `conversion` delivery (events `conversion.completed`, `conversion.refunded`). */
 export type ConversionEvent = ConversionWebhook & { type: "conversion" };
 
 /**
- * A `payment` delivery (`X-Webhook-Event`: `invoice.cancelled`, `invoice.confirm_check`,
- * `invoice.created`, `invoice.expired`, `invoice.paid`, `invoice.paid_over`, `invoice.select`,
- * `invoice.under_review`, `invoice.wrong_amount`).
+ * A `payment` delivery (events `invoice.cancelled`, `invoice.confirm_check`, `invoice.created`,
+ * `invoice.expired`, `invoice.paid`, `invoice.paid_over`, `invoice.select`, `invoice.under_review`,
+ * `invoice.wrong_amount`).
  */
 export type PaymentEvent = PaymentWebhook & { type: "payment" };
 
 /**
- * A `payout` delivery (`X-Webhook-Event`: `payout.approved`, `payout.awaiting_cosign`,
- * `payout.broadcasting`, `payout.cancelled`, `payout.confirmed`, `payout.failed`, `payout.pending`,
- * `payout.sent`).
+ * A `payout` delivery (events `payout.approved`, `payout.awaiting_cosign`, `payout.broadcasting`,
+ * `payout.cancelled`, `payout.confirmed`, `payout.failed`, `payout.pending`, `payout.sent`).
  */
 export type PayoutEvent = PayoutWebhook & { type: "payout" };
 
-/** A `wallet` delivery (`X-Webhook-Event`: `wallet.paid`). */
+/** A `wallet` delivery (events `wallet.paid`). */
 export type WalletEvent = WalletWebhook & { type: "wallet" };
 
 /** The event kinds this release models field by field. */
