@@ -17,6 +17,7 @@ import {
   HEADER_WEBHOOK_SIGNATURE,
   HEADER_WEBHOOK_SIGNATURE_PREV,
   HEADER_WEBHOOK_TIMESTAMP,
+  SKEW_SECONDS,
 } from "../../src/generated/signing.js";
 
 // The samples were delivered by the core's real dispatcher to the recorder, signed with the
@@ -88,11 +89,15 @@ describe("verifyWebhook rules", () => {
   });
 
   it("rejects stale deliveries unless tolerance is disabled", () => {
-    expect(() => verifyWebhook(body, headers(), { secret: "whsec", now: () => ts + 600 })).toThrow(
-      /outside/,
-    );
+    expect(() =>
+      verifyWebhook(body, headers(), { secret: "whsec", now: () => ts + 2 * SKEW_SECONDS }),
+    ).toThrow(/outside/);
     expect(
-      verifyWebhook(body, headers(), { secret: "whsec", now: () => ts + 600, toleranceSec: 0 }),
+      verifyWebhook(body, headers(), {
+        secret: "whsec",
+        now: () => ts + 2 * SKEW_SECONDS,
+        toleranceSec: 0,
+      }),
     ).toMatchObject({ uuid: "u1" });
   });
 
