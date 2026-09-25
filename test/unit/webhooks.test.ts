@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isKnownEvent } from "../../src/webhooks.js";
 import {
   isStaleEvent,
+  objectId,
   parseWebhook,
   verifyWebhook,
   verifyWebhookDelivery,
@@ -14,7 +15,6 @@ import { WEBHOOK_SAMPLES_SECRET, loadWebhookSamples } from "../support/fixtures.
 // endpoint secret in force at that moment — the one returned by the rotate-secret call.
 const samples = loadWebhookSamples();
 const secret = WEBHOOK_SAMPLES_SECRET;
-const uuidOf = (event: object) => (event as { uuid?: unknown }).uuid;
 
 describe("verifyWebhook against real deliveries", () => {
   for (const s of samples) {
@@ -25,7 +25,7 @@ describe("verifyWebhook against real deliveries", () => {
         secret,
         now: () => ts,
       });
-      expect(uuidOf(event)).toBe(s.body.uuid);
+      expect(objectId(event)).toBe(s.body.uuid);
       expect(id).toBe(s.headers["X-Webhook-Id"]);
       expect(eventId).toBe(s.headers["X-Webhook-Event-Id"]);
       expect(eventType).toBe(s.headers["X-Webhook-Event"]);
@@ -123,5 +123,14 @@ describe("verifyWebhook rules", () => {
     const alien = parseWebhook('{"type":"alien","uuid":"x"}');
     expect(alien.type).toBe("alien");
     expect(isKnownEvent(alien)).toBe(false);
+  });
+
+  it("reads the object id from the field the contract declares for the kind", () => {
+    expect(objectId(parseWebhook(body))).toBe(JSON.parse(body).uuid);
+    // A conversion names its object `id`, not `uuid`.
+    expect(objectId(parseWebhook('{"type":"conversion","id":"c-1","sequence":1}'))).toBe("c-1");
+    // An unknown kind's id field is not guessed.
+    expect(objectId(parseWebhook('{"type":"alien","uuid":"x","id":"y"}'))).toBeUndefined();
+    expect(objectId(null)).toBeUndefined();
   });
 });

@@ -380,7 +380,8 @@ export const server = createServer((req, res) => {
   повторов и переотправок. `id` (`X-Webhook-Id`) называет одну доставку и меняется при переотправке
   (`webhooks.resendPayment`, повтор в песочнице) — с ним ключом переотправленный `invoice.paid`
   обработается дважды.
-- **Упорядочивайте по `event.sequence`**: `isStaleEvent(event, lastSequence)`.
+- **Упорядочивайте по `event.sequence`**: `isStaleEvent(event, lastSequence)`, храня последний номер
+  по объекту — `objectId(event)`, поле id, которое контракт называет для вида события.
 - **Репетиции** подписаны как боевые и несут `test: true` (и `X-Webhook-Test: true`);
   `verifyWebhookDelivery(...).isTest` об этом сообщает.
 - **Незнакомые типы событий** от более нового шлюза возвращаются как есть (`UnknownWebhookEvent`), а
