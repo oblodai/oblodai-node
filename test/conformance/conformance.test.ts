@@ -47,18 +47,30 @@ function pointer(doc: Json, path: string): Json {
 
 /**
  * The spec's `x-oblodai-signing`, the vectors the suite points at and the header names by role
- * (`header_names`): read from the spec, never from the SDK's own constants, so a rename in the core
- * that did not reach the SDK fails here.
+ * (`header_names`; the rehearsal header at `header_names.test_pointer`): read from the spec, never
+ * from the SDK's own constants, so a rename in the core that did not reach the SDK fails here.
  */
-function source(s: Json): { signing: Json; vectors: Json[]; names: Record<string, string> } {
+function source(s: Json): {
+  signing: Json;
+  vectors: Json[];
+  names: Record<string, string>;
+  testHeader: string;
+} {
   const spec = JSON.parse(readFileSync(join(DIR, s.source.spec), "utf8"));
   const names: Record<string, string> = {};
+  let testHeader = "";
   if (s.header_names) {
     const list: string[] = pointer(spec, s.header_names.pointer);
     expect(list).toHaveLength(s.header_names.roles.length);
     s.header_names.roles.forEach((role: string, i: number) => (names[role] = list[i]!));
+    if (s.header_names.test_pointer) testHeader = pointer(spec, s.header_names.test_pointer);
   }
-  return { signing: spec["x-oblodai-signing"], vectors: pointer(spec, s.source.pointer), names };
+  return {
+    signing: spec["x-oblodai-signing"],
+    vectors: pointer(spec, s.source.pointer),
+    names,
+    testHeader,
+  };
 }
 
 function cases(name: string): Array<[string, Json, Json, Json, Record<string, string>]> {
@@ -178,9 +190,13 @@ describe.skipIf(!found)("conformance", () => {
 
   describe("webhook deliveries", () => {
     const deliverySuite = found ? suite("webhook_delivery") : { fields: {}, checks: [] };
-    const { vectors: deliveries, names: deliveryNames } = found
+    const {
+      vectors: deliveries,
+      names: deliveryNames,
+      testHeader,
+    } = found
       ? source(deliverySuite)
-      : { vectors: [] as Json[], names: {} as Record<string, string> };
+      : { vectors: [] as Json[], names: {} as Record<string, string>, testHeader: "" };
     const camel = (snake: string) => snake.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 
     it.skipIf(!found)("has a delivery of every event this release knows", () => {
@@ -197,7 +213,13 @@ describe.skipIf(!found)("conformance", () => {
     it.each(deliveryCases)("%s", (_, check, d) => {
       expect(check.kind).toBe("webhook_delivery");
       const secret = check.key === "previous" ? d.previous_secret : d.secret;
-      const delivery = verifyWebhookDelivery(d.payload, d.headers, { secret, now: () => d.ts });
+      const headers: Record<string, string> = { ...d.headers };
+      if (check.test) {
+        expect(testHeader, "no header_names.test_pointer").toBeTruthy();
+        headers[testHeader] = "true";
+      }
+      const delivery = verifyWebhookDelivery(d.payload, headers, { secret, now: () => d.ts });
+      expect(delivery.isTest, `isTest (rehearsal header ${testHeader})`).toBe(Boolean(check.test));
       expect(isKnownEvent(delivery.event)).toBe(true);
       expect(delivery.event.type).toBe(d.kind);
       expect(WEBHOOK_EVENTS[d.kind as keyof typeof WEBHOOK_EVENTS]).toContain(d.event);
