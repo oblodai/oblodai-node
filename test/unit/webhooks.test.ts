@@ -10,6 +10,14 @@ import {
 import { SignatureError } from "../../src/core/errors.js";
 import { signWebhook } from "../../src/core/signing.js";
 import { WEBHOOK_SAMPLES_SECRET, loadWebhookSamples } from "../support/fixtures.js";
+import {
+  HEADER_WEBHOOK_EVENT,
+  HEADER_WEBHOOK_EVENT_ID,
+  HEADER_WEBHOOK_ID,
+  HEADER_WEBHOOK_SIGNATURE,
+  HEADER_WEBHOOK_SIGNATURE_PREV,
+  HEADER_WEBHOOK_TIMESTAMP,
+} from "../../src/generated/signing.js";
 
 // The samples were delivered by the core's real dispatcher to the recorder, signed with the
 // endpoint secret in force at that moment — the one returned by the rotate-secret call.
@@ -18,17 +26,17 @@ const secret = WEBHOOK_SAMPLES_SECRET;
 
 describe("verifyWebhook against real deliveries", () => {
   for (const s of samples) {
-    it(`verifies ${s.headers["X-Webhook-Event"]}`, () => {
+    it(`verifies ${s.headers[HEADER_WEBHOOK_EVENT]}`, () => {
       const raw = s.raw ?? JSON.stringify(s.body); // the recorder keeps the exact delivered bytes
-      const ts = Number(s.headers["X-Webhook-Timestamp"]);
+      const ts = Number(s.headers[HEADER_WEBHOOK_TIMESTAMP]);
       const { event, id, eventId, eventType } = verifyWebhookDelivery(raw, s.headers, {
         secret,
         now: () => ts,
       });
       expect(objectId(event)).toBe(s.body.uuid);
-      expect(id).toBe(s.headers["X-Webhook-Id"]);
-      expect(eventId).toBe(s.headers["X-Webhook-Event-Id"]);
-      expect(eventType).toBe(s.headers["X-Webhook-Event"]);
+      expect(id).toBe(s.headers[HEADER_WEBHOOK_ID]);
+      expect(eventId).toBe(s.headers[HEADER_WEBHOOK_EVENT_ID]);
+      expect(eventType).toBe(s.headers[HEADER_WEBHOOK_EVENT]);
       expect(() =>
         verifyWebhook(raw, s.headers, {
           secret: "some-other-secret",
@@ -38,7 +46,7 @@ describe("verifyWebhook against real deliveries", () => {
       ).toThrow(/does not match/);
       expect(event.type).toBe(s.body.type);
       expect(typeof event.sequence).toBe("number");
-      expect(s.headers["X-Webhook-Event"]).toMatch(/^(invoice|payout|wallet)\./);
+      expect(s.headers[HEADER_WEBHOOK_EVENT]).toMatch(/^(invoice|payout|wallet)\./);
     });
   }
 });
@@ -55,8 +63,8 @@ describe("verifyWebhook rules", () => {
   });
   const ts = 1_755_600_000;
   const headers = (overrides: Record<string, string> = {}) => ({
-    "x-webhook-timestamp": String(ts),
-    "x-webhook-signature": signWebhook("whsec", ts, body),
+    [HEADER_WEBHOOK_TIMESTAMP.toLowerCase()]: String(ts),
+    [HEADER_WEBHOOK_SIGNATURE.toLowerCase()]: signWebhook("whsec", ts, body),
     ...overrides,
   });
 
@@ -74,9 +82,9 @@ describe("verifyWebhook rules", () => {
         now: () => ts,
       }),
     ).toThrow(/does not match/);
-    expect(() => verifyWebhook(body, { "x-webhook-signature": "aa" }, { secret: "whsec" })).toThrow(
-      /missing/,
-    );
+    expect(() =>
+      verifyWebhook(body, { [HEADER_WEBHOOK_SIGNATURE.toLowerCase()]: "aa" }, { secret: "whsec" }),
+    ).toThrow(/missing/);
   });
 
   it("rejects stale deliveries unless tolerance is disabled", () => {
@@ -90,8 +98,8 @@ describe("verifyWebhook rules", () => {
 
   it("verifies during a secret rotation via the Prev header or the previousSecret option", () => {
     const rotated = headers({
-      "x-webhook-signature": signWebhook("new", ts, body),
-      "x-webhook-signature-prev": signWebhook("old", ts, body),
+      [HEADER_WEBHOOK_SIGNATURE.toLowerCase()]: signWebhook("new", ts, body),
+      [HEADER_WEBHOOK_SIGNATURE_PREV.toLowerCase()]: signWebhook("old", ts, body),
     });
     expect(verifyWebhook(body, rotated, { secret: "old", now: () => ts })).toMatchObject({
       uuid: "u1",
@@ -105,7 +113,10 @@ describe("verifyWebhook rules", () => {
   });
 
   it("reads the event id apart from the delivery id", () => {
-    const withIds = headers({ "x-webhook-id": "d-1", "x-webhook-event-id": "e-1" });
+    const withIds = headers({
+      [HEADER_WEBHOOK_ID.toLowerCase()]: "d-1",
+      [HEADER_WEBHOOK_EVENT_ID.toLowerCase()]: "e-1",
+    });
     const delivery = verifyWebhookDelivery(body, withIds, { secret: "whsec", now: () => ts });
     expect([delivery.id, delivery.eventId]).toEqual(["d-1", "e-1"]);
     expect(

@@ -26,6 +26,7 @@ import {
 } from "../../src/webhooks.js";
 import { WEBHOOK_EVENTS } from "../../src/generated/events.js";
 import { conformanceDir } from "../support/backend.js";
+import { HEADER_IDEMPOTENCY_KEY } from "../../src/generated/signing.js";
 
 const DIR = conformanceDir();
 const found = existsSync(DIR);
@@ -80,16 +81,20 @@ function cases(name: string): Array<[string, Json, Json, Json, Record<string, st
 /**
  * Send a request vector through the signing transport the client's methods use — keys `publicId`
  * + the vector's secret, clock at the vector's `ts` — and return the headers that reached fetch,
- * with lower-cased names.
+ * with lower-cased names. The request that reached fetch is the vector's own — method, path + raw
+ * query and body bytes — so a matching signature proves the SDK signed what it sent.
  */
 async function sendVector(v: Json, publicId: string): Promise<Record<string, string>> {
   const sent: Array<Record<string, string>> = [];
-  const fetch = async (_url: string, init: RequestInit): Promise<Response> => {
+  const fetch = async (url: string, init: RequestInit): Promise<Response> => {
     const headers: Record<string, string> = {};
     for (const [k, value] of Object.entries(init.headers as Record<string, string>)) {
       headers[k.toLowerCase()] = value;
     }
     sent.push(headers);
+    const u = new URL(url);
+    expect(init.method).toBe(v.method);
+    expect(u.pathname + u.search).toBe(v.request_uri);
     expect(init.body ?? "").toBe(v.body);
     return new Response(JSON.stringify({ result: {} }), {
       status: 200,
@@ -345,7 +350,7 @@ describe.skipIf(!found)("conformance", () => {
 
       const expectations = scenario.expect;
       expect(requests.map((r) => r.url)).toHaveLength(expectations.requests);
-      const keys = requests.map((r) => r.headers["idempotency-key"]);
+      const keys = requests.map((r) => r.headers[HEADER_IDEMPOTENCY_KEY.toLowerCase()]);
       if (expectations.idempotency_key === "absent")
         expect(keys.every((k) => k === undefined)).toBe(true);
       if (expectations.idempotency_key === "present") expect(keys.every((k) => !!k)).toBe(true);

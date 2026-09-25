@@ -8,6 +8,12 @@ import {
   ValidationError,
 } from "../../src/core/errors.js";
 import { apiError, mockFetch, ok } from "../support/mock-fetch.js";
+import {
+  HEADER_IDEMPOTENCY_KEY,
+  HEADER_PUBLIC_ID,
+  HEADER_SIGNATURE,
+  HEADER_TIMESTAMP,
+} from "../../src/generated/signing.js";
 
 const creds = {
   publicId: "pk_test_1",
@@ -25,8 +31,8 @@ describe("transport", () => {
     await ob.sandbox.listWebhooks({ limit: 10, offset: 0 });
     expect(calls[0]!.url).toBe("https://api.test/v1/sandbox/webhooks?limit=10&offset=0");
     expect(calls[0]!.body).toBeUndefined();
-    expect(calls[0]!.headers["x-public-id"]).toBe("pk_test_1");
-    expect(calls[0]!.headers["x-signature"]).toMatch(/^[0-9a-f]{64}$/);
+    expect(calls[0]!.headers[HEADER_PUBLIC_ID.toLowerCase()]).toBe("pk_test_1");
+    expect(calls[0]!.headers[HEADER_SIGNATURE.toLowerCase()]).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("generates one Idempotency-Key per create call and reuses it across retries", async () => {
@@ -37,11 +43,11 @@ describe("transport", () => {
     const ob = new Oblodai({ ...creds, fetch });
     await ob.payments.create({ amount: "1", currency: "USDT" });
     expect(calls).toHaveLength(2);
-    const key = calls[0]!.headers["idempotency-key"];
+    const key = calls[0]!.headers[HEADER_IDEMPOTENCY_KEY.toLowerCase()];
     expect(key).toMatch(/^[0-9a-f-]{36}$/);
-    expect(calls[1]!.headers["idempotency-key"]).toBe(key);
+    expect(calls[1]!.headers[HEADER_IDEMPOTENCY_KEY.toLowerCase()]).toBe(key);
     // Re-signed per attempt: same key, timestamp may differ but signature is present.
-    expect(calls[1]!.headers["x-signature"]).toMatch(/^[0-9a-f]{64}$/);
+    expect(calls[1]!.headers[HEADER_SIGNATURE.toLowerCase()]).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("honours a caller-supplied idempotency key and does not add one to read routes", async () => {
@@ -52,8 +58,8 @@ describe("transport", () => {
       { idempotencyKey: "my-key-1" },
     );
     await ob.payments.getInfo({ uuid: "u" });
-    expect(calls[0]!.headers["idempotency-key"]).toBe("my-key-1");
-    expect(calls[1]!.headers["idempotency-key"]).toBeUndefined();
+    expect(calls[0]!.headers[HEADER_IDEMPOTENCY_KEY.toLowerCase()]).toBe("my-key-1");
+    expect(calls[1]!.headers[HEADER_IDEMPOTENCY_KEY.toLowerCase()]).toBeUndefined();
   });
 
   it("does not retry a non-retryable error even on a 5xx", async () => {
@@ -146,7 +152,7 @@ describe("transport", () => {
     const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
     await ob.account.getBalance();
     expect(calls).toHaveLength(2);
-    const ts = Number(calls[1]!.headers["x-timestamp"]);
+    const ts = Number(calls[1]!.headers[HEADER_TIMESTAMP.toLowerCase()]);
     expect(Math.abs(ts - serverNow)).toBeLessThan(5);
   });
 
@@ -163,9 +169,9 @@ describe("transport", () => {
     const ob = new Oblodai({ ...creds, fetch });
     await ob.payouts.create({ amount: "1", currency: "USDT", address: "T", order_id: "o" });
     await ob.payments.create({ amount: "1", currency: "USDT" });
-    expect(calls[0]!.headers["x-public-id"]).toBe("pk_test_1");
-    expect(calls[1]!.headers["x-public-id"]).toBe("pk_test_1");
-    expect(calls[0]!.headers["x-signature"]).toBeDefined();
+    expect(calls[0]!.headers[HEADER_PUBLIC_ID.toLowerCase()]).toBe("pk_test_1");
+    expect(calls[1]!.headers[HEADER_PUBLIC_ID.toLowerCase()]).toBe("pk_test_1");
+    expect(calls[0]!.headers[HEADER_SIGNATURE.toLowerCase()]).toBeDefined();
   });
 
   it("refuses a public route call with no credentials only when the route needs them", async () => {

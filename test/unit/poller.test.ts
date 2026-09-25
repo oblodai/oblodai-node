@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { LRO, Oblodai, ROUTES, type BatchInfoResponse, type JobHandle } from "../../src/index.js";
 import { mockFetch, ok } from "../support/mock-fetch.js";
+import { HEADER_IDEMPOTENCY_KEY } from "../../src/generated/signing.js";
 
 const creds = { publicId: "pk", secret: "s", baseUrl: "https://api.test" };
 
@@ -36,7 +37,7 @@ describe("long-running operations wait (spec §3.8)", () => {
     ]);
     expect(JSON.parse(calls[1]!.body!)).toEqual({ batch_id: "b-1" });
     // The poll is not the create: no idempotency key, its own request id.
-    expect(calls[1]!.headers["idempotency-key"]).toBeUndefined();
+    expect(calls[1]!.headers[HEADER_IDEMPOTENCY_KEY.toLowerCase()]).toBeUndefined();
     expect(calls[1]!.headers["x-request-id"]).not.toBe(calls[0]!.headers["x-request-id"]);
     expect(delays).toEqual([500]);
   });

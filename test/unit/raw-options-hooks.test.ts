@@ -8,6 +8,7 @@ import {
   type ResponseInfo,
 } from "../../src/index.js";
 import { apiError, mockFetch, ok } from "../support/mock-fetch.js";
+import { HEADER_SIGNATURE } from "../../src/generated/signing.js";
 
 const creds = {
   publicId: "pk",
@@ -123,7 +124,7 @@ describe("hooks", () => {
     expect(requests.map((r) => r.attempt)).toEqual([1, 2]);
     expect(requests[0]!.operationId).toBe("getBalance");
     expect(requests[0]!.requestId).toBe(requests[1]!.requestId);
-    expect(requests[0]!.headers["X-Signature"]).toBe("[redacted]");
+    expect(requests[0]!.headers[HEADER_SIGNATURE]).toBe("[redacted]");
     expect(responses.map((r) => r.status)).toEqual([0, 200]);
     expect((responses[0]!.error as { code: string }).code).toBe("transport.network");
     expect(responses[1]!.error).toBeUndefined();

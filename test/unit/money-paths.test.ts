@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { Oblodai } from "../../src/index.js";
 import { ConfigError, TransportError } from "../../src/core/errors.js";
 import { apiError, mockFetch, ok } from "../support/mock-fetch.js";
+import {
+  HEADER_IDEMPOTENCY_KEY,
+  HEADER_SIGNATURE,
+  HEADER_TIMESTAMP,
+} from "../../src/generated/signing.js";
 
 const creds = {
   publicId: "pk",
@@ -87,7 +92,7 @@ describe("Page", () => {
     const ob = new Oblodai({ ...creds, fetch });
     // Silently dropping it would leave the caller believing a re-send is deduplicated when it is not.
     expect(() => ob.payouts.listHistory({}, { idempotencyKey: "k" })).toThrow(
-      /does not deduplicate by Idempotency-Key/,
+      new RegExp(`does not deduplicate by ${HEADER_IDEMPOTENCY_KEY}`),
     );
     expect(calls).toHaveLength(0);
   });
@@ -114,7 +119,7 @@ describe("clock skew", () => {
     const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
     await expect(ob.account.getBalance()).rejects.toMatchObject({ code: "merchant.bad_signature" });
     await ob.account.getBalance();
-    const ts = Number(calls[2]!.headers["x-timestamp"]);
+    const ts = Number(calls[2]!.headers[HEADER_TIMESTAMP.toLowerCase()]);
     expect(Math.abs(ts - Math.floor(Date.now() / 1000))).toBeLessThan(5);
   });
 });
@@ -135,9 +140,9 @@ describe("request construction", () => {
     await new Oblodai({
       ...creds,
       fetch,
-      headers: { "x-signature": "zz", "X-Trace": "t1" },
+      headers: { [HEADER_SIGNATURE.toLowerCase()]: "zz", "X-Trace": "t1" },
     }).account.getBalance();
-    expect(calls[0]!.headers["x-signature"]).toMatch(/^[0-9a-f]{64}$/);
+    expect(calls[0]!.headers[HEADER_SIGNATURE.toLowerCase()]).toMatch(/^[0-9a-f]{64}$/);
     expect(calls[0]!.headers["x-trace"]).toBe("t1");
   });
 

@@ -2,6 +2,12 @@ import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signWebhook } from "../../src/core/signing.js";
 import { gateway } from "../support/gateway.js";
+import {
+  HEADER_IDEMPOTENCY_KEY,
+  HEADER_WEBHOOK_ID,
+  HEADER_WEBHOOK_SIGNATURE,
+  HEADER_WEBHOOK_TIMESTAMP,
+} from "../../src/generated/signing.js";
 
 // Every examples/*.ts runs its main() against the stand-in gateway; the webhook receiver gets a
 // signed delivery and a forged one.
@@ -35,7 +41,7 @@ describe("examples", () => {
     const { main } = await import("../../examples/payout.js");
     await main();
     expect(calls.map((c) => c.route.operationId)).toEqual(["validatePayout", "createPayout"]);
-    expect(calls[1]!.headers["idempotency-key"]).toBe("payout-42");
+    expect(calls[1]!.headers[HEADER_IDEMPOTENCY_KEY.toLowerCase()]).toBe("payout-42");
   });
 
   it("sandbox", async () => {
@@ -74,9 +80,9 @@ describe("examples", () => {
           body,
           headers: {
             "content-type": "application/json",
-            "X-Webhook-Timestamp": String(ts),
-            "X-Webhook-Signature": signature,
-            "X-Webhook-Id": "w-1",
+            [HEADER_WEBHOOK_TIMESTAMP]: String(ts),
+            [HEADER_WEBHOOK_SIGNATURE]: signature,
+            [HEADER_WEBHOOK_ID]: "w-1",
           },
         });
       expect((await send(signWebhook("whsec_demo", ts, body))).status).toBe(200);
