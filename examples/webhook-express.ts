@@ -1,4 +1,4 @@
-// Express receiver: verify over the RAW body, deduplicate by X-Webhook-Event-Id, ignore stale sequences.
+// Express receiver: verify over the RAW body, deduplicate by the event id, ignore stale sequences.
 import express from "express";
 import {
   verifyWebhookDelivery,
@@ -9,7 +9,7 @@ import {
 } from "@oblodai-npm/sdk/webhooks";
 
 export const app = express();
-// X-Webhook-Event-Id: the same for retries AND resends of a state (X-Webhook-Id changes on a
+// delivery.eventId: the same for retries AND resends of a state (delivery.id changes on a
 // resend). Use your database in production.
 const seenEvents = new Set<string>();
 const lastSequence = new Map<string, number>(); // per object id

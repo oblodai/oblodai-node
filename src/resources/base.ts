@@ -9,6 +9,7 @@ import { attachJob, jobIdOf } from "../core/poller.js";
 import { RawAPIResponse } from "../core/raw.js";
 import type { Query } from "../core/request.js";
 import { routeLabel, type RouteSpec } from "../core/route.js";
+import { HEADER_IDEMPOTENCY_KEY } from "../core/signing.js";
 import {
   unwrapResult,
   type CallOptions,
@@ -25,7 +26,7 @@ export interface RequestExtra {
   query?: Record<string, unknown>;
   /**
    * The route's body has its own `idempotency_key` field (Ruling 10): the `idempotencyKey` option
-   * fills it and no `Idempotency-Key` header is sent. Set by the generator from the contract.
+   * fills it and no idempotency key header is sent. Set by the generator from the contract.
    */
   idempotencyKeyInBody?: boolean;
 }
@@ -128,7 +129,7 @@ export abstract class Resource {
       // One key reused across pages would replay page 1 forever.
       throw new ConfigError(
         "sdk.idempotency_unsupported",
-        `${routeLabel(route)} is a list and does not deduplicate by Idempotency-Key; remove idempotencyKey from this call`,
+        `${routeLabel(route)} is a list and does not deduplicate by ${HEADER_IDEMPOTENCY_KEY}; remove idempotencyKey from this call`,
         "idempotencyKey",
       );
     }

@@ -20,7 +20,7 @@ export interface RouteSpec {
   /** Path template; `{name}` segments are filled from `pathParams`. */
   path: string;
   auth: RouteAuth;
-  /** Wrapped in the core's `withIdempotency`: an Idempotency-Key is generated when not supplied. */
+  /** Wrapped in the core's `withIdempotency`: an idempotency key is generated when not supplied. */
   idempotent: boolean;
   /** Retry-safe: repeating the request cannot duplicate a side effect. */
   safe: boolean;

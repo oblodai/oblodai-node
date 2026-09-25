@@ -14,6 +14,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { Oblodai, OblodaiError, SignatureError, WebhookPayloadError } from "../../src/index.js";
 import { canonicalString, signRequest, signWebhook } from "../../src/core/signing.js";
+import { SkewCorrectingClock } from "../../src/core/clock.js";
+import { makeCredentials, type Query } from "../../src/core/request.js";
+import type { HttpMethod, RouteSpec } from "../../src/core/route.js";
+import { Transport } from "../../src/core/transport.js";
 import {
   isKnownEvent,
   parseWebhook,
@@ -40,20 +44,84 @@ function pointer(doc: Json, path: string): Json {
     .reduce((cur, part) => cur[part.replace(/~1/g, "/").replace(/~0/g, "~")], doc);
 }
 
-/** The spec's `x-oblodai-signing` and the vectors the suite points at. */
-function source(s: Json): { signing: Json; vectors: Json[] } {
+/**
+ * The spec's `x-oblodai-signing`, the vectors the suite points at and the header names by role
+ * (`header_names`): read from the spec, never from the SDK's own constants, so a rename in the core
+ * that did not reach the SDK fails here.
+ */
+function source(s: Json): { signing: Json; vectors: Json[]; names: Record<string, string> } {
   const spec = JSON.parse(readFileSync(join(DIR, s.source.spec), "utf8"));
-  return { signing: spec["x-oblodai-signing"], vectors: pointer(spec, s.source.pointer) };
+  const names: Record<string, string> = {};
+  if (s.header_names) {
+    const list: string[] = pointer(spec, s.header_names.pointer);
+    expect(list).toHaveLength(s.header_names.roles.length);
+    s.header_names.roles.forEach((role: string, i: number) => (names[role] = list[i]!));
+  }
+  return { signing: spec["x-oblodai-signing"], vectors: pointer(spec, s.source.pointer), names };
 }
 
-function cases(name: string): Array<[string, Json, Json, Json]> {
+function cases(name: string): Array<[string, Json, Json, Json, Record<string, string>]> {
   const s = suite(name);
-  const { signing, vectors } = source(s);
+  const { signing, vectors, names } = source(s);
   return s.checks.flatMap((check: Json) =>
     vectors.map(
-      (vector, i) => [`${check.name}#${i}`, check, vector, signing] as [string, Json, Json, Json],
+      (vector, i) =>
+        [`${check.name}#${i}`, check, vector, signing, names] as [
+          string,
+          Json,
+          Json,
+          Json,
+          Record<string, string>,
+        ],
     ),
   );
+}
+
+/**
+ * Send a request vector through the signing transport the client's methods use — keys `publicId`
+ * + the vector's secret, clock at the vector's `ts` — and return the headers that reached fetch,
+ * with lower-cased names.
+ */
+async function sendVector(v: Json, publicId: string): Promise<Record<string, string>> {
+  const sent: Array<Record<string, string>> = [];
+  const fetch = async (_url: string, init: RequestInit): Promise<Response> => {
+    const headers: Record<string, string> = {};
+    for (const [k, value] of Object.entries(init.headers as Record<string, string>)) {
+      headers[k.toLowerCase()] = value;
+    }
+    sent.push(headers);
+    expect(init.body ?? "").toBe(v.body);
+    return new Response(JSON.stringify({ result: {} }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+  const [path, rawQuery] = String(v.request_uri).split("?", 2) as [string, string | undefined];
+  const query: Query = Object.fromEntries(new URLSearchParams(rawQuery ?? ""));
+  const route: RouteSpec = {
+    operationId: "conformanceRequestHeaders",
+    method: v.method as HttpMethod,
+    path,
+    auth: "key",
+    idempotent: v.idempotency_key !== "",
+    safe: false,
+    bare: false,
+    listKind: null,
+  };
+  const transport = new Transport({
+    baseUrl: "https://api.test",
+    userAgent: "conformance",
+    credentials: makeCredentials(publicId, v.secret),
+    fetch,
+    clock: new SkewCorrectingClock({ now: () => v.ts }),
+  });
+  await transport.call(route, {
+    query,
+    ...(v.method === "GET" ? {} : { body: JSON.parse(v.body) }),
+    ...(v.idempotency_key ? { idempotencyKey: v.idempotency_key } : {}),
+  });
+  expect(sent).toHaveLength(1);
+  return sent[0]!;
 }
 
 /** `operationId` → [resource class, method], read from the generated source. */
@@ -75,7 +143,18 @@ function operations(): Map<string, [string, string]> {
 
 describe.skipIf(!found)("conformance", () => {
   describe("request signing", () => {
-    it.each(found ? cases("signing") : [])("%s", (_, check, v) => {
+    it.each(found ? cases("signing") : [])("%s", async (_, check, v, _signing, names) => {
+      if (check.kind === "request_headers") {
+        const headers = await sendVector(v, check.public_id);
+        const sent = (role: string) => headers[names[role]!.toLowerCase()];
+        expect(sent("public_id"), names.public_id).toBe(check.public_id);
+        expect(sent("signature"), names.signature).toBe(v.signature);
+        expect(sent("timestamp"), names.timestamp).toBe(String(v.ts));
+        expect(sent("idempotency_key"), names.idempotency_key).toBe(
+          v.idempotency_key === "" ? undefined : v.idempotency_key,
+        );
+        return;
+      }
       const input = {
         ts: v.ts,
         method: v.method,
@@ -93,8 +172,10 @@ describe.skipIf(!found)("conformance", () => {
   });
 
   describe("webhook deliveries", () => {
-    const deliverySuite = found ? suite("webhook_delivery") : { headers: {}, checks: [] };
-    const deliveries: Json[] = found ? source(deliverySuite).vectors : [];
+    const deliverySuite = found ? suite("webhook_delivery") : { fields: {}, checks: [] };
+    const { vectors: deliveries, names: deliveryNames } = found
+      ? source(deliverySuite)
+      : { vectors: [] as Json[], names: {} as Record<string, string> };
     const camel = (snake: string) => snake.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 
     it.skipIf(!found)("has a delivery of every event this release knows", () => {
@@ -115,10 +196,10 @@ describe.skipIf(!found)("conformance", () => {
       expect(isKnownEvent(delivery.event)).toBe(true);
       expect(delivery.event.type).toBe(d.kind);
       expect(WEBHOOK_EVENTS[d.kind as keyof typeof WEBHOOK_EVENTS]).toContain(d.event);
-      for (const [header, field] of Object.entries(
-        deliverySuite.headers as Record<string, string>,
-      )) {
+      for (const [role, field] of Object.entries(deliverySuite.fields as Record<string, string>)) {
         if (field === "") continue;
+        const header = deliveryNames[role]!;
+        expect(header, `no header name for role ${role}`).toBeTruthy();
         const value = (delivery as unknown as Record<string, unknown>)[camel(field)];
         const want: string = d.headers[header];
         expect(value, `${camel(field)} ≠ ${header}`).toBe(
@@ -129,7 +210,7 @@ describe.skipIf(!found)("conformance", () => {
   });
 
   describe("webhooks", () => {
-    it.each(found ? cases("webhook") : [])("%s", (_, check, v, signing) => {
+    it.each(found ? cases("webhook") : [])("%s", (_, check, v, signing, names) => {
       if (check.kind === "webhook_signature") {
         expect(signWebhook(v.secret, v.ts, v.payload)).toBe(v.signature);
         return;
@@ -147,7 +228,7 @@ describe.skipIf(!found)("conformance", () => {
       if (check.mutate === "payload") payload += " ";
       else if (check.mutate === "signature")
         signature = (signature[0] !== "0" ? "0" : "1") + signature.slice(1);
-      const headers = { "X-Webhook-Timestamp": String(v.ts), "X-Webhook-Signature": signature };
+      const headers = { [names.timestamp!]: String(v.ts), [names.signature!]: signature };
       const verify = () =>
         verifyWebhook(payload, headers, {
           secret: v.secret,

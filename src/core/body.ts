@@ -60,7 +60,7 @@ function tooLarge(label: string, seen: number, maxBytes: number): ContractError 
 
 /**
  * The SDK never follows a redirect: the signature is bound to the path it signed, and a 3xx to
- * another origin would replay the request (and its Idempotency-Key) somewhere else. Native fetch is
+ * another origin would replay the request (and its idempotency key) somewhere else. Native fetch is
  * called with `redirect: "manual"`, but an injected client may ignore that — so the answer's own URL
  * is checked against the one asked for.
  */

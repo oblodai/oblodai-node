@@ -30,7 +30,7 @@ import {
   describeCredential,
   protectResponseSecrets,
 } from "./secrets.js";
-import { SIGNATURE_SKEW_SECONDS } from "./signing.js";
+import { HEADER_IDEMPOTENCY_KEY, SIGNATURE_SKEW_SECONDS } from "./signing.js";
 import { headerValue, sleep, uuid } from "./util.js";
 
 /**
@@ -256,7 +256,7 @@ export class Transport {
         // deduplicated when it is not — the one belief that turns a lost response into a double spend.
         throw new ConfigError(
           "sdk.idempotency_unsupported",
-          `${label} does not deduplicate by Idempotency-Key; remove idempotencyKey from this call`,
+          `${label} does not deduplicate by ${HEADER_IDEMPOTENCY_KEY}; remove idempotencyKey from this call`,
           "idempotencyKey",
         );
       }
@@ -483,7 +483,7 @@ export class Transport {
 export function unwrapResult(route: RouteSpec, raw: RawResponse): unknown {
   const decoded = decodeEnvelope<unknown>(raw.status, Buffer.from(raw.body).toString("utf8"));
   if (!decoded.ok) throw decoded.error; // unreachable: `call` already threw for error statuses
-  // The core replays a cached response by Idempotency-Key; when the original was too large to
+  // The core replays a cached response by idempotency key; when the original was too large to
   // cache it answers {ok, idempotent_replay: true, detail} instead of the object — surface that.
   const r = decoded.result as { idempotent_replay?: unknown; detail?: unknown } | null;
   if (r && typeof r === "object" && r.idempotent_replay === true) {
