@@ -61,6 +61,7 @@ import type {
   PaymentBatchRequest,
   PaymentDiscountRule,
   PaymentFeeResult,
+  PaymentHistoryRequest,
   PaymentInfoResult,
   PaymentLinkCreateRequest,
   PaymentLinkDetail,
@@ -408,7 +409,7 @@ export class Payments extends Resource {
    * request.control_char, request.duplicate_field, request.nul_byte, request.overloaded,
    * request.rate_limited, request.too_deep
    */
-  listHistory(params: HistoryRequest = {}, options?: RequestOptions): Page<PaymentView> {
+  listHistory(params: PaymentHistoryRequest = {}, options?: RequestOptions): Page<PaymentView> {
     return this._request(ROUTES.listPaymentHistory, params, options);
   }
 
