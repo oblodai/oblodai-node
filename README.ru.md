@@ -230,7 +230,7 @@ await oblodai.sandbox.reset(); // cancel open invoices, zero the balances
 
 <!-- prettier-ignore-start -->
 <!-- sdkgen:methods -->
-16 ресурсов, 120 методов.
+17 ресурсов, 123 метода.
 
 | Ресурс | Методы |
 | --- | --- |
@@ -250,6 +250,7 @@ await oblodai.sandbox.reset(); // cancel open invoices, zero the balances
 | `documents` | `getSigned` · `getBalance` · `getFees` · `getLedger` · `getSplit` · `getPayoutLinkCheque` · `getStatement` · `getBatch` · `getPaymentLink` · `getWalletStatement` · `getReferrals` · `createJob` · `getJob` · `downloadJobFile` |
 | `checkout` | `getSourceOfFundsForm` · `submitSourceOfFunds` · `getPublicPaymentLink` · `paymentLink` · `listCurrencies` · `get` · `selectMethod` · `startOnramp` · `getOnramp` · `getQr` |
 | `sandbox` | `onboardStore` · `faucet` · `simulateDeposit` · `reset` · `listWebhooks` · `replayWebhook` |
+| `cliLogin` | `start` · `poll` · `logoutCli` |
 <!-- /sdkgen:methods -->
 <!-- prettier-ignore-end -->
 

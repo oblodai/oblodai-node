@@ -20,6 +20,7 @@ import type {
   DocumentJobKind,
   DocumentJobStatus,
   FeeType,
+  KeyMode,
   OnrampIdleStatus,
   OnrampStatus,
   OpenEnum,
@@ -31,648 +32,724 @@ import type {
   PayoutSource,
   PayoutStatus,
   RefundRollup,
+  Role,
   SoFStatus,
   WebhookDeliveryStatus,
 } from "./enums.js";
 
 export interface AMLLinkView {
-  /** До какого момента ссылка действует (UTC). */
+  /** Until when the link is valid (UTC). */
   expired_at: string;
-  /** Ссылка на анкету — передайте её плательщику. */
+  /** The questionnaire link — hand it to the payer. */
   link: string;
-  /** Статус заполнения анкеты. */
+  /** Questionnaire completion status. */
   status: OpenEnum<SoFStatus>;
 }
 
 export interface AMLLinksRequest {
-  /** Идентификатор заказа мерчанта. */
+  /** The merchant's order id. */
   order_id?: string;
-  /** Идентификатор платежа. Нужен uuid или order_id; приоритет у uuid. */
+  /** Payment id. Either uuid or order_id is required; uuid takes precedence. */
   uuid?: string;
 }
 
 export interface AMLLinksResult {
-  /** По ссылке на каждый заблокированный депозит платежа; пусто — блокировать нечего. */
+  /** One link per blocked deposit of the payment; empty — nothing is blocked. */
   items: AMLLinkView[];
 }
 
 export interface APIAllowEnableRequest {
   /**
-   * true — принимать API-вызовы только с адресов из списка; false — список хранится, но не
-   * применяется.
+   * true — accept API calls only from addresses on the list; false — the list is kept but not
+   * enforced.
    */
   enabled: boolean;
 }
 
 export interface APIAllowEntryRequest {
-  /** IP или подсеть в CIDR (203.0.113.7 или 203.0.113.0/24). */
+  /** An IP or a CIDR subnet (203.0.113.7 or 203.0.113.0/24). */
   cidr: string;
 }
 
 export interface APIAllowListResult {
-  /** Применяется ли список: true — вызовы с адресов вне списка получают 403 auth.ip_not_allowed. */
+  /**
+   * Whether the list is enforced: true — calls from addresses outside the list get 403
+   * auth.ip_not_allowed.
+   */
   enabled: boolean;
-  /** Разрешённые IP и подсети в CIDR. */
+  /** Allowed IPs and CIDR subnets. */
   items: string[];
 }
 
 export interface APILogEntry {
-  /** Ключ, которым подписан запрос. */
+  /** The key the request was signed with. */
   api_key_id: string;
-  /** Когда пришёл запрос (UTC). */
+  /** When the request arrived (UTC). */
   created_at: string;
-  /** Длительность обработки, мс. */
+  /** Processing duration, ms. */
   duration_ms: number;
-  /** Адрес клиента. */
+  /** The customer's address. */
   ip: string;
-  /** HTTP-метод. */
+  /** HTTP method. */
   method: string;
-  /** Путь запроса. */
+  /** Request path. */
   path: string;
-  /** Код ответа. */
+  /** Response code. */
   status: number;
 }
 
 export interface APILogRequest {
-  /** Начало периода, YYYY-MM-DD, включительно. */
+  /** Start of the period, YYYY-MM-DD, inclusive. */
   from?: string;
-  /** Размер страницы, 1..200; по умолчанию 20. */
+  /** Page size, 1..200; default 20. */
   limit?: number;
-  /** Страница, с 1. */
+  /** Page, starting from 1. */
   page?: number;
-  /** Подстрока по «МЕТОД путь» — то, что человек видит в таблице. */
+  /** A substring of "METHOD path" — what a person sees in the table. */
   q?: string;
-  /** Точный код ответа; 0 — все. */
+  /** The exact response code; 0 — all. */
   status?: number;
-  /** Конец периода, YYYY-MM-DD, ВКЛЮЧИТЕЛЬНО (день целиком). */
+  /** End of the period, YYYY-MM-DD, INCLUSIVE (the whole day). */
   to?: string;
 }
 
 export interface APILogResult {
-  /** Строки этой страницы, новые сверху. */
+  /** The rows of this page, newest first. */
   items: APILogEntry[];
-  /** Сколько дней лог хранится. */
+  /** How many days the log is kept. */
   retention_days: number;
-  /** Всего строк по фильтру. */
+  /** Total rows matching the filter. */
   total: number;
 }
 
 export interface AcceptedConfiguredMethod {
-  /** Можно ли платить этим методом здесь. */
+  /** Whether this method can be used to pay here. */
   available: boolean;
-  /** Код актива. */
+  /** Asset code. */
   currency: string;
-  /** Сеть актива. */
+  /** The asset's network. */
   network: string;
   /**
-   * Почему недоступен: not_served_here — развёртывание не принимает этот метод, unknown_method —
-   * метода нет в каталоге; у доступного ключа нет.
+   * Why it is unavailable: not_served_here — the deployment does not accept this method,
+   * unknown_method — the method is not in the catalog; an available one has no such key.
    */
   reason?: OpenEnum<AcceptedReason>;
 }
 
 export interface AcceptedConfiguredMethodList {
-  /** Записи этой страницы. */
+  /** The records of this page. */
   items: AcceptedConfiguredMethod[];
-  /** Блок пагинации. */
+  /** Pagination block. */
   paginate: Pagination;
 }
 
 export interface AcceptedMethod {
-  /** Код актива. */
+  /** Asset code. */
   currency: string;
-  /** Сеть актива. */
+  /** The asset's network. */
   network: string;
 }
 
 export interface AcceptedSetRequest {
   /**
-   * Полный список пар валюта+сеть, которыми разрешено платить; пустой список — принимать всё из
-   * каталога.
+   * The full list of currency+network pairs allowed for payment; an empty list — accept everything
+   * in the catalog.
    */
   accepted: AcceptedMethod[];
 }
 
 export interface AcceptedSetResult {
-  /** Набор сохранён. */
+  /** The set has been saved. */
   ok: boolean;
-  /** Сохранённые, но неизвестные каталогу пары — оставлены как были; ключа нет, когда таких нет. */
+  /** Saved pairs that the catalog does not know — kept as they were; no key when there are none. */
   unknown?: AcceptedMethod[];
 }
 
 export interface AccuracyResult {
-  /** Допуск в процентах, 1–5; 0 — допуск выключен (нужна точная сумма). */
+  /** Tolerance in percent, 1–5; 0 — tolerance disabled (the exact amount is required). */
   accuracy_percent: number;
-  /** Включён ли допуск. */
+  /** Whether the tolerance is enabled. */
   enabled: boolean;
 }
 
 export interface ApproveRequest {
-  /** Идентификатор выплаты. */
+  /** Payout id. */
   uuid: string;
 }
 
 export interface AutoConvertResult {
-  /** Есть ли приказ. false — остальные поля — умолчания формы. */
+  /** Whether an order exists. false — the other fields are form defaults. */
   configured: boolean;
-  /** Включён ли приказ. */
+  /** Whether the order is enabled. */
   enabled: boolean;
-  /** Пол одной конвертации в долларах, десятичной строкой (с умолчанием процесса). */
+  /**
+   * The floor for a single conversion in dollars, as a decimal string (with the process default
+   * applied).
+   */
   min_amount: string;
-  /** Режим зачисления: economy или instant. */
+  /** The crediting mode: economy or instant. */
   mode: OpenEnum<AutoConvertMode>;
-  /** Монеты, которые сводятся; пусто — [], не null. */
+  /** The coins being converted; empty — [], not null. */
   sources: string[];
-  /** Монета, в которую сводится выручка; пусто без приказа. */
+  /** The coin revenue is converted into; empty without an order. */
   target: string;
 }
 
 export interface AutoRefundPolicyResult {
-  /** false — политику не задавали, действует умолчание (обе включены). */
+  /** false — no policy has been set, the default applies (both enabled). */
   configured: boolean;
-  /** Возвращается ли излишек при переплате (paid_over). */
+  /** Whether the excess of an overpayment (paid_over) is refunded. */
   overpay: boolean;
-  /** Возвращаются ли средства при истёкшей недоплате (wrong_amount). */
+  /** Whether the funds of an expired underpayment (wrong_amount) are refunded. */
   underpay: boolean;
 }
 
 export interface AutoWithdrawDeleteRequest {
-  /** Актив, автовывод которого выключить. */
+  /** The asset whose auto-withdrawal to disable. */
   currency: string;
 }
 
 export interface AutoWithdrawListResult {
-  /** Правила автовывода, по одному на актив. */
+  /** Auto-withdrawal rules, one per asset. */
   items: AutoWithdrawRule[];
 }
 
 export interface AutoWithdrawRule {
-  /** Адрес назначения. */
+  /** Destination address. */
   address: string;
-  /** Актив. */
+  /** Asset. */
   currency: string;
-  /** Порог срабатывания в единицах актива. */
+  /** The trigger threshold in asset units. */
   min_amount: string;
-  /** Сеть адреса назначения. */
+  /** The destination address network. */
   network: string;
 }
 
 export interface AutoWithdrawSetRequest {
-  /** Адрес назначения (внешний кошелёк мерчанта). */
+  /** Destination address (the merchant's external wallet). */
   address: string;
-  /** Актив, который выводить автоматически. */
+  /** The asset to withdraw automatically. */
   currency: string;
   /**
-   * Порог: вывод срабатывает, когда доступный баланс актива не меньше этой суммы; пусто — сетевой
-   * минимум.
+   * Threshold: the withdrawal triggers when the asset's available balance is at least this amount;
+   * empty — the network minimum.
    */
   min_amount?: string;
-  /** Сеть адреса назначения. */
+  /** The destination address network. */
   network: string;
 }
 
 export interface BalanceResult {
-  /** Балансы владельца. */
+  /** The owner's balances. */
   balance: MerchantBalances;
 }
 
 export interface BatchInfoItem {
   /**
-   * Машиночитаемый код ошибки — тот же, что вернул бы одиночный вызов (payment.below_minimum,
-   * payout.address_network_mismatch, …); batch.stopped / batch.key_revoked — элемент не выполнялся;
-   * только при status «error». Пусто у элементов, завершённых до ввода поля.
+   * The machine-readable error code — the same one a single call would return
+   * (payment.below_minimum, payout.address_network_mismatch, …); batch.stopped / batch.key_revoked
+   * — the item was not executed; only with status "error". Empty for items completed before the
+   * field was introduced.
    */
   error_code?: string;
   /**
-   * HTTP-статус, которым ответил бы одиночный вызов (400, 409, …); отсутствует, если элемент не
-   * дошёл до обработчика (batch.stopped, batch.key_revoked).
+   * The HTTP status a single call would have returned (400, 409, …); absent if the item never
+   * reached the handler (batch.stopped, batch.key_revoked).
    */
   http_status?: number;
-  /** Порядковый номер элемента в исходном массиве (с нуля). */
+  /** The item's index in the original array (zero-based). */
   idx: number;
-  /** Человекочитаемое сообщение об ошибке; только при status «error». */
+  /** A human-readable error message; only with status "error". */
   message?: string;
   /**
-   * Итог элемента: true при status «done», false при status «error»; отсутствует, пока элемент не
-   * обработан.
+   * The item outcome: true with status "done", false with status "error"; absent until the item has
+   * been processed.
    */
   ok?: boolean;
-  /** order_id элемента, если вы его задавали; присутствует не всегда. */
+  /** The item's order_id, if you set one; not always present. */
   order_id?: string;
   /**
-   * Результат успешной операции — тот же объект, что вернул бы одиночный вызов; только при status
-   * «done».
+   * The result of a successful operation — the same object a single call would return; only with
+   * status "done".
    */
   result?: unknown;
-  /** Статус элемента: pending | processing | done | error. */
+  /** Item status: pending | processing | done | error. */
   status: OpenEnum<BatchItemStatus>;
 }
 
 export interface BatchInfoRequest {
-  /** Идентификатор батча из ответа на submit. */
+  /** The batch id from the submit response. */
   batch_id: string;
-  /** Сколько элементов вернуть в items (пагинация). */
+  /** How many items to return in items (pagination). */
   limit?: number;
-  /** Смещение по элементам. */
+  /** Offset in items. */
   offset?: number;
 }
 
 export interface BatchInfoResponse {
-  /** Идентификатор батча. */
+  /** Batch id. */
   batch_id: string;
-  /** Время создания батча (ISO 8601, UTC). */
+  /** Batch creation time (ISO 8601, UTC). */
   created_at: string;
-  /** Завершилось ошибкой (при on_error stop сюда попадают и пропущенные элементы). */
+  /** Failed (with on_error stop, skipped items are counted here too). */
   failed: number;
-  /** Страница элементов с результатом или ошибкой по каждому. */
+  /** A page of items with the result or error for each. */
   items: BatchInfoItem[];
-  /** Вид батча: payment | refund | payout | transfer. */
+  /** Batch kind: payment | refund | payout | transfer. */
   kind: OpenEnum<BatchKind>;
-  /** Режим обработки ошибок, с которым батч был отправлен: continue | stop. */
+  /** The error handling mode the batch was submitted with: continue | stop. */
   on_error: OpenEnum<BatchOnError>;
   /**
-   * Статус батча: pending | processing | completed | stopped. ТЕРМИНАЛЬНЫЕ — completed И stopped
-   * (опрашивайте до одного из них, не только до completed): completed = обработка дошла до конца,
-   * stopped = батч с on_error=stop остановился на первой ошибке (остальные элементы пропущены и
-   * учтены в failed). Ни один не значит «всё успешно» — смотрите succeeded/failed.
+   * Batch status: pending | processing | completed | stopped. TERMINAL ones are completed AND
+   * stopped (poll until either of them, not only completed): completed = processing reached the
+   * end, stopped = a batch with on_error=stop halted at the first error (the remaining items were
+   * skipped and counted in failed). Neither means "everything succeeded" — check succeeded/failed.
    */
   status: OpenEnum<BatchStatus>;
-  /** Успешно обработано. */
+  /** Processed successfully. */
   succeeded: number;
-  /** Всего элементов в батче; считается по всему батчу и от пагинации не зависит. */
+  /** Total items in the batch; counted over the whole batch, independent of pagination. */
   total: number;
-  /** Время последнего изменения (ISO 8601, UTC). */
+  /** Time of the last change (ISO 8601, UTC). */
   updated_at: string;
 }
 
 export interface BatchSubmitResponse extends JobHandle<BatchInfoResponse> {
-  /** Идентификатор батча — с ним идите в POST /v1/batch/info за статусом и результатами. */
+  /** The batch id — use it with POST /v1/batch/info to get the status and results. */
   batch_id: string;
-  /** Сколько элементов принято в обработку. */
+  /** How many items were accepted for processing. */
   count: number;
-  /** Вид батча: payment | refund | payout | transfer. */
+  /** Batch kind: payment | refund | payout | transfer. */
   kind: OpenEnum<BatchKind>;
-  /** Стартовый статус — всегда pending. */
+  /** The initial status — always pending. */
   status: OpenEnum<BatchStatus>;
 }
 
 export interface BlockWalletRequest {
-  /** Адрес статического кошелька */
+  /** Static wallet address */
   address: string;
-  /** true — заблокировать (значение по умолчанию, если поле опущено); false — снять блокировку */
+  /** true — block (the default if the field is omitted); false — lift the block */
   is_force_block?: boolean;
 }
 
 export interface BlockWalletResult {
-  /** Адрес кошелька. */
+  /** Wallet address. */
   address: string;
-  /** Заблокирован ли кошелёк после вызова. */
+  /** Whether the wallet is blocked after the call. */
   blocked: boolean;
-  /** Идентификатор статического кошелька. */
+  /** Static wallet id. */
   uuid: string;
 }
 
 export interface BlockedRefundRequest {
-  /** Адрес назначения возврата. */
+  /** Refund destination address. */
   address: string;
   /**
-   * Тег/мемо назначения (XRP destination tag, XLM memo id, TON comment). Обязателен для
-   * классического адреса на tag/memo-сети, если тег не встроен в X-/M-адрес.
+   * Destination tag/memo (XRP destination tag, XLM memo id, TON comment). Required for a classic
+   * address on a tag/memo network unless the tag is embedded in an X-/M-address.
    */
   memo?: string;
-  /** Идентификатор статического кошелька (из ответа /v1/wallet). */
+  /** The static wallet id (from the /v1/wallet response). */
   uuid: string;
 }
 
 export interface BlockedRefundResult {
-  /** Адрес получателя. */
+  /** Recipient address. */
   address: string;
-  /** Сумма выплаты в валюте currency, списанная с вашего баланса. */
+  /** The payout amount in currency, debited from your balance. */
   amount: string;
-  /** true — выплата ждёт подтверждения (внутренние сценарии; по API-ключу всегда false). */
+  /** true — the payout is awaiting approval (internal scenarios; always false with an API key). */
   approval_required: boolean;
-  /** Удержанная сетевая комиссия, в валюте выплаты. 0 — комиссию поглотил шлюз. */
+  /** The withheld network fee, in the payout currency. 0 — the gateway absorbed the fee. */
   commission: string;
-  /** Время создания (ISO 8601). */
+  /** Creation time (ISO 8601). */
   created_at: string;
-  /** Код валюты выплаты. */
+  /** Payout currency code. */
   currency: string;
   /**
-   * Подписанная ссылка на PDF-чек этой операции — открывается без API-ключа, можно вложить в письмо
-   * или отдать получателю. Пусто, если генерация документов не включена.
+   * A signed link to the PDF receipt of this operation — opens without an API key, can be attached
+   * to an email or given to the recipient. Empty if document generation is not enabled.
    */
   document_url: string;
   /**
-   * Кто заплатил сетевую комиссию: gateway — шлюз поглотил её (commission = 0); merchant — сумма
-   * списания увеличена на комиссию, получатель получает запрошенное целиком (is_subtract=true,
-   * выплатная ссылка с fee_bearer=merchant); recipient — комиссия удержана из выплаты, получателю
-   * приходит меньше запрошенного.
+   * Who paid the network fee: gateway — the gateway absorbed it (commission = 0); merchant — the
+   * debit amount was increased by the fee, the recipient gets the full requested amount
+   * (is_subtract=true, a payout link with fee_bearer=merchant); recipient — the fee was withheld
+   * from the payout, the recipient gets less than requested.
    */
   fee_bearer: OpenEnum<PayoutFeeBearer>;
-  /** true — статус финальный (confirmed / failed / cancelled). */
+  /** true — the status is final (confirmed / failed / cancelled). */
   is_final: boolean;
-  /** true — это возврат платежа, а не обычная выплата. */
+  /** true — this is a payment refund, not a regular payout. */
   is_refund: boolean;
-  /** Тег/мемо назначения, переданный при создании (TON Jetton, memo-биржи). Пусто — без мемо. */
+  /** The destination tag/memo passed at creation (TON Jetton, exchange memos). Empty — no memo. */
   memo: string;
-  /** Сеть блокчейна. */
+  /** Blockchain network. */
   network: string;
   /**
-   * Ваш номер (reference) выплаты. У возврата — null: возврат не имеет вашего идентификатора, см.
+   * Your payout number (reference). null for a refund: a refund has no identifier of yours, see
    * payment_order_id.
    */
   order_id: string | null;
-  /** Сколько реально уходит получателю на адрес: amount − commission. */
+  /** How much actually goes to the recipient's address: amount − commission. */
   payer_amount: string;
   /**
-   * Ваш order_id платежа, по которому сделан возврат (null у обычной выплаты). У возврата
-   * собственного order_id нет — он приходит null, а сверять возврат с заказом нужно по этому полю.
+   * Your order_id of the payment that was refunded (null for a regular payout). A refund has no
+   * order_id of its own — it comes as null, so match a refund to an order by this field.
    */
   payment_order_id: string | null;
-  /** Идентификатор возвращаемого платежа (null, если это не возврат). */
+  /** The id of the payment being refunded (null if this is not a refund). */
   refund_for: string | null;
-  /** api (через интеграцию) | manual (из кабинета). */
+  /** api (via the integration) | manual (from the dashboard). */
   source: OpenEnum<PayoutSource>;
   /**
-   * Статус выплаты: pending (создана, ждёт) | approved (одобрена) | awaiting_cosign (ждёт второй
-   * подписи) | broadcasting (отправляется) | sent (отправлена, ждёт подтверждений) | confirmed
-   * (подтверждена — готово) | failed | cancelled. Значение можно передать обратно в фильтр истории
-   * как есть.
+   * Payout status: pending (created, waiting) | approved (approved) | awaiting_cosign (waiting for
+   * the second signature) | broadcasting (being broadcast) | sent (sent, awaiting confirmations) |
+   * confirmed (confirmed — done) | failed | cancelled. The value can be passed back to the history
+   * filter as is.
    */
   status: OpenEnum<PayoutStatus>;
-  /** Хеш транзакции в блокчейне (появляется после отправки). */
+  /** The blockchain transaction hash (appears after sending). */
   txid: string;
-  /** Время последнего изменения (ISO 8601). */
+  /** Time of the last change (ISO 8601). */
   updated_at: string;
-  /** Идентификатор выплаты. */
+  /** Payout id. */
   uuid: string;
-  /** Кошелёк, с которого вернули деньги. */
+  /** The wallet the money was refunded from. */
   wallet_uuid: string;
 }
 
+export interface CLIDeviceAuthorization {
+  /** The CLI's secret for polling POST /v1/cli/token. Never show it to the user. */
+  device_code: string;
+  /** Seconds until the request expires. */
+  expires_in: number;
+  /** Seconds to wait between polls; cli.slow_down raises it by 5. */
+  interval: number;
+  /** The code the user confirms in the browser. */
+  user_code: string;
+  /** The cabinet page where the user enters the code. */
+  verification_uri: string;
+  /** The same page with the code filled in — open this one in the browser. */
+  verification_uri_complete: string;
+}
+
+export interface CLIDeviceRequest {
+  /**
+   * The client asking for access (at most 64 characters); shown in the cabinet. Empty — "oblodai".
+   */
+  client_name?: string;
+  /**
+   * The device (at most 100 characters); shown in the cabinet and becomes the key label. Empty —
+   * "CLI".
+   */
+  device_name?: string;
+}
+
+export interface CLILogoutResult {
+  /** The CLI key that was revoked (the one that signed this request). */
+  public_id: string;
+  /** Always true: the key no longer authenticates. */
+  revoked: boolean;
+}
+
+export interface CLIToken {
+  /** When the key stops working; log in again after that. */
+  expires_at: string;
+  /** The key label (device name). */
+  label: string;
+  /** The merchant (store) the key acts for. */
+  merchant_id: string;
+  /** The store's name at approval time. */
+  merchant_name: string;
+  /** live — a production store; test — its sandbox. */
+  mode: OpenEnum<KeyMode>;
+  /** The CLI key's public id (X-Public-Id). */
+  public_id: string;
+  /**
+   * The team member's role the key acts with (at approval time; the core checks the current one on
+   * every call).
+   */
+  role: OpenEnum<Role>;
+  /** The key secret. Returned exactly once — store it now. */
+  secret: string;
+}
+
+export interface CLITokenRequest {
+  /** device_code from POST /v1/cli/device. */
+  device_code: string;
+}
+
 export interface CancelPayoutRequest {
-  /** Идентификатор выплаты (или возврата) для отмены. */
+  /** The id of the payout (or refund) to cancel. */
   uuid: string;
 }
 
 export interface CheckoutConfigRequest {
   /**
-   * Слать ли покупателю чек на почту после оплаты. Чек уходит только если покупатель оставил адрес.
-   * По умолчанию — да.
+   * Whether to email the buyer a receipt after payment. The receipt is sent only if the buyer left
+   * an address. Defaults to yes.
    */
   email_receipts?: boolean | null;
   /**
-   * Куда вернуть покупателя, если он ушёл с оплаты. Пустая строка — никуда не отправлять. Поле
-   * можно не присылать — тогда прежнее значение сохранится. Подставляется только в те счета, где
-   * url_return не задан.
+   * Where to send the buyer if they left the payment page. An empty string — do not redirect. The
+   * field may be omitted — then the previous value is kept. Applied only to invoices where
+   * url_return is not set.
    */
   fail_url?: string | null;
   /**
-   * Куда вернуть покупателя после успешной оплаты. Пустая строка — никуда не отправлять. Поле можно
-   * не присылать — тогда прежнее значение сохранится. Подставляется только в те счета, где
-   * url_success не задан.
+   * Where to send the buyer after a successful payment. An empty string — do not redirect. The
+   * field may be omitted — then the previous value is kept. Applied only to invoices where
+   * url_success is not set.
    */
   success_url?: string | null;
 }
 
 export interface CheckoutConfigView {
-  /** Слать ли покупателю чек на почту после оплаты. */
+  /** Whether to email the buyer a receipt after payment. */
   email_receipts: boolean;
-  /** Куда вернуть покупателя, ушедшего с оплаты; пусто — никуда. */
+  /** Where to send a buyer who left the payment page; empty — nowhere. */
   fail_url: string;
-  /** Куда вернуть покупателя после оплаты; пусто — никуда. */
+  /** Where to send the buyer after payment; empty — nowhere. */
   success_url: string;
 }
 
 export interface ClaimRequest {
-  /** Адрес получателя в сети выплаты. */
+  /** The recipient's address on the payout network. */
   address: string;
-  /** Memo/tag — только для сетей, где он обязателен. */
+  /** Memo/tag — only for networks where it is required. */
   memo?: string;
   /**
-   * Код получения — если отправитель установил его на ссылку. После 10 неверных вводов ссылка
-   * запирается.
+   * Claim passcode — if the sender set one on the link. After 10 wrong attempts the link is locked.
    */
   passcode?: string;
 }
 
 export interface ConversionEconomyQuote {
-  /** Доступен ли режим сейчас. */
+  /** Whether the mode is available right now. */
   available: boolean;
-  /** Комиссия режима в процентах. */
+  /** The mode's fee, in percent. */
   fee_percent: string;
-  /** Гарантированный минимум к получению, в валюте котировки. */
+  /** The guaranteed minimum to receive, in the quote currency. */
   min_out: string;
-  /** Почему недоступен: no_route; пусто — доступен. */
+  /** Why it is unavailable: no_route; empty — available. */
   reason: string;
-  /** За сколько минут исполняется заявка. */
+  /** How many minutes the order takes to execute. */
   window_minutes: number;
 }
 
 export interface ConversionInstantQuote {
-  /** Доступен ли режим сейчас. */
+  /** Whether the mode is available right now. */
   available: boolean;
-  /** Сколько придёт, в валюте котировки. */
+  /** How much will arrive, in the quote currency. */
   estimated_out: string;
-  /** Комиссия режима в процентах. */
+  /** The mode's fee, in percent. */
   fee_percent: string;
-  /** Почему недоступен: frozen, position_cap; пусто — доступен. */
+  /** Why it is unavailable: frozen, position_cap; empty — available. */
   reason: string;
 }
 
 export interface ConversionModes {
-  /** Конвертация через партию ликвидации. */
+  /** Conversion via a liquidation batch. */
   economy: ConversionEconomyQuote;
-  /** Мгновенная конвертация по спред-курсу. */
+  /** Instant conversion at the spread rate. */
   instant: ConversionInstantQuote;
 }
 
 /**
- * Приходит, когда конвертация в эконом-режиме исполнена (completed — зачислено) или отменена с
- * возвратом исходной суммы (refunded).
+ * Sent when an economy-mode conversion is executed (completed — credited) or cancelled with the
+ * source amount returned (refunded).
  */
 export interface ConversionWebhook {
-  /** Когда завершена (ISO 8601). */
+  /** When completed (ISO 8601). */
   completed_at: string;
-  /** Когда конвертация принята (ISO 8601). */
+  /** When the conversion was accepted (ISO 8601). */
   created_at: string;
-  /** Подписанная ссылка на PDF-чек конвертации; пусто у возврата и когда документы выключены. */
+  /**
+   * A signed link to the PDF conversion receipt; empty for a refund and when documents are
+   * disabled.
+   */
   document_url: string;
-  /** Когда событие произошло, UTC с миллисекундами (ISO 8601). */
+  /** When the event happened, UTC with milliseconds (ISO 8601). */
   event_at: string;
-  /** Комиссия конвертации, в процентах. */
+  /** Conversion fee, in percent. */
   fee_percent: string;
-  /** Из какой валюты. */
+  /** Source currency. */
   from: string;
-  /** Идентификатор конвертации — тот id, что вернул запрос конвертации. */
+  /** The conversion id — the id returned by the conversion request. */
   id: string;
-  /** Всегда true: событие приходит, когда деньги уже зачислены или возвращены. */
+  /** Always true: the event arrives when the money has already been credited or returned. */
   is_final: boolean;
-  /** Режим: economy (исполнена очередью) | instant. */
+  /** Mode: economy (executed via the queue) | instant. */
   mode: string;
-  /** Причина возврата (market_below_min | window_expired); пусто у completed. */
+  /** The refund reason (market_below_min | window_expired); empty for completed. */
   reason: string;
-  /** Сколько зачислено, в валюте to. Есть только у completed; у refunded поля нет. */
+  /**
+   * How much was credited, in the to currency. Present only for completed; refunded has no such
+   * field.
+   */
   received?: string;
-  /** Сколько отдано, в валюте from. */
+  /** How much was given, in the from currency. */
   sent: string;
   /**
-   * Глобальный номер события: в пределах одного объекта больший номер новее, меньший — опоздавшая
-   * доставка, её нужно отбросить. У репетиции (test: true) всегда 0.
+   * The global event number: within one object a higher number is newer, a lower one is a late
+   * delivery and must be discarded. Always 0 on a rehearsal (test: true).
    */
   sequence: number;
-  /** completed — зачислено; refunded — исходная сумма возвращена. */
+  /** completed — credited; refunded — the source amount was returned. */
   status: OpenEnum<ConversionWebhookStatus>;
   /**
-   * Есть только у репетиции (/v1/test-webhook/*, /v1/payment/testing-webhook) и всегда true —
-   * внутри подписи. Боевое событие этого поля не несёт никогда: тело с test: true обработчик обязан
-   * игнорировать, даже если подпись верна.
+   * Present only on a rehearsal (/v1/test-webhook/*, /v1/payment/testing-webhook) and always true —
+   * inside the signature. A live event never carries this field: your handler must ignore a body
+   * with test: true even if the signature is valid.
    */
   test?: boolean;
-  /** В какую валюту. */
+  /** Target currency. */
   to: string;
-  /** Вид события: payment | payout | wallet | conversion — какое тело пришло. */
+  /** Event kind: payment | payout | wallet | conversion — which body arrived. */
   type: string;
 }
 
 export interface CreateWalletRequest {
-  /** Символ валюты приёма (USDT, BTC, ETH, …) */
+  /** The symbol of the accepted currency (USDT, BTC, ETH, …) */
   currency: string;
-  /** Сеть приёма (tron, ethereum, bitcoin, …) */
+  /** The receiving network (tron, ethereum, bitcoin, …) */
   network: string;
-  /** Ваш идентификатор клиента/заказа. Закрепляет отдельный постоянный адрес за клиентом */
+  /** Your customer/order identifier. Assigns a dedicated permanent address to the customer */
   order_id?: string;
 }
 
 export interface CurrenciesResult {
-  /** Чем счёт можно оплатить: монеты по сетям. */
+  /** What the invoice can be paid with: coins by network. */
   currencies: CurrencyEntry[];
-  /** В чём счёт можно выставить: те же монеты и фиат; отсортированы по коду. */
+  /** What an invoice can be priced in: the same coins plus fiat; sorted by code. */
   pricing_currencies: PricingCurrency[];
 }
 
 export interface CurrencyEntry {
-  /** Код валюты. */
+  /** Currency code. */
   currency: string;
-  /** Знаков после запятой в суммах этой валюты. */
+  /** Decimal places in amounts of this currency. */
   decimals: number;
   networks: CurrencyNetwork[];
 }
 
 export interface CurrencyNetwork {
-  /** То же, что deposit_available. */
+  /** The same as deposit_available. */
   available: boolean;
-  /** Номер EVM-сети (EIP-155); только у EVM-сетей. */
+  /** The EVM chain id (EIP-155); EVM networks only. */
   chain_id?: number;
-  /** Контракт токена; у монеты сети ключа нет. */
+  /** The token contract; a native coin has no such key. */
   contract?: string;
-  /** false — метод показывается на оплате только после явного включения мерчантом. */
+  /** false — the method is shown at checkout only after the merchant explicitly enables it. */
   default_offer: boolean;
-  /** Приём в этой сети работает на этом развёртывании. */
+  /** Accepting payments on this network works on this deployment. */
   deposit_available: boolean;
-  /** native — монета сети, token — токен контракта. */
+  /** native — the network's native coin, token — a contract token. */
   kind: OpenEnum<AssetKind>;
-  /** Подтверждений до зачисления. */
+  /** Confirmations until crediting. */
   min_confirmations: number;
-  /** Сеть. */
+  /** Network. */
   network: string;
-  /** Выплаты в этой сети работают на этом развёртывании. */
+  /** Payouts on this network work on this deployment. */
   payout_available: boolean;
 }
 
 export interface DocumentJobAccepted extends FileJobHandle<DocumentJobView> {
-  /** Когда задача поставлена (UTC). */
+  /** When the job was queued (UTC). */
   created_at: string;
-  /** Почему файла нет; есть у задачи в статусе failed или expired. */
+  /** Why there is no file; present on a job in status failed or expired. */
   error?: DocumentJobError;
-  /** Готовый файл; есть у задачи в статусе done. */
+  /** The finished file; present on a job in status done. */
   file?: DocumentJobFile;
-  /** Формат файла: pdf или csv. */
+  /** File format: pdf or csv. */
   format: string;
-  /** Идентификатор задачи. */
+  /** Job id. */
   job_id: string;
-  /** Вид отчёта. */
+  /** Report kind. */
   kind: OpenEnum<DocumentJobKind>;
-  /** Язык документа. */
+  /** Document language. */
   lang: string;
-  /** Период отчёта. */
+  /** Report period. */
   period: DocumentJobPeriod;
-  /** Срок готовности; есть, пока задача в очереди или в работе. */
+  /** The readiness deadline; present while the job is queued or in progress. */
   ready_within?: string;
-  /** Статус задачи: queued, processing, done, failed или expired. */
+  /** Job status: queued, processing, done, failed or expired. */
   status: OpenEnum<DocumentJobStatus>;
-  /** Когда задача менялась последний раз (UTC). */
+  /** When the job last changed (UTC). */
   updated_at: string;
 }
 
 export interface DocumentJobError {
-  /** Машинный код отказа. */
+  /** The machine code of the rejection. */
   code: string;
-  /** Что случилось и что делать. */
+  /** What happened and what to do. */
   message: string;
 }
 
 export interface DocumentJobFile {
-  /** Путь скачивания (GET под ключом мерчанта). */
+  /** The download path (GET under the merchant key). */
   download_url: string;
-  /** До какого момента файл хранится (UTC). */
+  /** Until when the file is kept (UTC). */
   expires_at?: string;
-  /** Строк в отчёте. */
+  /** Rows in the report. */
   rows: number;
-  /** Размер файла в байтах. */
+  /** File size in bytes. */
   size_bytes: number;
 }
 
 export interface DocumentJobInfoRequest {
-  /** Идентификатор задачи из ответа создания. */
+  /** The job id from the creation response. */
   job_id: string;
 }
 
 export interface DocumentJobPeriod {
-  /** Начало периода, YYYY-MM-DD. */
+  /** Start of the period, YYYY-MM-DD. */
   from: string;
-  /** Конец периода включительно, YYYY-MM-DD. */
+  /** End of the period, inclusive, YYYY-MM-DD. */
   to: string;
 }
 
 export interface DocumentJobRequest {
   /**
-   * Формат файла: pdf (по умолчанию) или csv. CSV собирается без вёрстки — для тяжёлых выписок
-   * дешевле и грузится в Excel/1С.
+   * File format: pdf (default) or csv. CSV is built without layout — cheaper for heavy statements
+   * and imports into Excel/1C.
    */
   format?: string;
-  /** Начало периода, YYYY-MM-DD (по умолчанию — первое число текущего месяца). */
+  /** Start of the period, YYYY-MM-DD (defaults to the first day of the current month). */
   from?: string;
-  /** Вид отчёта: statement (операции), fees (комиссии) или ledger (движения баланса). */
+  /** Report kind: statement (operations), fees (fees) or ledger (balance movements). */
   kind: OpenEnum<DocumentJobKind>;
-  /** Язык документа (по умолчанию en). */
+  /** Document language (en by default). */
   lang?: string;
-  /** Конец периода включительно, YYYY-MM-DD (по умолчанию — сегодня). Период — до двух лет. */
+  /**
+   * End of the period, inclusive, YYYY-MM-DD (defaults to today). The period is up to two years.
+   */
   to?: string;
 }
 
 export interface DocumentJobView {
-  /** Когда задача поставлена (UTC). */
+  /** When the job was queued (UTC). */
   created_at: string;
-  /** Почему файла нет; есть у задачи в статусе failed или expired. */
+  /** Why there is no file; present on a job in status failed or expired. */
   error?: DocumentJobError;
-  /** Готовый файл; есть у задачи в статусе done. */
+  /** The finished file; present on a job in status done. */
   file?: DocumentJobFile;
-  /** Формат файла: pdf или csv. */
+  /** File format: pdf or csv. */
   format: string;
-  /** Идентификатор задачи. */
+  /** Job id. */
   job_id: string;
-  /** Вид отчёта. */
+  /** Report kind. */
   kind: OpenEnum<DocumentJobKind>;
-  /** Язык документа. */
+  /** Document language. */
   lang: string;
-  /** Период отчёта. */
+  /** Report period. */
   period: DocumentJobPeriod;
-  /** Срок готовности; есть, пока задача в очереди или в работе. */
+  /** The readiness deadline; present while the job is queued or in progress. */
   ready_within?: string;
-  /** Статус задачи: queued, processing, done, failed или expired. */
+  /** Job status: queued, processing, done, failed or expired. */
   status: OpenEnum<DocumentJobStatus>;
-  /** Когда задача менялась последний раз (UTC). */
+  /** When the job last changed (UTC). */
   updated_at: string;
 }
 
@@ -682,2911 +759,3006 @@ export interface Error {
 
 export interface ErrorError {
   /**
-   * Стабильный машинный код `<область>.<причина>` — единственное поле, по которому можно ветвиться.
-   * Список известных кодов — ErrorCode; новые коды добавляются без смены версии, поэтому клиент
-   * обязан переживать незнакомый код.
+   * A stable machine code `<area>.<reason>` — the only field you may branch on. The list of known
+   * codes is ErrorCode; new codes are added without a version change, so a client must tolerate an
+   * unknown code.
    */
   code: string;
   /**
-   * Имя поля запроса, к которому относится ошибка, в присланном написании. Отсутствует, если ошибка
-   * не про конкретное поле.
+   * Machine-readable facts about this refusal, with keys documented by its code (e.g.
+   * `cli.permission_denied` carries `required_role` and `role`). Absent when the code has none.
+   */
+  details?: Record<string, string>;
+  /**
+   * The name of the request field the error refers to, spelled as sent. Absent if the error is not
+   * about a specific field.
    */
   field?: string;
-  /** Человекочитаемое пояснение. Текст не является контрактом и может меняться. */
+  /** A human-readable explanation. The text is not part of the contract and may change. */
   message?: string;
-  /** Идентификатор запроса (дублирует X-Request-ID) — приложите его к обращению в поддержку. */
+  /** The request id (duplicates X-Request-ID) — include it when contacting support. */
   request_id?: string;
-  /** Подсказка, через сколько секунд повторять (дублирует заголовок Retry-After). */
+  /** A hint of how many seconds to wait before retrying (duplicates the Retry-After header). */
   retry_after?: number;
   /**
-   * true — повтор того же запроса без изменений может пройти, когда условие снимется; false —
-   * повторять бессмысленно без правки запроса.
+   * true — repeating the same request unchanged may succeed once the condition clears; false —
+   * retrying is pointless without changing the request.
    */
   retryable: boolean;
 }
 
 export interface ExchangeRate {
-  /** Цена одной единицы from в to, десятичной строкой. */
+  /** The price of one unit of from in to, as a decimal string. */
   course: string;
-  /** Исходная валюта. */
+  /** Source currency. */
   from: string;
-  /** Валюта котировки. */
+  /** Quote currency. */
   to: string;
 }
 
 export interface ExchangeRatesRequest {
   /**
-   * Сумма в currency_from. Вместе с currency_from и currency_to добавляет в ответ блок modes: обе
-   * цены конвертации (instant/economy) с доступностью каждого режима
+   * The amount in currency_from. Together with currency_from and currency_to it adds a modes block
+   * to the response: both conversion prices (instant/economy) with the availability of each mode
    */
   amount?: string;
   /**
-   * Код валюты. Если задан — вернётся курс только по нему. Если пусто или тело {} — по всем валютам
+   * Currency code. If set, only its rate is returned. If empty or the body is {} — rates for all
+   * currencies
    */
   currency_from?: string;
   /**
-   * Валюта котировки: по умолчанию USDT; любой прайсинговый актив, включая фиаты с прямым фидом
-   * (EUR, RUB, …)
+   * Quote currency: USDT by default; any pricing asset, including fiat currencies with a direct
+   * feed (EUR, RUB, …)
    */
   currency_to?: string;
-  /** Размер страницы, 1–100; по умолчанию 25 */
+  /** Page size, 1–100; default 25 */
   limit?: number;
-  /** Смещение от начала списка; по умолчанию 0 */
+  /** Offset from the start of the list; default 0 */
   offset?: number;
 }
 
 export interface ExchangeRatesResult {
-  /** Курсы этой страницы. */
+  /** The rates of this page. */
   items: ExchangeRate[];
   /**
-   * Квота конвертации в обоих режимах; нет ключа — квоту не просили, она не удалась или пара вне
-   * режимов.
+   * The conversion quota in both modes; no key — no quota was requested, it failed, or the pair is
+   * outside both modes.
    */
   modes?: ConversionModes;
-  /** Блок пагинации. */
+  /** Pagination block. */
   paginate: Pagination;
 }
 
 export interface FaucetRequest {
-  /** Сумма тестовых денег, строкой; потолок 1000000 за вызов. */
+  /** The amount of test money, as a string; capped at 1000000 per call. */
   amount: string;
-  /** Актив пополнения (USDT, BTC, …). */
+  /** Deposit asset (USDT, BTC, …). */
   asset: string;
-  /** Ключ безопасного повтора; пусто — каждый вызов даёт новое пополнение. */
+  /** The safe-retry key; empty — every call creates a new top-up. */
   idempotency_key?: string;
 }
 
 export interface FaucetResult {
-  /** Зачисленная сумма в точности актива. */
+  /** The credited amount at the asset's precision. */
   amount: string;
-  /** Актив пополнения. */
+  /** Deposit asset. */
   asset: string;
-  /** Журнальная запись пополнения; повтор с тем же idempotency_key возвращает ту же. */
+  /** The ledger entry of the top-up; a retry with the same idempotency_key returns the same one. */
   journal_id: string;
 }
 
 export interface HistoryRequest {
   /**
-   * Только для /v1/payout/history: true — вместе с выплатами вернуть и возвраты (прежнее поведение
-   * ленты без kind). По умолчанию false: возвраты — отдельно, kind=refund.
+   * Only for /v1/payout/history: true — return refunds together with payouts (the former behavior
+   * of the feed without kind). Default false: refunds are separate, kind=refund.
    */
   include_refunds?: boolean;
   /**
-   * Только для /v1/payout/history: payout — обычные выплаты, refund — возвраты; пусто — обычные
-   * выплаты (с include_refunds=true — всё вместе).
+   * Only for /v1/payout/history: payout — regular payouts, refund — refunds; empty — regular
+   * payouts (with include_refunds=true — everything together).
    */
   kind?: OpenEnum<PayoutKind>;
-  /** Размер страницы, 1–100; вне диапазона — 25. */
+  /** Page size, 1–100; out of range — 25. */
   limit?: number;
-  /** Смещение от начала списка (новые сверху). */
+  /** Offset from the start of the list (newest first). */
   offset?: number;
-  /** Фильтр по статусу (точное значение из словаря статусов); пусто — все. */
+  /** Filter by status (an exact value from the status vocabulary); empty — all. */
   status?: string;
 }
 
 export interface LinkCheckoutRequest {
   /**
-   * Сумма, которую ввёл покупатель, в валюте цены ссылки; обязательна для open и range, для fixed
-   * игнорируется
+   * The amount the buyer entered, in the link's price currency; required for open and range,
+   * ignored for fixed
    */
   amount?: string;
   /**
-   * Валюта расчёта — монета, которой платит покупатель; нужна, только если ссылка не закрепила
+   * The settlement currency — the coin the buyer pays with; needed only if the link did not pin
    * pinned_currency
    */
   currency?: string;
-  /** Сеть расчёта; нужна, только если ссылка не закрепила pinned_network */
+  /** The settlement network; needed only if the link did not pin pinned_network */
   network?: string;
   /**
-   * Номер заказа магазина из встроенного виджета (data-oblodai-order-id); переносится на счёт и в
-   * вебхук для сопоставления с заказом; не ключ идемпотентности
+   * The store's order number from the embedded widget (data-oblodai-order-id); carried over to the
+   * invoice and the webhook for matching with the order; not an idempotency key
    */
   order_id?: string;
-  /** Email покупателя — на него автоматически уйдёт чек после оплаты */
+  /** The buyer's email — a receipt is sent to it automatically after payment */
   payer_email?: string;
 }
 
 export interface LookupRequest {
-  /** Ваша ссылка на заказ. */
+  /** Your order reference. */
   order_id?: string;
-  /** Идентификатор счёта в Oblodai. Нужен uuid или order_id; приоритет у uuid. */
+  /** The invoice id in Oblodai. Either uuid or order_id is required; uuid takes precedence. */
   uuid?: string;
 }
 
 export interface MassPayoutRequest {
-  /** Массив до 100 элементов; поля каждого — как в POST /v1/payout. */
+  /** An array of up to 100 items; the fields of each are as in POST /v1/payout. */
   payouts: PayoutRequest[];
-  /** Метка происхождения, применяется ко всем элементам без своего source. */
+  /** The origin label, applied to all items without their own source. */
   source?: string;
 }
 
 export interface MassPayoutResult {
-  /** Элементы в порядке запроса. */
+  /** Items in request order. */
   items: MassPayoutResultItemsItem[];
 }
 
 export interface MassPayoutResultItemsItem {
-  /** Машинный код отказа; есть при ok=false. */
+  /** The machine code of the rejection; present when ok=false. */
   error_code?: string;
-  /** HTTP-статус, которым ответил бы одиночный вызов; есть при ok=false. */
+  /** The HTTP status a single call would have returned; present when ok=false. */
   http_status?: number;
-  /** Номер элемента в запросе. */
+  /** The item's number in the request. */
   idx: number;
-  /** Текст отказа; есть при ok=false. */
+  /** The rejection text; present when ok=false. */
   message?: string;
-  /** Элемент выполнен. */
+  /** The item was executed. */
   ok: boolean;
-  /** order_id элемента, если он был в запросе. */
+  /** The item's order_id, if it was in the request. */
   order_id?: string;
-  /** Результат одиночного вызова; есть при ok=true. */
+  /** The result of a single call; present when ok=true. */
   result?: PayoutItem;
 }
 
 export interface MerchantBalanceEntry {
-  /** Доступно к выводу, десятичной строкой. */
+  /** Available to withdraw, as a decimal string. */
   balance: string;
   /**
-   * Сколько этой монеты сейчас едет через очередь автоконверта (economy); нет ключа — очереди нет.
+   * How much of this coin is currently in transit through the auto-conversion queue (economy); no
+   * key — no queue.
    */
   converting?: string;
-  /** Символ актива. */
+  /** Asset symbol. */
   currency: string;
 }
 
 export interface MerchantBalances {
-  /** Доступные балансы по активам. */
+  /** Available balances per asset. */
   merchant: MerchantBalanceEntry[];
 }
 
 export interface OnboardKey {
-  /** Публичная часть ключа. */
+  /** The public part of the key. */
   public_id: string;
-  /** Секрет ключа; пусто у повторного ответа песочницы (секрет хэширован). */
+  /** The key secret; empty in a repeated sandbox response (the secret is hashed). */
   secret: string;
 }
 
 export interface OnrampIdle {
-  /** Пустая строка: живой он-рамп-сессии по счёту нет. */
+  /** An empty string: there is no live on-ramp session for the invoice. */
   status: OpenEnum<OnrampIdleStatus>;
 }
 
 export interface OnrampSessionView {
-  /** Срок жизни сессии (UTC). */
+  /** Session lifetime (UTC). */
   expires_at: string;
-  /** Причина отказа провайдера дословно; пусто, если её нет. */
+  /** The provider's rejection reason, verbatim; empty if there is none. */
   reason: string;
-  /** Идентификатор он-рамп-сессии. */
+  /** On-ramp session id. */
   session_id: string;
-  /** Состояние сессии. */
+  /** Session state. */
   status: OpenEnum<OnrampStatus>;
 }
 
 export interface OnrampStartResponse {
-  /** Срок жизни сессии, RFC3339 (UTC). */
+  /** Session lifetime, RFC3339 (UTC). */
   expires_at: string;
   /**
-   * Сколько спишется с карты, в целых единицах фиата; пусто, если провайдер суммы не назвал.
-   * Оценка: курс и комиссия провайдера двигаются.
+   * How much will be charged to the card, in whole fiat units; empty if the provider did not name
+   * an amount. An estimate: the provider's rate and fee move.
    */
   fiat_amount: string;
-  /** Валюта списания. */
+  /** Debit currency. */
   fiat_currency: string;
-  /** Какой рамп дал лучшую котировку на момент открытия. */
+  /** Which on-ramp gave the best quote at the time of opening. */
   provider?: string;
-  /** Причина отказа провайдера, дословно, когда она есть. */
+  /** The provider's rejection reason, verbatim, when there is one. */
   reason?: string;
-  /** Идентификатор он-рамп-сессии. */
+  /** On-ramp session id. */
   session_id: string;
-  /** Состояние сессии. */
+  /** Session state. */
   status: OpenEnum<OnrampStatus>;
-  /** Подписанная ссылка на виджет покупки. Пустая, если покупка уже идёт: тогда смотрите status. */
+  /**
+   * A signed link to the purchase widget. Empty if a purchase is already in progress: then check
+   * status.
+   */
   url: string;
 }
 
 export interface PageRequest {
-  /** Размер страницы, 1–100; вне диапазона — 25. */
+  /** Page size, 1–100; out of range — 25. */
   limit?: number;
-  /** Смещение от начала списка. */
+  /** Offset from the start of the list. */
   offset?: number;
 }
 
 export interface Pagination {
-  /** Есть ли записи дальше этой страницы. */
+  /** Whether there are records beyond this page. */
   has_pages: boolean;
-  /** Смещение этой страницы. */
+  /** The offset of this page. */
   offset: number;
-  /** Размер страницы, которую отдали. */
+  /** The size of the page returned. */
   per_page: number;
-  /** Всего записей по фильтру (на всех страницах). */
+  /** Total records matching the filter (across all pages). */
   total: number;
 }
 
 export interface PaySelectRequest {
-  /** Выбранная валюта оплаты. */
+  /** The chosen payment currency. */
   currency: string;
-  /** Выбранная сеть. */
+  /** The chosen network. */
   network: string;
 }
 
 export interface PayServiceCommission {
-  /** Единица fee_amount: USD у приёма, валюта выплаты у выплаты. */
+  /** The unit of fee_amount: USD for accepting payments, the payout currency for payouts. */
   currency?: string;
-  /** Фиксированная часть комиссии в валюте currency; null — не определилась. */
+  /** The fixed part of the fee in currency; null — could not be determined. */
   fee_amount: string | null;
-  /** exact — договорная ставка; estimated — оценка по сетевой комиссии. */
+  /** exact — a contractual rate; estimated — an estimate based on the network fee. */
   fee_type: OpenEnum<FeeType>;
-  /** Процент комиссии; null — не определился. */
+  /** The fee percentage; null — could not be determined. */
   percent: string | null;
 }
 
 export interface PayServiceEntry {
   commission: PayServiceCommission;
-  /** Валюта. */
+  /** Currency. */
   currency: string;
-  /** Метод работает на этом развёртывании. */
+  /** The method works on this deployment. */
   is_available: boolean;
   limit: PayServiceLimit;
-  /** Сеть. */
+  /** Network. */
   network: string;
 }
 
 export interface PayServiceEntryList {
-  /** Записи этой страницы. */
+  /** The records of this page. */
   items: PayServiceEntry[];
-  /** Блок пагинации. */
+  /** Pagination block. */
   paginate: Pagination;
 }
 
 export interface PayServiceLimit {
-  /** Единица сумм limit; нет ключа — нет и границ в деньгах. */
+  /** The unit of the limit amounts; no key — no monetary bounds either. */
   currency?: string;
-  /** Потолок одной выплаты в USD; "" — потолка нет (у приёма — всегда). */
+  /** The cap for a single payout in USD; "" — no cap (always so for accepting payments). */
   max_amount: string;
-  /** Минимальная сумма в валюте currency: "" — минимума нет, null — не определилась. */
+  /** The minimum amount in currency: "" — no minimum, null — could not be determined. */
   min_amount: string | null;
 }
 
 export interface PaymentBatchItem {
-  /** Допуск недо/переплаты, 0–5 %. Перекрывает настройку мерчанта. */
+  /** Underpayment/overpayment tolerance, 0–5 %. Overrides the merchant setting. */
   accuracy_payment_percent?: number;
-  /** Приватные данные мерчанта, эхом в вебхуках (покупателю не видны). */
+  /** The merchant's private data, echoed in webhooks (not visible to the buyer). */
   additional_data?: string;
-  /** Сумма к оплате в валюте currency. */
+  /** The amount to pay in currency. */
   amount: string;
   /**
-   * Код валюты цены: любой из 23 фиатов (USD, EUR, RUB, …) или любая монета (USDT, BTC, …). У JPY и
-   * KRW ноль знаков после запятой.
+   * The price currency code: any of the 23 fiat currencies (USD, EUR, RUB, …) or any coin (USDT,
+   * BTC, …). JPY and KRW have zero decimal places.
    */
   currency: string;
-  /** Разрешить доплату остатка. */
+  /** Allow paying the remainder. */
   is_payment_multiple?: boolean | null;
-  /** Оживить просроченный счёт по order_id вместо создания нового. */
+  /** Revive an expired invoice by order_id instead of creating a new one. */
   is_refresh?: boolean;
   /**
-   * Время жизни счёта в секундах, 300–43200; по умолчанию 3600. Значения вне диапазона обрезаются к
-   * ближайшей границе.
+   * Invoice lifetime in seconds, 300–43200; default 3600. Out-of-range values are clamped to the
+   * nearest bound.
    */
   lifetime_seconds?: number;
-  /** Сеть расчёта (напр. tron, ethereum). Необязательна — см. режимы выбора валюты и сети. */
+  /**
+   * The settlement network (e.g. tron, ethereum). Optional — see the currency and network selection
+   * modes.
+   */
   network?: string;
-  /** Ссылка мерчанта; ключ идемпотентности. Настоятельно рекомендуется. */
+  /** The merchant reference; the idempotency key. Strongly recommended. */
   order_id: string;
   /**
-   * Email плательщика. Если задан — после оплаты на него автоматически уходит чек; он же получатель
-   * по умолчанию у POST /v1/payment/send-email.
+   * The payer's email. If set, a receipt is sent to it automatically after payment; it is also the
+   * default recipient for POST /v1/payment/send-email.
    */
   payer_email?: string;
   /**
-   * Устаревшее: % сетевой наценки на плательщика (0–100); payer-facing наценки настраиваются через
-   * discount.
+   * Deprecated: % network surcharge on the payer (0–100); payer-facing surcharges are configured
+   * via discount.
    */
   subtract?: number;
-  /** Тема страницы оплаты: dark | light. */
+  /** Payment page theme: dark | light. */
   theme?: string;
   /**
-   * Валюта расчёта — крипта, которой платят. По умолчанию = currency (только если currency —
-   * крипта); при цене в фиате задайте явно либо опустите вместе с network.
+   * The settlement currency — the crypto used to pay. Defaults to currency (only if currency is
+   * crypto); for a fiat price set it explicitly or omit it together with network.
    */
   to_currency?: string;
   /**
-   * Индивидуальный webhook для этого счёта. Требует зарегистрированного эндпоинта (POST
-   * /v1/webhooks): доставка подписывается его секретом.
+   * A per-invoice webhook. Requires a registered endpoint (POST /v1/webhooks): the delivery is
+   * signed with its secret.
    */
   url_callback?: string;
-  /** Ссылка «назад в магазин» на странице оплаты. */
+  /** The "back to store" link on the payment page. */
   url_return?: string;
-  /** Редирект после успешной оплаты. */
+  /** Redirect after a successful payment. */
   url_success?: string;
 }
 
 export interface PaymentBatchRequest {
   /**
-   * Что делать при ошибке элемента: continue (по умолчанию) — обрабатывать остальные; stop —
-   * прекратить обработку после первой ошибки.
+   * What to do when an item fails: continue (default) — process the rest; stop — stop processing
+   * after the first error.
    */
   on_error?: OpenEnum<BatchOnError>;
   /**
-   * Массив от 1 до 5000 элементов — те же поля, что у POST /v1/payment; order_id обязателен у
-   * каждого элемента: по нему сопоставляются результаты и он защищает от дублей.
+   * An array of 1 to 5000 items — the same fields as in POST /v1/payment; order_id is required on
+   * each item: results are matched by it and it protects against duplicates.
    */
   payments: PaymentBatchItem[];
 }
 
 export interface PaymentDiscountRule {
-  /** Монета правила. Пусто — правило по умолчанию для всех монет, у которых нет своего. */
+  /** The rule's coin. Empty — the default rule for all coins that have no rule of their own. */
   currency: string;
-  /** Процент, от -99 до 99. Плюс — скидка плательщику за оплату этой монетой, минус — наценка. */
+  /**
+   * Percent, from -99 to 99. Plus — a discount to the payer for paying with this coin, minus — a
+   * surcharge.
+   */
   discount_percent: number;
-  /** Сеть. Пусто — любая сеть этой монеты. */
+  /** Network. Empty — any network of this coin. */
   network: string;
 }
 
 export interface PaymentDiscountRuleList {
-  /** Записи этой страницы. */
+  /** The records of this page. */
   items: PaymentDiscountRule[];
-  /** Блок пагинации. */
+  /** Pagination block. */
   paginate: Pagination;
 }
 
 export interface PaymentFeeResult {
-  /** Разрешён ли мерчанту перенос комиссии на покупателя (решение оператора). */
+  /** Whether the merchant is allowed to pass the fee on to the buyer (an operator decision). */
   enabled: boolean;
-  /** Фиксированная часть комиссии на платёж, USD десятичной строкой. */
+  /** The fixed part of the fee per payment, USD as a decimal string. */
   fee_fixed_usd?: string;
-  /** Устарело: та же фиксированная часть целыми центами США числом — читайте fee_fixed_usd. */
+  /** Deprecated: the same fixed part in whole US cents as a number — read fee_fixed_usd. */
   fee_fixed_usd_cents?: number;
-  /** true — персональный тариф; false — умолчание платформы. */
+  /** true — a personal rate; false — the platform default. */
   fee_individual?: boolean;
-  /** Процент комиссии мерчанта. */
+  /** The merchant fee percentage. */
   fee_percent?: string;
-  /** Доля, которую применит следующий счёт; 0, если оператор выключил перенос комиссии. */
+  /** The share the next invoice will apply; 0 if the operator has disabled fee pass-through. */
   payer_pays_percent: number;
 }
 
 export interface PaymentInfoResult {
-  /** Ваши приватные данные, которые вернутся в ответе и в вебхуке. */
+  /** Your private data, returned in the response and in the webhook. */
   additional_data: string;
   /**
-   * Адрес, на который клиент отправляет деньги. На XRP это классический r-адрес ОБЩЕГО кошелька —
-   * платёж обязан нести destination_tag, иначе сеть его отклонит.
+   * The address the customer sends money to. On XRP this is the classic r-address of a SHARED
+   * wallet — the payment must carry destination_tag, otherwise the network rejects it.
    */
   address: string;
   /**
-   * Только XLM: те же реквизиты одной строкой — muxed-адрес M… (SEP-23), адрес и memo вместе; его
-   * же кодирует QR. Пусто на остальных сетях.
+   * XLM only: the same payment details in one string — a muxed M… address (SEP-23), address and
+   * memo together; the QR code encodes it as well. Empty on other networks.
    */
   address_muxed: string;
   /**
-   * QR-код адреса как PNG data:-URI — можно сразу в <img src>. На XRP кодирует X-address (адрес+тег
-   * одной строкой).
+   * The address QR code as a PNG data: URI — can go straight into <img src>. On XRP it encodes the
+   * X-address (address + tag in one string).
    */
   address_qr_code: string;
   /**
-   * Только XRP: те же реквизиты одной строкой в формате X-address (XLS-5) — адрес и тег вместе; его
-   * же кодирует QR. Пусто на остальных сетях.
+   * XRP only: the same payment details in one string in X-address format (XLS-5) — address and tag
+   * together; the QR code encodes it as well. Empty on other networks.
    */
   address_xaddress: string;
-  /** Сумма к оплате в валюте цены (например, в USD). */
+  /** The amount to pay in the price currency (e.g. USD). */
   amount: string;
   /**
-   * Сколько уже подтверждённо оплачено, в крипте оплаты; всегда строка (0, если ничего не пришло).
-   * Пусто, пока валюта оплаты не выбрана (счёт без валюты).
+   * How much has already been paid and confirmed, in the payment crypto; always a string (0 if
+   * nothing has arrived). Empty until the payment currency is chosen (an invoice without a
+   * currency).
    */
   amount_paid: string;
   /**
-   * Сколько ещё осталось доплатить (к оплате − оплачено); 0, если хватает. Пусто, пока валюта
-   * оплаты не выбрана (счёт без валюты).
+   * How much is still left to pay (due − paid); 0 if enough has been paid. Empty until the payment
+   * currency is chosen (an invoice without a currency).
    */
   amount_remaining: string;
   /**
-   * Наша комиссия с этого платежа — УДЕРЖАННАЯ величина, в валюте оплаты (payer_currency). Ставка
-   * счёта уже включает амортизированный фиксированный сбор — второй раз он не берётся. ПУСТО, пока
-   * по счёту ничего не зачислено (и у валюто-агностичного счёта до выбора монеты): нуля здесь не
-   * бывает у неоплаченного счёта — «0» читалось бы как «комиссию не берут». У оплаченного счёта с
-   * нулевым тарифом 0 — настоящий.
+   * Our fee on this payment — the WITHHELD amount, in the payment currency (payer_currency). The
+   * invoice rate already includes the amortized fixed fee — it is not charged a second time. EMPTY
+   * until anything has been credited on the invoice (and, for a currency-agnostic invoice, until a
+   * coin is chosen): an unpaid invoice never shows zero here — "0" would read as "no fee is
+   * charged". For a paid invoice with a zero rate, 0 is genuine.
    */
   commission: string;
-  /** Текущее число подтверждений входящего платежа. */
+  /** The current number of confirmations of the incoming payment. */
   confirmations: number;
-  /** Время создания (ISO 8601). */
+  /** Creation time (ISO 8601). */
   created_at: string;
   /**
-   * Валюта цены: фиат (USD, EUR, RUB, JPY… — см. pricing_currencies) или монета. Говорит, сколько
-   * счёт СТОИТ, а не чем за него платят (это payer_currency).
+   * The price currency: fiat (USD, EUR, RUB, JPY… — see pricing_currencies) or a coin. It says how
+   * much the invoice COSTS, not what it is paid with (that is payer_currency).
    */
   currency: string;
   /**
-   * Только XRP: числовой destination tag, который клиент ОБЯЗАН указать в переводе (поле «тег/memo
-   * получателя» на бирже или в кошельке). Пусто на остальных сетях.
+   * XRP only: the numeric destination tag the customer MUST specify in the transfer (the "recipient
+   * tag/memo" field at the exchange or in the wallet). Empty on other networks.
    */
   destination_tag: string;
   /**
-   * Подписанная ссылка на PDF-чек этой операции — открывается без API-ключа, можно вложить в письмо
-   * или отдать клиенту. Пусто, если генерация документов не включена.
+   * A signed link to the PDF receipt of this operation — opens without an API key, can be attached
+   * to an email or given to the customer. Empty if document generation is not enabled.
    */
   document_url: string;
   /**
-   * Курс, зафиксированный этим счётом (сколько валюты оплаты за 1 единицу валюты цены) — по нему
-   * рассчитан payer_amount. Пусто, пока валюта не выбрана.
+   * The rate locked in by this invoice (how much of the payment currency per 1 unit of the price
+   * currency) — payer_amount is calculated from it. Empty until the currency is chosen.
    */
   exchange_rate: string;
-  /** Когда истекает счёт (ISO 8601, как и все временные поля). */
+  /** When the invoice expires (ISO 8601, like all time fields). */
   expired_at: string;
   /**
-   * Ставка комиссии этого счёта в процентах — та, что зафиксирована в момент создания (смена тарифа
-   * не меняет уже созданные счета). Уже включает амортизированный фиксированный сбор. В отличие от
-   * commission известна с первой секунды и присутствует всегда.
+   * The fee rate of this invoice in percent — the one locked in at creation (a pricing change does
+   * not affect invoices already created). Already includes the amortized fixed fee. Unlike
+   * commission, it is known from the first second and is always present.
    */
   fee_percent: string;
-  /** true — статус финальный, больше не изменится. */
+  /** true — the status is final and will not change again. */
   is_final: boolean;
-  /** true — это валюто-агностичная ссылка, клиент ещё не выбрал валюту/сеть. */
+  /**
+   * true — this is a currency-agnostic link; the customer has not chosen the currency/network yet.
+   */
   is_multi: boolean;
-  /** true — счёт песочницы (dev-магазина): деньги ненастоящие, в живую сверку не включайте. */
+  /**
+   * true — a sandbox (dev store) invoice: the money is not real, do not include it in live
+   * reconciliation.
+   */
   is_test: boolean;
   /**
-   * Только XLM (Stellar): числовой memo (тип ID), который клиент ОБЯЗАН указать в переводе — поле
-   * «memo» на бирже или в кошельке. Пусто на остальных сетях.
+   * XLM (Stellar) only: the numeric memo (ID type) the customer MUST specify in the transfer — the
+   * "memo" field at the exchange or in the wallet. Empty on other networks.
    */
   memo: string;
   /**
-   * Сколько зачислено (или будет зачислено) вам: amount_paid − network_surcharge − commission.
-   * Сетевые расходы на сбор депозита оплачивает плательщик отдельной строкой (network_surcharge) —
-   * из вашей суммы они НЕ вычитаются. Пусто, пока валюта оплаты не выбрана (счёт без валюты).
+   * How much has been (or will be) credited to you: amount_paid − network_surcharge − commission.
+   * The network costs of sweeping the deposit are paid by the payer as a separate line
+   * (network_surcharge) — they are NOT deducted from your amount. Empty until the payment currency
+   * is chosen (an invoice without a currency).
    */
   merchant_amount: string;
   /**
-   * Ваша скидка или наценка для ВЫБРАННОГО способа оплаты, в валюте оплаты: на столько сдвинулась
-   * сумма плательщика из-за настройки по этой монете и сети. Положительное — плательщик платит
-   * МЕНЬШЕ (скидка), отрицательное — больше (наценка). Пусто, если настройки для метода нет.
+   * Your discount or surcharge for the CHOSEN payment method, in the payment currency: how much the
+   * payer's amount shifted because of the setting for this coin and network. Positive — the payer
+   * pays LESS (discount), negative — more (surcharge). Empty if there is no setting for the method.
    */
   method_adjustment: string;
   /**
-   * Та же скидка/наценка в базисных пунктах (так она переживает переоценку курса). Знак тот же, что
-   * в настройке скидок: ПЛЮС — скидка, МИНУС — наценка.
+   * The same discount/surcharge in basis points (this way it survives a rate re-quote). The sign is
+   * the same as in the discount setting: PLUS — a discount, MINUS — a surcharge.
    */
   method_adjustment_bps: number;
-  /** Сеть блокчейна (например, tron). */
+  /** Blockchain network (e.g. tron). */
   network: string;
   /**
-   * Сетевая надбавка плательщика в валюте оплаты: стоимость сбора депозита в выбранной сети
-   * (активация адреса, если адрес новый, плюс энергия/газ с запасом), зафиксированная при выборе
-   * сети. Пусто до выбора сети; 0, если надбавка выключена.
+   * The payer's network surcharge in the payment currency: the cost of sweeping the deposit on the
+   * chosen network (address activation, if the address is new, plus energy/gas with a margin),
+   * locked in when the network is chosen. Empty until the network is chosen; 0 if the surcharge is
+   * disabled.
    */
   network_surcharge: string;
-  /** Та же надбавка в базисных пунктах от суммы к оплате (так она переживает переоценку курса). */
+  /**
+   * The same surcharge in basis points of the amount due (this way it survives a rate re-quote).
+   */
   network_surcharge_bps: number;
-  /** Ваш номер заказа, который вы передали при создании. */
+  /** Your order number that you passed at creation. */
   order_id: string;
   /**
-   * Момент фактической оплаты — зачисление последнего подтверждённого перевода (ISO 8601). null,
-   * пока оплата не пришла. Отличайте от updated_at: тот сдвигается любым изменением счёта.
+   * The moment of actual payment — the crediting of the last confirmed transfer (ISO 8601). null
+   * until the payment arrives. Not to be confused with updated_at, which moves on any change to the
+   * invoice.
    */
   paid_at: string | null;
   /**
-   * Адрес, С КОТОРОГО пришёл первый подтверждённый депозит — на аккаунт-сетях
-   * (EVM/Tron/Solana/TON); пусто на UTXO. ⚠ Это НЕ обязательно адрес для возврата: отправителем
-   * может быть биржа, сдача UTXO-транзакции или горячий омнибус крипто-он-рампа, если покупатель
-   * платил картой. Прежде чем возвращать деньги сюда, смотрите payer_address_is_refundable.
+   * The address the first confirmed deposit came FROM — on account-based networks
+   * (EVM/Tron/Solana/TON); empty on UTXO. ⚠ This is NOT necessarily a refund address: the sender
+   * may be an exchange, the change of a UTXO transaction, or the omnibus hot wallet of a crypto
+   * on-ramp if the buyer paid by card. Before refunding money here, check
+   * payer_address_is_refundable.
    */
   payer_address: string;
   /**
-   * true — payer_address принадлежит плательщику, и в /v1/payment/refund можно опустить address
-   * (вернём на него). false — адрес возврата неизвестен (UTXO/XRP, оплата картой через он-рамп,
-   * адрес не записан): спросите адрес у покупателя и передайте address явно, иначе запрос будет
-   * отклонён с refund.no_address.
+   * true — payer_address belongs to the payer, and address may be omitted in /v1/payment/refund (we
+   * refund to it). false — the refund address is unknown (UTXO/XRP, card payment via an on-ramp,
+   * address not recorded): ask the buyer for an address and pass address explicitly, otherwise the
+   * request is rejected with refund.no_address.
    */
   payer_address_is_refundable: boolean;
   /**
-   * Сколько нужно отправить в крипте оплаты. Пусто, пока валюта оплаты не выбрана (счёт без
-   * валюты).
+   * How much must be sent in the payment crypto. Empty until the payment currency is chosen (an
+   * invoice without a currency).
    */
   payer_amount: string;
   /**
-   * Валюта, в которой платит клиент (например, USDT). Пусто у валюто-агностичного счёта (is_multi),
-   * пока клиент не выбрал монету — валюты расчёта у него ещё нет.
+   * The currency the customer pays in (e.g. USDT). Empty for a currency-agnostic invoice (is_multi)
+   * until the customer picks a coin — it has no settlement currency yet.
    */
   payer_currency: string;
-  /** E-mail плательщика, если вы его передали. */
+  /** The payer's email, if you provided it. */
   payer_email: string;
   /**
-   * До какого момента действует зафиксированный payer_amount (ISO 8601; окно ~5 мин, после него
-   * страница оплаты перекотирует счёт). Пусто, когда перекотировки уже не будет: валюта не выбрана,
-   * депозит замечен, счёт вышел из created или истёк — сумма зафиксирована навсегда.
+   * Until when the locked payer_amount is valid (ISO 8601; a ~5 min window, after which the payment
+   * page re-quotes the invoice). Empty when there will be no more re-quotes: the currency has not
+   * been chosen, a deposit has been seen, the invoice has left created or expired — the amount is
+   * locked for good.
    */
   rate_expires_at: string;
   /**
-   * Сколько возвращено от оплаченного: none, partial или full (отменённые и неудавшиеся возвраты не
-   * считаются).
+   * How much of the paid amount has been refunded: none, partial or full (cancelled and failed
+   * refunds are not counted).
    */
   refund_status?: OpenEnum<RefundRollup>;
-  /** Возвраты по этому платежу. */
+  /** Refunds for this payment. */
   refunds?: PaymentRefundLine[];
-  /** Сколько подтверждений нужно для зачисления (зависит от суммы и сети). */
+  /** How many confirmations are required for crediting (depends on the amount and the network). */
   required_confirmations: number;
   /**
-   * Статус: select (клиент выбирает валюту) | created (ждём оплату) | confirm_check (видим оплату,
-   * ждём подтверждений; при amount_remaining > 0 — частичная, ждём остаток) | paid (оплачено) |
-   * paid_over (переплата) | wrong_amount (недоплата, срок вышел) | expired (просрочен) | cancelled
-   * (отменён) | under_review (поступление задержано на проверке, разбирает оператор).
+   * Status: select (the customer is choosing a currency) | created (awaiting payment) |
+   * confirm_check (payment seen, awaiting confirmations; with amount_remaining > 0 — partial,
+   * awaiting the remainder) | paid (paid) | paid_over (overpaid) | wrong_amount (underpaid,
+   * expired) | expired (expired) | cancelled (cancelled) | under_review (the deposit is held for
+   * review, an operator is handling it).
    */
   status: OpenEnum<PaymentStatus>;
   /**
-   * Все подтверждённые переводы, которыми оплачен счёт. Частичная оплата несколькими переводами —
-   * штатный сценарий wrong_amount; один txid наверху — лишь последний замеченный.
+   * All confirmed transfers that paid the invoice. Partial payment by several transfers is a
+   * regular wrong_amount scenario; the single txid above is only the last one seen.
    */
   tx_list: PaymentTx[];
-  /** Хеш входящей транзакции (когда замечена). */
+  /** The hash of the incoming transaction (once seen). */
   txid: string;
-  /** Время последнего изменения (ISO 8601). */
+  /** Time of the last change (ISO 8601). */
   updated_at: string;
-  /** Ссылка на готовую страницу оплаты. */
+  /** A link to the ready-made payment page. */
   url: string;
-  /** Ссылка «вернуться в магазин» до оплаты. */
+  /** The "back to store" link before payment. */
   url_return: string;
-  /** Куда перенаправить после успешной оплаты. */
+  /** Where to redirect after a successful payment. */
   url_success: string;
-  /** Наш идентификатор платежа (используйте его в info/refund). */
+  /** Our payment identifier (use it in info/refund). */
   uuid: string;
 }
 
 export interface PaymentLinkCreateRequest {
-  /** Сумма — для режима fixed; обязательна в этом режиме */
+  /** Amount — for fixed mode; required in this mode */
   amount_fixed?: string;
-  /** Режим суммы: fixed | open | range */
+  /** Amount mode: fixed | open | range */
   amount_mode: OpenEnum<AmountMode>;
   /**
-   * Валюта цены — фиат (USD, EUR, RUB, …) или монета; список — pricing_currencies из GET
+   * The price currency — fiat (USD, EUR, RUB, …) or a coin; the list is pricing_currencies from GET
    * /v1/currencies
    */
   currency: string;
-  /** Описание на странице оплаты */
+  /** Description on the payment page */
   description?: string;
-  /** Срок жизни ссылки, секунд от момента создания; 0 (по умолчанию) — ссылка бессрочная */
+  /** The link lifetime, in seconds from creation; 0 (default) — the link never expires */
   expires_in_seconds?: number;
-  /** Верхняя граница — для range; обязательна в этом режиме */
+  /** Upper bound — for range; required in this mode */
   max_amount?: string;
-  /** Нижняя граница: необязательный «пол» для open, обязательный минимум для range */
+  /** Lower bound: an optional "floor" for open, a required minimum for range */
   min_amount?: string;
-  /** Валюта расчёта (монета), закреплённая за ссылкой; пусто — монету выбирает покупатель */
+  /** The settlement currency (coin) pinned to the link; empty — the buyer chooses the coin */
   pinned_currency?: string;
-  /** Сеть расчёта, закреплённая за ссылкой; пусто — сеть выбирает покупатель */
+  /** The settlement network pinned to the link; empty — the buyer chooses the network */
   pinned_network?: string;
-  /** Заголовок на странице оплаты */
+  /** Title on the payment page */
   title?: string;
 }
 
 export interface PaymentLinkDetail {
-  /** Ссылка принимает оплату. */
+  /** The link accepts payments. */
   active: boolean;
-  /** Сумма для режима fixed. */
+  /** The amount for fixed mode. */
   amount_fixed?: string;
-  /** Режим суммы. */
+  /** Amount mode. */
   amount_mode: OpenEnum<AmountMode>;
-  /** Когда создана (UTC). */
+  /** When created (UTC). */
   created_at: string;
-  /** Валюта цены. */
+  /** Price currency. */
   currency: string;
-  /** Описание на странице оплаты. */
+  /** Description on the payment page. */
   description: string;
-  /** Подписанная ссылка на PDF-плакат с QR оплаты; пусто, когда рендер документов не включён. */
+  /**
+   * A signed link to a PDF poster with the payment QR code; empty when document rendering is not
+   * enabled.
+   */
   document_url: string;
-  /** Когда ссылка истекает (UTC); нет — бессрочная. */
+  /** When the link expires (UTC); absent — never expires. */
   expires_at?: string;
-  /** Идентификатор ссылки. */
+  /** Link id. */
   link_id: string;
-  /** Верхняя граница для range. */
+  /** Upper bound for range. */
   max_amount?: string;
-  /** Нижняя граница для open/range. */
+  /** Lower bound for open/range. */
   min_amount?: string;
-  /** Платежи по ссылке, страница по limit/offset запроса. */
+  /** Payments through the link, paged by the request's limit/offset. */
   payments: PaymentLinkPayment[];
-  /** Закреплённая валюта оплаты. */
+  /** The pinned payment currency. */
   pinned_currency?: string;
-  /** Закреплённая сеть оплаты. */
+  /** The pinned payment network. */
   pinned_network?: string;
-  /** Заголовок страницы оплаты. */
+  /** Payment page title. */
   title: string;
-  /** Публичный URL страницы оплаты; пусто, если публичный адрес не настроен. */
+  /** The public URL of the payment page; empty if the public address is not configured. */
   url: string;
 }
 
 export interface PaymentLinkLookupRequest {
-  /** Размер страницы платежей по ссылке, 1–100; вне диапазона — 25. */
+  /** The page size for payments through the link, 1–100; out of range — 25. */
   limit?: number;
-  /** Идентификатор платёжной ссылки. */
+  /** Payment link id. */
   link_id: string;
-  /** Смещение страницы платежей. */
+  /** The offset of the payments page. */
   offset?: number;
 }
 
 export interface PaymentLinkPayment {
-  /** Цена счёта в валюте цены ссылки. */
+  /** The invoice price in the link's price currency. */
   amount: string;
-  /** Когда создан (UTC). */
+  /** When created (UTC). */
   created_at: string;
-  /** Валюта цены. */
+  /** Price currency. */
   currency: string;
-  /** Номер заказа магазина, если виджет его передал. */
+  /** The store's order number, if the widget passed one. */
   order_id?: string;
-  /** Статус платежа. */
+  /** Payment status. */
   status: OpenEnum<PaymentStatus>;
-  /** Идентификатор платежа. */
+  /** Payment id. */
   uuid: string;
 }
 
 export interface PaymentLinkPublicView {
-  /** Сумма для fixed. */
+  /** Amount for fixed. */
   amount_fixed?: string;
-  /** fixed, open или range. */
+  /** fixed, open or range. */
   amount_mode: OpenEnum<AmountMode>;
-  /** Валюта цены. */
+  /** Price currency. */
   currency: string;
-  /** Описание. */
+  /** Description. */
   description: string;
-  /** Идентификатор ссылки. */
+  /** Link id. */
   link_id: string;
-  /** Верхняя граница для range. */
+  /** Upper bound for range. */
   max_amount?: string;
-  /** Нижняя граница для open/range. */
+  /** Lower bound for open/range. */
   min_amount?: string;
-  /** Закреплённая валюта оплаты. */
+  /** The pinned payment currency. */
   pinned_currency?: string;
-  /** Закреплённая сеть оплаты. */
+  /** The pinned payment network. */
   pinned_network?: string;
-  /** Заголовок страницы. */
+  /** Page title. */
   title: string;
 }
 
 export interface PaymentLinkResponse {
   /**
-   * Подписанная ссылка на PDF-плакат с QR оплаты (печать на кассу). Пусто, если генерация
-   * документов не включена.
+   * A signed link to a PDF poster with the payment QR code (for printing at the till). Empty if
+   * document generation is not enabled.
    */
   document_url: string;
-  /** Идентификатор ссылки */
+  /** Link id */
   link_id: string;
-  /** Публичный URL страницы оплаты — его вы даёте покупателю: кнопкой, в письме, QR-кодом */
+  /**
+   * The public URL of the payment page — the one you give to the buyer: as a button, in an email,
+   * as a QR code
+   */
   url: string;
 }
 
 export interface PaymentLinkToggleRequest {
-  /** true — ссылка принимает оплату; false — выключена (страница покажет, что ссылка неактивна). */
+  /**
+   * true — the link accepts payments; false — disabled (the page will show that the link is
+   * inactive).
+   */
   active: boolean;
-  /** Идентификатор платёжной ссылки. */
+  /** Payment link id. */
   link_id: string;
 }
 
 export interface PaymentLinkToggled {
-  /** Новое состояние: true — принимает оплату. */
+  /** The new state: true — accepts payments. */
   active: boolean;
-  /** Идентификатор ссылки. */
+  /** Link id. */
   link_id: string;
 }
 
 export interface PaymentLinkView {
-  /** Ссылка принимает оплату. */
+  /** The link accepts payments. */
   active: boolean;
-  /** Сумма для режима fixed. */
+  /** The amount for fixed mode. */
   amount_fixed?: string;
-  /** Режим суммы. */
+  /** Amount mode. */
   amount_mode: OpenEnum<AmountMode>;
-  /** Когда создана (UTC). */
+  /** When created (UTC). */
   created_at: string;
-  /** Валюта цены. */
+  /** Price currency. */
   currency: string;
-  /** Описание на странице оплаты. */
+  /** Description on the payment page. */
   description: string;
-  /** Подписанная ссылка на PDF-плакат с QR оплаты; пусто, когда рендер документов не включён. */
+  /**
+   * A signed link to a PDF poster with the payment QR code; empty when document rendering is not
+   * enabled.
+   */
   document_url: string;
-  /** Когда ссылка истекает (UTC); нет — бессрочная. */
+  /** When the link expires (UTC); absent — never expires. */
   expires_at?: string;
-  /** Идентификатор ссылки. */
+  /** Link id. */
   link_id: string;
-  /** Верхняя граница для range. */
+  /** Upper bound for range. */
   max_amount?: string;
-  /** Нижняя граница для open/range. */
+  /** Lower bound for open/range. */
   min_amount?: string;
-  /** Закреплённая валюта оплаты. */
+  /** The pinned payment currency. */
   pinned_currency?: string;
-  /** Закреплённая сеть оплаты. */
+  /** The pinned payment network. */
   pinned_network?: string;
-  /** Заголовок страницы оплаты. */
+  /** Payment page title. */
   title: string;
-  /** Публичный URL страницы оплаты; пусто, если публичный адрес не настроен. */
+  /** The public URL of the payment page; empty if the public address is not configured. */
   url: string;
 }
 
 export interface PaymentLinkViewList {
-  /** Записи этой страницы. */
+  /** The records of this page. */
   items: PaymentLinkView[];
-  /** Блок пагинации. */
+  /** Pagination block. */
   paginate: Pagination;
 }
 
 export interface PaymentQRResult {
-  /** Депозитный адрес; пусто, пока его нет. */
+  /** The deposit address; empty until there is one. */
   address: string;
   /**
-   * PNG QR-кода как data:-URI; "" — адреса ещё нет (монета не выбрана) или он не платёжный
-   * (песочница).
+   * The QR code PNG as a data: URI; "" — there is no address yet (the coin has not been chosen) or
+   * it is not a payment address (sandbox).
    */
   image: string;
   /**
-   * true — в QR платёжный запрос с суммой (кошелёк подставит её сам); false — только адрес, сумму
-   * плательщик вводит.
+   * true — the QR code holds a payment request with the amount (the wallet fills it in); false —
+   * address only, the payer enters the amount.
    */
   is_uri: boolean;
-  /** Что закодировано в QR: платёжный URI сети с суммой или голый адрес. */
+  /** What the QR code encodes: the network's payment URI with the amount, or the bare address. */
   payload: string;
 }
 
 export interface PaymentRefundLine {
-  /** Куда возвращено. */
+  /** Where the refund went. */
   address: string;
-  /** Сумма возврата в монете платежа. */
+  /** The refund amount in the payment coin. */
   amount: string;
-  /** Когда создан (RFC 3339). */
+  /** When created (RFC 3339). */
   created_at: string;
-  /** Статус возврата окончательный. */
+  /** The refund status is final. */
   is_final: boolean;
-  /** Статус выплаты-возврата. */
+  /** The status of the refund payout. */
   status: OpenEnum<PayoutStatus>;
-  /** Хэш транзакции возврата; пусто, пока не отправлен. */
+  /** The refund transaction hash; empty until sent. */
   txid: string;
-  /** Идентификатор возврата (это выплата). */
+  /** The refund id (it is a payout). */
   uuid: string;
 }
 
 export interface PaymentRequest {
-  /** Допуск недо/переплаты, 0–5 %. Перекрывает настройку мерчанта. */
+  /** Underpayment/overpayment tolerance, 0–5 %. Overrides the merchant setting. */
   accuracy_payment_percent?: number;
-  /** Приватные данные мерчанта, эхом в вебхуках (покупателю не видны). */
+  /** The merchant's private data, echoed in webhooks (not visible to the buyer). */
   additional_data?: string;
-  /** Сумма к оплате в валюте currency. */
+  /** The amount to pay in currency. */
   amount: string;
   /**
-   * Код валюты цены: любой из 23 фиатов (USD, EUR, RUB, …) или любая монета (USDT, BTC, …). У JPY и
-   * KRW ноль знаков после запятой.
+   * The price currency code: any of the 23 fiat currencies (USD, EUR, RUB, …) or any coin (USDT,
+   * BTC, …). JPY and KRW have zero decimal places.
    */
   currency: string;
-  /** Разрешить доплату остатка. */
+  /** Allow paying the remainder. */
   is_payment_multiple?: boolean | null;
-  /** Оживить просроченный счёт по order_id вместо создания нового. */
+  /** Revive an expired invoice by order_id instead of creating a new one. */
   is_refresh?: boolean;
   /**
-   * Время жизни счёта в секундах, 300–43200; по умолчанию 3600. Значения вне диапазона обрезаются к
-   * ближайшей границе.
+   * Invoice lifetime in seconds, 300–43200; default 3600. Out-of-range values are clamped to the
+   * nearest bound.
    */
   lifetime_seconds?: number;
-  /** Сеть расчёта (напр. tron, ethereum). Необязательна — см. режимы выбора валюты и сети. */
+  /**
+   * The settlement network (e.g. tron, ethereum). Optional — see the currency and network selection
+   * modes.
+   */
   network?: string;
-  /** Ссылка мерчанта; ключ идемпотентности. Настоятельно рекомендуется. */
+  /** The merchant reference; the idempotency key. Strongly recommended. */
   order_id?: string;
   /**
-   * Email плательщика. Если задан — после оплаты на него автоматически уходит чек; он же получатель
-   * по умолчанию у POST /v1/payment/send-email.
+   * The payer's email. If set, a receipt is sent to it automatically after payment; it is also the
+   * default recipient for POST /v1/payment/send-email.
    */
   payer_email?: string;
   /**
-   * Устаревшее: % сетевой наценки на плательщика (0–100); payer-facing наценки настраиваются через
-   * discount.
+   * Deprecated: % network surcharge on the payer (0–100); payer-facing surcharges are configured
+   * via discount.
    */
   subtract?: number;
-  /** Тема страницы оплаты: dark | light. */
+  /** Payment page theme: dark | light. */
   theme?: string;
   /**
-   * Валюта расчёта — крипта, которой платят. По умолчанию = currency (только если currency —
-   * крипта); при цене в фиате задайте явно либо опустите вместе с network.
+   * The settlement currency — the crypto used to pay. Defaults to currency (only if currency is
+   * crypto); for a fiat price set it explicitly or omit it together with network.
    */
   to_currency?: string;
   /**
-   * Индивидуальный webhook для этого счёта. Требует зарегистрированного эндпоинта (POST
-   * /v1/webhooks): доставка подписывается его секретом.
+   * A per-invoice webhook. Requires a registered endpoint (POST /v1/webhooks): the delivery is
+   * signed with its secret.
    */
   url_callback?: string;
-  /** Ссылка «назад в магазин» на странице оплаты. */
+  /** The "back to store" link on the payment page. */
   url_return?: string;
-  /** Редирект после успешной оплаты. */
+  /** Redirect after a successful payment. */
   url_success?: string;
 }
 
 export interface PaymentTx {
-  /** Сумма перевода в валюте оплаты. */
+  /** The transfer amount in the payment currency. */
   amount: string;
-  /** Когда перевод зачислен (ISO 8601). */
+  /** When the transfer was credited (ISO 8601). */
   created_at: string;
-  /** Высота блока, в котором перевод подтверждён. */
+  /** The height of the block in which the transfer was confirmed. */
   height: number;
   /**
-   * Сеть, в которой пришёл перевод. На EVM может отличаться от network счёта: депозит зачитывается
-   * и на другой цепочке с тем же адресом.
+   * The network the transfer arrived on. On EVM it may differ from the invoice's network: a deposit
+   * is also credited on another chain with the same address.
    */
   network: string;
-  /** Хеш транзакции. */
+  /** Transaction hash. */
   txid: string;
 }
 
 export interface PaymentView {
-  /** Ваши приватные данные, которые вернутся в ответе и в вебхуке. */
+  /** Your private data, returned in the response and in the webhook. */
   additional_data: string;
   /**
-   * Адрес, на который клиент отправляет деньги. На XRP это классический r-адрес ОБЩЕГО кошелька —
-   * платёж обязан нести destination_tag, иначе сеть его отклонит.
+   * The address the customer sends money to. On XRP this is the classic r-address of a SHARED
+   * wallet — the payment must carry destination_tag, otherwise the network rejects it.
    */
   address: string;
   /**
-   * Только XLM: те же реквизиты одной строкой — muxed-адрес M… (SEP-23), адрес и memo вместе; его
-   * же кодирует QR. Пусто на остальных сетях.
+   * XLM only: the same payment details in one string — a muxed M… address (SEP-23), address and
+   * memo together; the QR code encodes it as well. Empty on other networks.
    */
   address_muxed: string;
   /**
-   * QR-код адреса как PNG data:-URI — можно сразу в <img src>. На XRP кодирует X-address (адрес+тег
-   * одной строкой).
+   * The address QR code as a PNG data: URI — can go straight into <img src>. On XRP it encodes the
+   * X-address (address + tag in one string).
    */
   address_qr_code: string;
   /**
-   * Только XRP: те же реквизиты одной строкой в формате X-address (XLS-5) — адрес и тег вместе; его
-   * же кодирует QR. Пусто на остальных сетях.
+   * XRP only: the same payment details in one string in X-address format (XLS-5) — address and tag
+   * together; the QR code encodes it as well. Empty on other networks.
    */
   address_xaddress: string;
-  /** Сумма к оплате в валюте цены (например, в USD). */
+  /** The amount to pay in the price currency (e.g. USD). */
   amount: string;
   /**
-   * Сколько уже подтверждённо оплачено, в крипте оплаты; всегда строка (0, если ничего не пришло).
-   * Пусто, пока валюта оплаты не выбрана (счёт без валюты).
+   * How much has already been paid and confirmed, in the payment crypto; always a string (0 if
+   * nothing has arrived). Empty until the payment currency is chosen (an invoice without a
+   * currency).
    */
   amount_paid: string;
   /**
-   * Сколько ещё осталось доплатить (к оплате − оплачено); 0, если хватает. Пусто, пока валюта
-   * оплаты не выбрана (счёт без валюты).
+   * How much is still left to pay (due − paid); 0 if enough has been paid. Empty until the payment
+   * currency is chosen (an invoice without a currency).
    */
   amount_remaining: string;
   /**
-   * Наша комиссия с этого платежа — УДЕРЖАННАЯ величина, в валюте оплаты (payer_currency). Ставка
-   * счёта уже включает амортизированный фиксированный сбор — второй раз он не берётся. ПУСТО, пока
-   * по счёту ничего не зачислено (и у валюто-агностичного счёта до выбора монеты): нуля здесь не
-   * бывает у неоплаченного счёта — «0» читалось бы как «комиссию не берут». У оплаченного счёта с
-   * нулевым тарифом 0 — настоящий.
+   * Our fee on this payment — the WITHHELD amount, in the payment currency (payer_currency). The
+   * invoice rate already includes the amortized fixed fee — it is not charged a second time. EMPTY
+   * until anything has been credited on the invoice (and, for a currency-agnostic invoice, until a
+   * coin is chosen): an unpaid invoice never shows zero here — "0" would read as "no fee is
+   * charged". For a paid invoice with a zero rate, 0 is genuine.
    */
   commission: string;
-  /** Текущее число подтверждений входящего платежа. */
+  /** The current number of confirmations of the incoming payment. */
   confirmations: number;
-  /** Время создания (ISO 8601). */
+  /** Creation time (ISO 8601). */
   created_at: string;
   /**
-   * Валюта цены: фиат (USD, EUR, RUB, JPY… — см. pricing_currencies) или монета. Говорит, сколько
-   * счёт СТОИТ, а не чем за него платят (это payer_currency).
+   * The price currency: fiat (USD, EUR, RUB, JPY… — see pricing_currencies) or a coin. It says how
+   * much the invoice COSTS, not what it is paid with (that is payer_currency).
    */
   currency: string;
   /**
-   * Только XRP: числовой destination tag, который клиент ОБЯЗАН указать в переводе (поле «тег/memo
-   * получателя» на бирже или в кошельке). Пусто на остальных сетях.
+   * XRP only: the numeric destination tag the customer MUST specify in the transfer (the "recipient
+   * tag/memo" field at the exchange or in the wallet). Empty on other networks.
    */
   destination_tag: string;
   /**
-   * Подписанная ссылка на PDF-чек этой операции — открывается без API-ключа, можно вложить в письмо
-   * или отдать клиенту. Пусто, если генерация документов не включена.
+   * A signed link to the PDF receipt of this operation — opens without an API key, can be attached
+   * to an email or given to the customer. Empty if document generation is not enabled.
    */
   document_url: string;
   /**
-   * Курс, зафиксированный этим счётом (сколько валюты оплаты за 1 единицу валюты цены) — по нему
-   * рассчитан payer_amount. Пусто, пока валюта не выбрана.
+   * The rate locked in by this invoice (how much of the payment currency per 1 unit of the price
+   * currency) — payer_amount is calculated from it. Empty until the currency is chosen.
    */
   exchange_rate: string;
-  /** Когда истекает счёт (ISO 8601, как и все временные поля). */
+  /** When the invoice expires (ISO 8601, like all time fields). */
   expired_at: string;
   /**
-   * Ставка комиссии этого счёта в процентах — та, что зафиксирована в момент создания (смена тарифа
-   * не меняет уже созданные счета). Уже включает амортизированный фиксированный сбор. В отличие от
-   * commission известна с первой секунды и присутствует всегда.
+   * The fee rate of this invoice in percent — the one locked in at creation (a pricing change does
+   * not affect invoices already created). Already includes the amortized fixed fee. Unlike
+   * commission, it is known from the first second and is always present.
    */
   fee_percent: string;
-  /** true — статус финальный, больше не изменится. */
+  /** true — the status is final and will not change again. */
   is_final: boolean;
-  /** true — это валюто-агностичная ссылка, клиент ещё не выбрал валюту/сеть. */
+  /**
+   * true — this is a currency-agnostic link; the customer has not chosen the currency/network yet.
+   */
   is_multi: boolean;
-  /** true — счёт песочницы (dev-магазина): деньги ненастоящие, в живую сверку не включайте. */
+  /**
+   * true — a sandbox (dev store) invoice: the money is not real, do not include it in live
+   * reconciliation.
+   */
   is_test: boolean;
   /**
-   * Только XLM (Stellar): числовой memo (тип ID), который клиент ОБЯЗАН указать в переводе — поле
-   * «memo» на бирже или в кошельке. Пусто на остальных сетях.
+   * XLM (Stellar) only: the numeric memo (ID type) the customer MUST specify in the transfer — the
+   * "memo" field at the exchange or in the wallet. Empty on other networks.
    */
   memo: string;
   /**
-   * Сколько зачислено (или будет зачислено) вам: amount_paid − network_surcharge − commission.
-   * Сетевые расходы на сбор депозита оплачивает плательщик отдельной строкой (network_surcharge) —
-   * из вашей суммы они НЕ вычитаются. Пусто, пока валюта оплаты не выбрана (счёт без валюты).
+   * How much has been (or will be) credited to you: amount_paid − network_surcharge − commission.
+   * The network costs of sweeping the deposit are paid by the payer as a separate line
+   * (network_surcharge) — they are NOT deducted from your amount. Empty until the payment currency
+   * is chosen (an invoice without a currency).
    */
   merchant_amount: string;
   /**
-   * Ваша скидка или наценка для ВЫБРАННОГО способа оплаты, в валюте оплаты: на столько сдвинулась
-   * сумма плательщика из-за настройки по этой монете и сети. Положительное — плательщик платит
-   * МЕНЬШЕ (скидка), отрицательное — больше (наценка). Пусто, если настройки для метода нет.
+   * Your discount or surcharge for the CHOSEN payment method, in the payment currency: how much the
+   * payer's amount shifted because of the setting for this coin and network. Positive — the payer
+   * pays LESS (discount), negative — more (surcharge). Empty if there is no setting for the method.
    */
   method_adjustment: string;
   /**
-   * Та же скидка/наценка в базисных пунктах (так она переживает переоценку курса). Знак тот же, что
-   * в настройке скидок: ПЛЮС — скидка, МИНУС — наценка.
+   * The same discount/surcharge in basis points (this way it survives a rate re-quote). The sign is
+   * the same as in the discount setting: PLUS — a discount, MINUS — a surcharge.
    */
   method_adjustment_bps: number;
-  /** Сеть блокчейна (например, tron). */
+  /** Blockchain network (e.g. tron). */
   network: string;
   /**
-   * Сетевая надбавка плательщика в валюте оплаты: стоимость сбора депозита в выбранной сети
-   * (активация адреса, если адрес новый, плюс энергия/газ с запасом), зафиксированная при выборе
-   * сети. Пусто до выбора сети; 0, если надбавка выключена.
+   * The payer's network surcharge in the payment currency: the cost of sweeping the deposit on the
+   * chosen network (address activation, if the address is new, plus energy/gas with a margin),
+   * locked in when the network is chosen. Empty until the network is chosen; 0 if the surcharge is
+   * disabled.
    */
   network_surcharge: string;
-  /** Та же надбавка в базисных пунктах от суммы к оплате (так она переживает переоценку курса). */
+  /**
+   * The same surcharge in basis points of the amount due (this way it survives a rate re-quote).
+   */
   network_surcharge_bps: number;
-  /** Ваш номер заказа, который вы передали при создании. */
+  /** Your order number that you passed at creation. */
   order_id: string;
   /**
-   * Момент фактической оплаты — зачисление последнего подтверждённого перевода (ISO 8601). null,
-   * пока оплата не пришла. Отличайте от updated_at: тот сдвигается любым изменением счёта.
+   * The moment of actual payment — the crediting of the last confirmed transfer (ISO 8601). null
+   * until the payment arrives. Not to be confused with updated_at, which moves on any change to the
+   * invoice.
    */
   paid_at: string | null;
   /**
-   * Адрес, С КОТОРОГО пришёл первый подтверждённый депозит — на аккаунт-сетях
-   * (EVM/Tron/Solana/TON); пусто на UTXO. ⚠ Это НЕ обязательно адрес для возврата: отправителем
-   * может быть биржа, сдача UTXO-транзакции или горячий омнибус крипто-он-рампа, если покупатель
-   * платил картой. Прежде чем возвращать деньги сюда, смотрите payer_address_is_refundable.
+   * The address the first confirmed deposit came FROM — on account-based networks
+   * (EVM/Tron/Solana/TON); empty on UTXO. ⚠ This is NOT necessarily a refund address: the sender
+   * may be an exchange, the change of a UTXO transaction, or the omnibus hot wallet of a crypto
+   * on-ramp if the buyer paid by card. Before refunding money here, check
+   * payer_address_is_refundable.
    */
   payer_address: string;
   /**
-   * true — payer_address принадлежит плательщику, и в /v1/payment/refund можно опустить address
-   * (вернём на него). false — адрес возврата неизвестен (UTXO/XRP, оплата картой через он-рамп,
-   * адрес не записан): спросите адрес у покупателя и передайте address явно, иначе запрос будет
-   * отклонён с refund.no_address.
+   * true — payer_address belongs to the payer, and address may be omitted in /v1/payment/refund (we
+   * refund to it). false — the refund address is unknown (UTXO/XRP, card payment via an on-ramp,
+   * address not recorded): ask the buyer for an address and pass address explicitly, otherwise the
+   * request is rejected with refund.no_address.
    */
   payer_address_is_refundable: boolean;
   /**
-   * Сколько нужно отправить в крипте оплаты. Пусто, пока валюта оплаты не выбрана (счёт без
-   * валюты).
+   * How much must be sent in the payment crypto. Empty until the payment currency is chosen (an
+   * invoice without a currency).
    */
   payer_amount: string;
   /**
-   * Валюта, в которой платит клиент (например, USDT). Пусто у валюто-агностичного счёта (is_multi),
-   * пока клиент не выбрал монету — валюты расчёта у него ещё нет.
+   * The currency the customer pays in (e.g. USDT). Empty for a currency-agnostic invoice (is_multi)
+   * until the customer picks a coin — it has no settlement currency yet.
    */
   payer_currency: string;
-  /** E-mail плательщика, если вы его передали. */
+  /** The payer's email, if you provided it. */
   payer_email: string;
   /**
-   * До какого момента действует зафиксированный payer_amount (ISO 8601; окно ~5 мин, после него
-   * страница оплаты перекотирует счёт). Пусто, когда перекотировки уже не будет: валюта не выбрана,
-   * депозит замечен, счёт вышел из created или истёк — сумма зафиксирована навсегда.
+   * Until when the locked payer_amount is valid (ISO 8601; a ~5 min window, after which the payment
+   * page re-quotes the invoice). Empty when there will be no more re-quotes: the currency has not
+   * been chosen, a deposit has been seen, the invoice has left created or expired — the amount is
+   * locked for good.
    */
   rate_expires_at: string;
-  /** Сколько подтверждений нужно для зачисления (зависит от суммы и сети). */
+  /** How many confirmations are required for crediting (depends on the amount and the network). */
   required_confirmations: number;
   /**
-   * Статус: select (клиент выбирает валюту) | created (ждём оплату) | confirm_check (видим оплату,
-   * ждём подтверждений; при amount_remaining > 0 — частичная, ждём остаток) | paid (оплачено) |
-   * paid_over (переплата) | wrong_amount (недоплата, срок вышел) | expired (просрочен) | cancelled
-   * (отменён) | under_review (поступление задержано на проверке, разбирает оператор).
+   * Status: select (the customer is choosing a currency) | created (awaiting payment) |
+   * confirm_check (payment seen, awaiting confirmations; with amount_remaining > 0 — partial,
+   * awaiting the remainder) | paid (paid) | paid_over (overpaid) | wrong_amount (underpaid,
+   * expired) | expired (expired) | cancelled (cancelled) | under_review (the deposit is held for
+   * review, an operator is handling it).
    */
   status: OpenEnum<PaymentStatus>;
   /**
-   * Все подтверждённые переводы, которыми оплачен счёт. Частичная оплата несколькими переводами —
-   * штатный сценарий wrong_amount; один txid наверху — лишь последний замеченный.
+   * All confirmed transfers that paid the invoice. Partial payment by several transfers is a
+   * regular wrong_amount scenario; the single txid above is only the last one seen.
    */
   tx_list: PaymentTx[];
-  /** Хеш входящей транзакции (когда замечена). */
+  /** The hash of the incoming transaction (once seen). */
   txid: string;
-  /** Время последнего изменения (ISO 8601). */
+  /** Time of the last change (ISO 8601). */
   updated_at: string;
-  /** Ссылка на готовую страницу оплаты. */
+  /** A link to the ready-made payment page. */
   url: string;
-  /** Ссылка «вернуться в магазин» до оплаты. */
+  /** The "back to store" link before payment. */
   url_return: string;
-  /** Куда перенаправить после успешной оплаты. */
+  /** Where to redirect after a successful payment. */
   url_success: string;
-  /** Наш идентификатор платежа (используйте его в info/refund). */
+  /** Our payment identifier (use it in info/refund). */
   uuid: string;
 }
 
 export interface PaymentViewList {
-  /** Записи этой страницы. */
+  /** The records of this page. */
   items: PaymentView[];
-  /** Блок пагинации. */
+  /** Pagination block. */
   paginate: Pagination;
 }
 
 /**
- * Приходит, когда платёж переходит в paid, paid_over, wrong_amount, expired или under_review, и
- * когда откатывается из них (реорганизация сети). Текущий статус — любой из словаря — можно
- * запросить заново: POST /v1/payment/resend. Сверять с заказом по order_id/uuid, с блокчейном — по
- * txid и network.
+ * Sent when a payment moves to paid, paid_over, wrong_amount, expired or under_review, and when it
+ * rolls back from them (a chain reorganization). The current status — any value from the vocabulary
+ * — can be requested again: POST /v1/payment/resend. Match it to the order by order_id/uuid and to
+ * the blockchain by txid and network.
  */
 export interface PaymentWebhook {
-  /** Ваши данные, переданные при создании платежа, как есть. */
+  /** Your data passed when creating the payment, as is. */
   additional_data: string;
-  /** Сумма счёта в валюте currency. */
+  /** The invoice amount in currency. */
   amount: string;
-  /** Валюта счёта. */
+  /** Invoice currency. */
   currency: string;
-  /** Когда событие произошло, UTC с миллисекундами (ISO 8601). */
+  /** When the event happened, UTC with milliseconds (ISO 8601). */
   event_at: string;
-  /** true — статус финальный, дальше платёж не изменится. */
+  /** true — the status is final, the payment will not change any further. */
   is_final: boolean;
-  /** Сеть, в которой пришли деньги. */
+  /** The network the money arrived on. */
   network: string;
-  /** Ваш order_id платежа. */
+  /** Your order_id for the payment. */
   order_id: string;
   /**
-   * Адрес, с которого пришёл платёж (пусто, если неизвестен). Возвращать на него можно только при
+   * The address the payment came from (empty if unknown). Refunding to it is allowed only when
    * payer_address_is_refundable = true.
    */
   payer_address: string;
   /**
-   * true — payer_address принадлежит плательщику и годится как адрес возврата; false — это адрес
-   * биржи, провайдера карты или сдачи, возвращать на него нельзя.
+   * true — payer_address belongs to the payer and is usable as a refund address; false — it is an
+   * exchange, card provider or change address, refunding to it is not allowed.
    */
   payer_address_is_refundable: boolean;
-  /** Сколько плательщик должен был заплатить в валюте payer_currency. */
+  /** How much the payer was supposed to pay, in payer_currency. */
   payer_amount: string;
-  /** Валюта, в которой платит плательщик. */
+  /** The currency the payer pays in. */
   payer_currency: string;
-  /** Сколько фактически получено (подтверждено), в валюте payer_currency. */
+  /** How much was actually received (confirmed), in payer_currency. */
   payment_amount: string;
   /**
-   * Глобальный номер события: в пределах одного объекта больший номер новее, меньший — опоздавшая
-   * доставка, её нужно отбросить. У репетиции (test: true) всегда 0.
+   * The global event number: within one object a higher number is newer, a lower one is a late
+   * delivery and must be discarded. Always 0 on a rehearsal (test: true).
    */
   sequence: number;
-  /** Статус платежа — тот же литерал, что в /v1/payment/info и фильтре истории. */
+  /** The payment status — the same literal as in /v1/payment/info and the history filter. */
   status: OpenEnum<PaymentStatus>;
   /**
-   * Есть только у репетиции (/v1/test-webhook/*, /v1/payment/testing-webhook) и всегда true —
-   * внутри подписи. Боевое событие этого поля не несёт никогда: тело с test: true обработчик обязан
-   * игнорировать, даже если подпись верна.
+   * Present only on a rehearsal (/v1/test-webhook/*, /v1/payment/testing-webhook) and always true —
+   * inside the signature. A live event never carries this field: your handler must ignore a body
+   * with test: true even if the signature is valid.
    */
   test?: boolean;
-  /** Хеш транзакции, которой пришёл платёж (пусто, пока платежа нет). */
+  /** The hash of the transaction the payment arrived with (empty until there is a payment). */
   txid: string;
-  /** Вид события: payment | payout | wallet | conversion — какое тело пришло. */
+  /** Event kind: payment | payout | wallet | conversion — which body arrived. */
   type: string;
-  /** Идентификатор платежа. */
+  /** Payment id. */
   uuid: string;
 }
 
 export interface PayoutBatchRequest {
   /**
-   * Что делать при ошибке элемента: continue (по умолчанию) — обрабатывать остальные; stop —
-   * прекратить обработку после первой ошибки.
+   * What to do when an item fails: continue (default) — process the rest; stop — stop processing
+   * after the first error.
    */
   on_error?: OpenEnum<BatchOnError>;
   /**
-   * Массив от 1 до 5000 элементов — те же поля, что у POST /v1/payout; order_id у каждого элемента
-   * обязателен и служит ключом идемпотентности: повтор вернёт уже созданную выплату.
+   * An array of 1 to 5000 items — the same fields as in POST /v1/payout; order_id is required on
+   * each item and serves as the idempotency key: a retry returns the payout already created.
    */
   payouts: PayoutRequest[];
 }
 
 export interface PayoutCalculateRequest {
-  /** Сумма выплаты, строкой. */
+  /** The payout amount, as a string. */
   amount: string;
-  /** Актив выплаты (USDT, BTC, …). */
+  /** Payout asset (USDT, BTC, …). */
   currency: string;
   /**
-   * true — комиссия списывается с баланса поверх суммы (получатель получит ровно amount); false —
-   * из суммы выплаты.
+   * true — the fee is debited from the balance on top of the amount (the recipient gets exactly
+   * amount); false — from the payout amount.
    */
   is_subtract?: boolean | null;
-  /** Сеть выплаты; обязательна, если актив живёт в нескольких сетях. */
+  /** Payout network; required if the asset lives on several networks. */
   network?: string;
 }
 
 export interface PayoutCalculation {
-  /** Сколько спишется с баланса; null — неизвестно (комиссию не оценить). */
+  /** How much will be debited from the balance; null — unknown (the fee cannot be estimated). */
   amount: string | null;
-  /** Сетевая комиссия; null — не оценить сейчас. */
+  /** Network fee; null — cannot be estimated right now. */
   commission: string | null;
-  /** Актив выплаты. */
+  /** Payout asset. */
   currency: string;
-  /** Кто платит комиссию: gateway, merchant или recipient. */
+  /** Who pays the fee: gateway, merchant or recipient. */
   fee_bearer: OpenEnum<PayoutFeeBearer>;
-  /** exact — комиссия договорная (шлюз её берёт на себя); estimated — оценка оракула. */
+  /** exact — the fee is contractual (the gateway absorbs it); estimated — an oracle estimate. */
   fee_type: OpenEnum<FeeType>;
-  /** Сеть — как пришла в запросе. */
+  /** The network — as it came in the request. */
   network: string;
-  /** Сколько получит адрес; null — неизвестно. */
+  /** How much the address will receive; null — unknown. */
   payer_amount: string | null;
 }
 
 export interface PayoutClaimLockedView {
-  /** Получить можно сейчас: ссылка оплачена и не истекла. */
+  /** Can be claimed now: the link is funded and has not expired. */
   claimable: boolean;
-  /** До какого момента ссылку можно получить (UTC). */
+  /** Until when the link can be claimed (UTC). */
   expires_at: string;
-  /** Всегда true: суммы и сеть покажутся после кода в заголовке X-Claim-Passcode. */
+  /**
+   * Always true: amounts and network are shown after the passcode in the X-Claim-Passcode header.
+   */
   passcode_required: boolean;
-  /** Состояние ссылки. */
+  /** Link state. */
   status: OpenEnum<PayoutLinkStatus>;
-  /** Заголовок от отправителя. */
+  /** Title from the sender. */
   title: string;
 }
 
 export interface PayoutClaimView {
-  /** Сумма ссылки — обещание получателю. */
+  /** The link amount — a promise to the recipient. */
   amount: string;
-  /** Получить можно сейчас: ссылка оплачена и не истекла. */
+  /** Can be claimed now: the link is funded and has not expired. */
   claimable: boolean;
-  /** Сетевая комиссия; null — оценить сейчас нельзя (ноль означал бы бесплатное получение). */
+  /** Network fee; null — cannot be estimated right now (zero would mean the claim is free). */
   commission: string | null;
-  /** Актив выплаты. */
+  /** Payout asset. */
   currency: string;
-  /** До какого момента ссылку можно получить (UTC). */
+  /** Until when the link can be claimed (UTC). */
   expires_at: string;
-  /** Кто платит сетевую комиссию. */
+  /** Who pays the network fee. */
   fee_bearer: OpenEnum<PayoutLinkFeeBearer>;
-  /** exact — комиссия зафиксирована; estimated — оценка по текущей сети. */
+  /** exact — the fee is fixed; estimated — an estimate based on the current network. */
   fee_type: OpenEnum<FeeType>;
-  /** Сеть выплаты. */
+  /** Payout network. */
   network: string;
-  /** Сообщение от отправителя. */
+  /** Message from the sender. */
   note: string;
-  /** Сколько дойдёт получателю; null — сказать нельзя (комиссия не оценена или съела сумму). */
+  /**
+   * How much will reach the recipient; null — cannot be said (the fee was not estimated or ate the
+   * amount).
+   */
   payer_amount: string | null;
-  /** Состояние ссылки. */
+  /** Link state. */
   status: OpenEnum<PayoutLinkStatus>;
-  /** Заголовок от отправителя. */
+  /** Title from the sender. */
   title: string;
 }
 
 export interface PayoutClaimed {
-  /** Адрес получателя. */
+  /** Recipient address. */
   address: string;
-  /** Сумма ссылки — обещание получателю. */
+  /** The link amount — a promise to the recipient. */
   amount: string;
-  /** Сетевая комиссия; null — оценить сейчас нельзя (ноль означал бы бесплатное получение). */
+  /** Network fee; null — cannot be estimated right now (zero would mean the claim is free). */
   commission: string | null;
-  /** Актив выплаты. */
+  /** Payout asset. */
   currency: string;
-  /** Кто платит сетевую комиссию. */
+  /** Who pays the network fee. */
   fee_bearer: OpenEnum<PayoutLinkFeeBearer>;
-  /** exact — комиссия зафиксирована; estimated — оценка по текущей сети. */
+  /** exact — the fee is fixed; estimated — an estimate based on the current network. */
   fee_type: OpenEnum<FeeType>;
-  /** Сеть выплаты. */
+  /** Payout network. */
   network: string;
-  /** Сколько дойдёт получателю; null — сказать нельзя (комиссия не оценена или съела сумму). */
+  /**
+   * How much will reach the recipient; null — cannot be said (the fee was not estimated or ate the
+   * amount).
+   */
   payer_amount: string | null;
-  /** Выплата получателю. */
+  /** The payout to the recipient. */
   payout_id: string;
-  /** Состояние ссылки после получения. */
+  /** The link state after the claim. */
   status: OpenEnum<PayoutLinkStatus>;
 }
 
 export interface PayoutFeeResult {
-  /** true — проект задал настройку сам; false — действует умолчание шлюза. */
+  /** true — the project set this setting itself; false — the gateway default applies. */
   configured: boolean;
-  /** Действующее значение: настройка проекта, а без неё — умолчание шлюза. */
+  /** The effective value: the project setting, or the gateway default if there is none. */
   fee_on_recipient: boolean;
 }
 
 export interface PayoutInfoResult {
-  /** Адрес получателя. */
+  /** Recipient address. */
   address: string;
-  /** Сумма выплаты в валюте currency, списанная с вашего баланса. */
+  /** The payout amount in currency, debited from your balance. */
   amount: string;
-  /** true — выплата ждёт подтверждения (внутренние сценарии; по API-ключу всегда false). */
+  /** true — the payout is awaiting approval (internal scenarios; always false with an API key). */
   approval_required: boolean;
-  /** Удержанная сетевая комиссия, в валюте выплаты. 0 — комиссию поглотил шлюз. */
+  /** The withheld network fee, in the payout currency. 0 — the gateway absorbed the fee. */
   commission: string;
-  /** Время создания (ISO 8601). */
+  /** Creation time (ISO 8601). */
   created_at: string;
-  /** Код валюты выплаты. */
+  /** Payout currency code. */
   currency: string;
   /**
-   * Подписанная ссылка на PDF-чек этой операции — открывается без API-ключа, можно вложить в письмо
-   * или отдать получателю. Пусто, если генерация документов не включена.
+   * A signed link to the PDF receipt of this operation — opens without an API key, can be attached
+   * to an email or given to the recipient. Empty if document generation is not enabled.
    */
   document_url: string;
-  /** Причина сбоя выплаты человеческим текстом; null — сбоя нет. */
+  /** The payout failure reason as human-readable text; null — no failure. */
   error: string | null;
-  /** Машинный код причины; null — сбоя нет. */
+  /** The machine reason code; null — no failure. */
   error_code: string | null;
   /**
-   * Кто заплатил сетевую комиссию: gateway — шлюз поглотил её (commission = 0); merchant — сумма
-   * списания увеличена на комиссию, получатель получает запрошенное целиком (is_subtract=true,
-   * выплатная ссылка с fee_bearer=merchant); recipient — комиссия удержана из выплаты, получателю
-   * приходит меньше запрошенного.
+   * Who paid the network fee: gateway — the gateway absorbed it (commission = 0); merchant — the
+   * debit amount was increased by the fee, the recipient gets the full requested amount
+   * (is_subtract=true, a payout link with fee_bearer=merchant); recipient — the fee was withheld
+   * from the payout, the recipient gets less than requested.
    */
   fee_bearer: OpenEnum<PayoutFeeBearer>;
-  /** true — статус финальный (confirmed / failed / cancelled). */
+  /** true — the status is final (confirmed / failed / cancelled). */
   is_final: boolean;
-  /** true — это возврат платежа, а не обычная выплата. */
+  /** true — this is a payment refund, not a regular payout. */
   is_refund: boolean;
-  /** Тег/мемо назначения, переданный при создании (TON Jetton, memo-биржи). Пусто — без мемо. */
+  /** The destination tag/memo passed at creation (TON Jetton, exchange memos). Empty — no memo. */
   memo: string;
-  /** Сеть блокчейна. */
+  /** Blockchain network. */
   network: string;
   /**
-   * Ваш номер (reference) выплаты. У возврата — null: возврат не имеет вашего идентификатора, см.
+   * Your payout number (reference). null for a refund: a refund has no identifier of yours, see
    * payment_order_id.
    */
   order_id: string | null;
-  /** Сколько реально уходит получателю на адрес: amount − commission. */
+  /** How much actually goes to the recipient's address: amount − commission. */
   payer_amount: string;
   /**
-   * Ваш order_id платежа, по которому сделан возврат (null у обычной выплаты). У возврата
-   * собственного order_id нет — он приходит null, а сверять возврат с заказом нужно по этому полю.
+   * Your order_id of the payment that was refunded (null for a regular payout). A refund has no
+   * order_id of its own — it comes as null, so match a refund to an order by this field.
    */
   payment_order_id: string | null;
-  /** Идентификатор возвращаемого платежа (null, если это не возврат). */
+  /** The id of the payment being refunded (null if this is not a refund). */
   refund_for: string | null;
-  /** api (через интеграцию) | manual (из кабинета). */
+  /** api (via the integration) | manual (from the dashboard). */
   source: OpenEnum<PayoutSource>;
   /**
-   * Статус выплаты: pending (создана, ждёт) | approved (одобрена) | awaiting_cosign (ждёт второй
-   * подписи) | broadcasting (отправляется) | sent (отправлена, ждёт подтверждений) | confirmed
-   * (подтверждена — готово) | failed | cancelled. Значение можно передать обратно в фильтр истории
-   * как есть.
+   * Payout status: pending (created, waiting) | approved (approved) | awaiting_cosign (waiting for
+   * the second signature) | broadcasting (being broadcast) | sent (sent, awaiting confirmations) |
+   * confirmed (confirmed — done) | failed | cancelled. The value can be passed back to the history
+   * filter as is.
    */
   status: OpenEnum<PayoutStatus>;
-  /** Хеш транзакции в блокчейне (появляется после отправки). */
+  /** The blockchain transaction hash (appears after sending). */
   txid: string;
-  /** Время последнего изменения (ISO 8601). */
+  /** Time of the last change (ISO 8601). */
   updated_at: string;
-  /** Идентификатор выплаты. */
+  /** Payout id. */
   uuid: string;
 }
 
 export interface PayoutItem {
-  /** Адрес получателя. */
+  /** Recipient address. */
   address: string;
-  /** Сумма выплаты в валюте currency, списанная с вашего баланса. */
+  /** The payout amount in currency, debited from your balance. */
   amount: string;
-  /** true — выплата ждёт подтверждения (внутренние сценарии; по API-ключу всегда false). */
+  /** true — the payout is awaiting approval (internal scenarios; always false with an API key). */
   approval_required: boolean;
-  /** Удержанная сетевая комиссия, в валюте выплаты. 0 — комиссию поглотил шлюз. */
+  /** The withheld network fee, in the payout currency. 0 — the gateway absorbed the fee. */
   commission: string;
-  /** Конверсия, сделанная по пути выплаты; нет ключа — конверсии не было. */
+  /** The conversion performed on the payout path; no key — there was no conversion. */
   convert?: Record<string, unknown>;
-  /** Время создания (ISO 8601). */
+  /** Creation time (ISO 8601). */
   created_at: string;
-  /** Код валюты выплаты. */
+  /** Payout currency code. */
   currency: string;
   /**
-   * Подписанная ссылка на PDF-чек этой операции — открывается без API-ключа, можно вложить в письмо
-   * или отдать получателю. Пусто, если генерация документов не включена.
+   * A signed link to the PDF receipt of this operation — opens without an API key, can be attached
+   * to an email or given to the recipient. Empty if document generation is not enabled.
    */
   document_url: string;
   /**
-   * Кто заплатил сетевую комиссию: gateway — шлюз поглотил её (commission = 0); merchant — сумма
-   * списания увеличена на комиссию, получатель получает запрошенное целиком (is_subtract=true,
-   * выплатная ссылка с fee_bearer=merchant); recipient — комиссия удержана из выплаты, получателю
-   * приходит меньше запрошенного.
+   * Who paid the network fee: gateway — the gateway absorbed it (commission = 0); merchant — the
+   * debit amount was increased by the fee, the recipient gets the full requested amount
+   * (is_subtract=true, a payout link with fee_bearer=merchant); recipient — the fee was withheld
+   * from the payout, the recipient gets less than requested.
    */
   fee_bearer: OpenEnum<PayoutFeeBearer>;
-  /** true — статус финальный (confirmed / failed / cancelled). */
+  /** true — the status is final (confirmed / failed / cancelled). */
   is_final: boolean;
-  /** true — это возврат платежа, а не обычная выплата. */
+  /** true — this is a payment refund, not a regular payout. */
   is_refund: boolean;
-  /** Тег/мемо назначения, переданный при создании (TON Jetton, memo-биржи). Пусто — без мемо. */
+  /** The destination tag/memo passed at creation (TON Jetton, exchange memos). Empty — no memo. */
   memo: string;
-  /** Сеть блокчейна. */
+  /** Blockchain network. */
   network: string;
   /**
-   * Ваш номер (reference) выплаты. У возврата — null: возврат не имеет вашего идентификатора, см.
+   * Your payout number (reference). null for a refund: a refund has no identifier of yours, see
    * payment_order_id.
    */
   order_id: string | null;
-  /** Сколько реально уходит получателю на адрес: amount − commission. */
+  /** How much actually goes to the recipient's address: amount − commission. */
   payer_amount: string;
   /**
-   * Ваш order_id платежа, по которому сделан возврат (null у обычной выплаты). У возврата
-   * собственного order_id нет — он приходит null, а сверять возврат с заказом нужно по этому полю.
+   * Your order_id of the payment that was refunded (null for a regular payout). A refund has no
+   * order_id of its own — it comes as null, so match a refund to an order by this field.
    */
   payment_order_id: string | null;
-  /** Идентификатор возвращаемого платежа (null, если это не возврат). */
+  /** The id of the payment being refunded (null if this is not a refund). */
   refund_for: string | null;
-  /** api (через интеграцию) | manual (из кабинета). */
+  /** api (via the integration) | manual (from the dashboard). */
   source: OpenEnum<PayoutSource>;
   /**
-   * Статус выплаты: pending (создана, ждёт) | approved (одобрена) | awaiting_cosign (ждёт второй
-   * подписи) | broadcasting (отправляется) | sent (отправлена, ждёт подтверждений) | confirmed
-   * (подтверждена — готово) | failed | cancelled. Значение можно передать обратно в фильтр истории
-   * как есть.
+   * Payout status: pending (created, waiting) | approved (approved) | awaiting_cosign (waiting for
+   * the second signature) | broadcasting (being broadcast) | sent (sent, awaiting confirmations) |
+   * confirmed (confirmed — done) | failed | cancelled. The value can be passed back to the history
+   * filter as is.
    */
   status: OpenEnum<PayoutStatus>;
-  /** Хеш транзакции в блокчейне (появляется после отправки). */
+  /** The blockchain transaction hash (appears after sending). */
   txid: string;
-  /** Время последнего изменения (ISO 8601). */
+  /** Time of the last change (ISO 8601). */
   updated_at: string;
-  /** Идентификатор выплаты. */
+  /** Payout id. */
   uuid: string;
 }
 
 export interface PayoutLinkBatchItem {
-  /** Сумма в currency, строкой; больше нуля */
+  /** The amount in currency, as a string; greater than zero */
   amount: string;
-  /** Крипто-актив выплаты (USDT, BTC, …); фиат невозможен */
+  /** The payout crypto asset (USDT, BTC, …); fiat is not possible */
   currency: string;
   /**
-   * Если задан — получателю уходит письмо с кнопкой «Получить средства»; сбой доставки не отменяет
-   * создание ссылки
+   * If set, the recipient gets an email with a "Claim funds" button; a delivery failure does not
+   * cancel the link creation
    */
   email?: string;
   /**
-   * Срок жизни ссылки в секундах, клампится в диапазон 3600–2592000 (час–30 суток); без поля или
-   * при 0 ссылка живёт 1 час, а не максимум — задавайте явно
+   * The link lifetime in seconds, clamped to the range 3600–2592000 (an hour to 30 days); without
+   * the field or at 0 the link lives 1 hour, not the maximum — set it explicitly
    */
   expires_in_seconds?: number;
   /**
-   * Кто платит сетевую комиссию: "recipient" (по умолчанию — вычитается из суммы, получателю придёт
-   * меньше) или "merchant" (резервируется сумма плюс комиссия, получателю придёт ровно amount)
+   * Who pays the network fee: "recipient" (default — deducted from the amount, the recipient gets
+   * less) or "merchant" (the amount plus the fee is reserved, the recipient gets exactly amount)
    */
   fee_bearer?: OpenEnum<PayoutLinkFeeBearer>;
-  /** Сеть выплаты получателю (tron, bitcoin, …) */
+  /** The network of the payout to the recipient (tron, bitcoin, …) */
   network: string;
-  /** Сообщение получателю (видно на странице получения и в письме) */
+  /** A message to the recipient (visible on the claim page and in the email) */
   note?: string;
   /**
-   * Код получения — второй фактор к ссылке: "auto" — сгенерируем и вернём ОДИН раз в ответе, либо
-   * свой (6–64 видимых символа), пусто — без кода. Код передавайте получателю ОТДЕЛЬНЫМ от ссылки
-   * каналом (в письмо он не кладётся); после 10 неверных вводов ссылка запирается.
+   * Claim passcode — a second factor for the link: "auto" — we generate it and return it ONCE in
+   * the response, or your own (6–64 visible characters), empty — no passcode. Give the passcode to
+   * the recipient over a channel SEPARATE from the link (it is not included in the email); after 10
+   * wrong attempts the link is locked.
    */
   passcode?: string;
   /**
-   * Ваш ключ дедупликации ссылки, уникальный на мерчанта: повтор с тем же reference не
-   * зарезервирует деньги второй раз. В одиночном POST /v1/payout/link необязателен — без него
-   * ключом становится заголовок Idempotency-Key, а без обоих запрос отвергается
-   * (payoutlink.idempotency_required). В пачке POST /v1/payout/link/batch обязателен у каждой
-   * ссылки: Idempotency-Key пачки на элементы не переносится
+   * Your deduplication key for the link, unique per merchant: a retry with the same reference will
+   * not reserve the money a second time. Optional in a single POST /v1/payout/link — without it the
+   * Idempotency-Key header becomes the key, and without both the request is rejected
+   * (payoutlink.idempotency_required). Required on every link in a POST /v1/payout/link/batch: the
+   * batch's Idempotency-Key is not carried over to the items
    */
   reference: string;
-  /** Заголовок — виден получателю на странице получения */
+  /** Title — visible to the recipient on the claim page */
   title?: string;
 }
 
 export interface PayoutLinkBatchRequest {
   /**
-   * До 500 ссылок за вызов; каждая проходит или падает независимо, ответ выровнен по индексам
-   * запроса. reference обязателен у каждой.
+   * Up to 500 links per call; each succeeds or fails independently, the response is aligned with
+   * the request indices. reference is required on each.
    */
   items: PayoutLinkBatchItem[];
 }
 
 export interface PayoutLinkBatchResult {
-  /** Элементы в порядке запроса; result — ответ одиночного POST /v1/payout/link. */
+  /** Items in request order; result — the response of a single POST /v1/payout/link. */
   items: PayoutLinkBatchResultItemsItem[];
 }
 
 export interface PayoutLinkBatchResultItemsItem {
-  /** Машинный код отказа; есть при ok=false. */
+  /** The machine code of the rejection; present when ok=false. */
   error_code?: string;
-  /** HTTP-статус, которым ответил бы одиночный вызов; есть при ok=false. */
+  /** The HTTP status a single call would have returned; present when ok=false. */
   http_status?: number;
-  /** Номер элемента в запросе. */
+  /** The item's number in the request. */
   idx: number;
-  /** Текст отказа; есть при ok=false. */
+  /** The rejection text; present when ok=false. */
   message?: string;
-  /** Элемент выполнен. */
+  /** The item was executed. */
   ok: boolean;
-  /** order_id элемента, если он был в запросе. */
+  /** The item's order_id, if it was in the request. */
   order_id?: string;
-  /** Результат одиночного вызова; есть при ok=true. */
+  /** The result of a single call; present when ok=true. */
   result?: PayoutLinkCreated;
 }
 
 export interface PayoutLinkChequeRequest {
   /**
-   * Секрет получения из ответа создания выплатной ссылки. Хранится только хешем и повторно не
-   * выдаётся — чек можно напечатать, лишь пока токен у вас.
+   * The claim secret from the payout link creation response. Stored only as a hash and not issued
+   * again — the cheque can be printed only while you still have the token.
    */
   claim_token: string;
   /**
-   * Язык документа — один из 41 поддерживаемого кода (en по умолчанию); полный список — в ошибке
-   * document.unknown_lang.
+   * Document language — one of the 41 supported codes (en by default); the full list is in the
+   * document.unknown_lang error.
    */
   lang?: string;
 }
 
 export interface PayoutLinkCreated {
-  /** Сумма ссылки — обещание получателю. */
+  /** The link amount — a promise to the recipient. */
   amount: string;
-  /** Пачка, в которой создана ссылка. */
+  /** The batch in which the link was created. */
   batch_id?: string;
-  /** Адрес, который указал получатель. */
+  /** The address the recipient specified. */
   claim_address?: string;
-  /** Секрет ссылки получения; выдаётся один раз и хранится только хешем. */
+  /** The claim link secret; issued once and stored only as a hash. */
   claim_token: string;
-  /** Страница получения; пусто, если публичный адрес не настроен. */
+  /** The claim page; empty if the public address is not configured. */
   claim_url: string;
-  /** Сетевая комиссия; null — оценить сейчас нельзя (ноль означал бы бесплатное получение). */
+  /** Network fee; null — cannot be estimated right now (zero would mean the claim is free). */
   commission: string | null;
-  /** Когда создана (UTC). */
+  /** When created (UTC). */
   created_at: string;
-  /** Актив выплаты. */
+  /** Payout asset. */
   currency: string;
-  /** Адрес, на который ушло письмо получателю. */
+  /** The address the email to the recipient was sent to. */
   email?: string;
-  /** До какого момента ссылку можно получить (UTC). */
+  /** Until when the link can be claimed (UTC). */
   expires_at: string;
-  /** Кто платит сетевую комиссию. */
+  /** Who pays the network fee. */
   fee_bearer: OpenEnum<PayoutLinkFeeBearer>;
-  /** exact — комиссия зафиксирована; estimated — оценка по текущей сети. */
+  /** exact — the fee is fixed; estimated — an estimate based on the current network. */
   fee_type: OpenEnum<FeeType>;
-  /** Идентификатор ссылки. */
+  /** Link id. */
   link_id: string;
-  /** Сеть выплаты. */
+  /** Payout network. */
   network: string;
-  /** Сообщение получателю. */
+  /** Message to the recipient. */
   note: string;
-  /** Сгенерированный код получения (passcode=auto); выдаётся один раз. */
+  /** The generated claim passcode (passcode=auto); issued once. */
   passcode?: string;
-  /** Получение требует кода. */
+  /** Claiming requires a passcode. */
   passcode_protected: boolean;
-  /** Сколько дойдёт получателю; null — сказать нельзя (комиссия не оценена или съела сумму). */
+  /**
+   * How much will reach the recipient; null — cannot be said (the fee was not estimated or ate the
+   * amount).
+   */
   payer_amount: string | null;
-  /** Выплата, порождённая получением; есть у полученной ссылки. */
+  /** The payout created by the claim; present on a claimed link. */
   payout_id?: string;
-  /** Ваш ключ дедупликации. */
+  /** Your deduplication key. */
   reference?: string;
-  /** Состояние ссылки. */
+  /** Link state. */
   status: OpenEnum<PayoutLinkStatus>;
-  /** Заголовок, видный получателю. */
+  /** Title visible to the recipient. */
   title: string;
 }
 
 export interface PayoutLinkIDRequest {
-  /** Идентификатор выплатной ссылки (link_id из ответа создания). */
+  /** The payout link id (link_id from the creation response). */
   link_id: string;
 }
 
 export interface PayoutLinkItem {
-  /** Сумма в currency, строкой; больше нуля */
+  /** The amount in currency, as a string; greater than zero */
   amount: string;
-  /** Крипто-актив выплаты (USDT, BTC, …); фиат невозможен */
+  /** The payout crypto asset (USDT, BTC, …); fiat is not possible */
   currency: string;
   /**
-   * Если задан — получателю уходит письмо с кнопкой «Получить средства»; сбой доставки не отменяет
-   * создание ссылки
+   * If set, the recipient gets an email with a "Claim funds" button; a delivery failure does not
+   * cancel the link creation
    */
   email?: string;
   /**
-   * Срок жизни ссылки в секундах, клампится в диапазон 3600–2592000 (час–30 суток); без поля или
-   * при 0 ссылка живёт 1 час, а не максимум — задавайте явно
+   * The link lifetime in seconds, clamped to the range 3600–2592000 (an hour to 30 days); without
+   * the field or at 0 the link lives 1 hour, not the maximum — set it explicitly
    */
   expires_in_seconds?: number;
   /**
-   * Кто платит сетевую комиссию: "recipient" (по умолчанию — вычитается из суммы, получателю придёт
-   * меньше) или "merchant" (резервируется сумма плюс комиссия, получателю придёт ровно amount)
+   * Who pays the network fee: "recipient" (default — deducted from the amount, the recipient gets
+   * less) or "merchant" (the amount plus the fee is reserved, the recipient gets exactly amount)
    */
   fee_bearer?: OpenEnum<PayoutLinkFeeBearer>;
-  /** Сеть выплаты получателю (tron, bitcoin, …) */
+  /** The network of the payout to the recipient (tron, bitcoin, …) */
   network: string;
-  /** Сообщение получателю (видно на странице получения и в письме) */
+  /** A message to the recipient (visible on the claim page and in the email) */
   note?: string;
   /**
-   * Код получения — второй фактор к ссылке: "auto" — сгенерируем и вернём ОДИН раз в ответе, либо
-   * свой (6–64 видимых символа), пусто — без кода. Код передавайте получателю ОТДЕЛЬНЫМ от ссылки
-   * каналом (в письмо он не кладётся); после 10 неверных вводов ссылка запирается.
+   * Claim passcode — a second factor for the link: "auto" — we generate it and return it ONCE in
+   * the response, or your own (6–64 visible characters), empty — no passcode. Give the passcode to
+   * the recipient over a channel SEPARATE from the link (it is not included in the email); after 10
+   * wrong attempts the link is locked.
    */
   passcode?: string;
   /**
-   * Ваш ключ дедупликации ссылки, уникальный на мерчанта: повтор с тем же reference не
-   * зарезервирует деньги второй раз. В одиночном POST /v1/payout/link необязателен — без него
-   * ключом становится заголовок Idempotency-Key, а без обоих запрос отвергается
-   * (payoutlink.idempotency_required). В пачке POST /v1/payout/link/batch обязателен у каждой
-   * ссылки: Idempotency-Key пачки на элементы не переносится
+   * Your deduplication key for the link, unique per merchant: a retry with the same reference will
+   * not reserve the money a second time. Optional in a single POST /v1/payout/link — without it the
+   * Idempotency-Key header becomes the key, and without both the request is rejected
+   * (payoutlink.idempotency_required). Required on every link in a POST /v1/payout/link/batch: the
+   * batch's Idempotency-Key is not carried over to the items
    */
   reference?: string;
-  /** Заголовок — виден получателю на странице получения */
+  /** Title — visible to the recipient on the claim page */
   title?: string;
 }
 
 export interface PayoutLinkView {
-  /** Сумма ссылки — обещание получателю. */
+  /** The link amount — a promise to the recipient. */
   amount: string;
-  /** Пачка, в которой создана ссылка. */
+  /** The batch in which the link was created. */
   batch_id?: string;
-  /** Адрес, который указал получатель. */
+  /** The address the recipient specified. */
   claim_address?: string;
-  /** Сетевая комиссия; null — оценить сейчас нельзя (ноль означал бы бесплатное получение). */
+  /** Network fee; null — cannot be estimated right now (zero would mean the claim is free). */
   commission: string | null;
-  /** Когда создана (UTC). */
+  /** When created (UTC). */
   created_at: string;
-  /** Актив выплаты. */
+  /** Payout asset. */
   currency: string;
-  /** Адрес, на который ушло письмо получателю. */
+  /** The address the email to the recipient was sent to. */
   email?: string;
-  /** До какого момента ссылку можно получить (UTC). */
+  /** Until when the link can be claimed (UTC). */
   expires_at: string;
-  /** Кто платит сетевую комиссию. */
+  /** Who pays the network fee. */
   fee_bearer: OpenEnum<PayoutLinkFeeBearer>;
-  /** exact — комиссия зафиксирована; estimated — оценка по текущей сети. */
+  /** exact — the fee is fixed; estimated — an estimate based on the current network. */
   fee_type: OpenEnum<FeeType>;
-  /** Идентификатор ссылки. */
+  /** Link id. */
   link_id: string;
-  /** Сеть выплаты. */
+  /** Payout network. */
   network: string;
-  /** Сообщение получателю. */
+  /** Message to the recipient. */
   note: string;
-  /** Получение требует кода. */
+  /** Claiming requires a passcode. */
   passcode_protected: boolean;
-  /** Сколько дойдёт получателю; null — сказать нельзя (комиссия не оценена или съела сумму). */
+  /**
+   * How much will reach the recipient; null — cannot be said (the fee was not estimated or ate the
+   * amount).
+   */
   payer_amount: string | null;
-  /** Выплата, порождённая получением; есть у полученной ссылки. */
+  /** The payout created by the claim; present on a claimed link. */
   payout_id?: string;
-  /** Ваш ключ дедупликации. */
+  /** Your deduplication key. */
   reference?: string;
-  /** Состояние ссылки. */
+  /** Link state. */
   status: OpenEnum<PayoutLinkStatus>;
-  /** Заголовок, видный получателю. */
+  /** Title visible to the recipient. */
   title: string;
 }
 
 export interface PayoutLinkViewList {
-  /** Записи этой страницы. */
+  /** The records of this page. */
   items: PayoutLinkView[];
-  /** Блок пагинации. */
+  /** Pagination block. */
   paginate: Pagination;
 }
 
 export interface PayoutRequest {
-  /** Адрес получателя. */
+  /** Recipient address. */
   address: string;
-  /** Сумма выплаты в валюте currency. */
+  /** The payout amount in currency. */
   amount: string;
-  /** Код валюты (например USDT). */
+  /** Currency code (e.g. USDT). */
   currency: string;
-  /** Профинансировать выплату конвертацией баланса. Только USDT → currency. */
+  /** Fund the payout by converting balance. USDT → currency only. */
   from_currency?: string;
   /**
-   * Кто платит сетевую комиссию: true — с баланса списывается amount+fee, получатель получает
-   * amount; false — получатель получает amount-fee; не передано — fee-config проекта.
+   * Who pays the network fee: true — amount+fee is debited from the balance, the recipient gets
+   * amount; false — the recipient gets amount-fee; omitted — the project's fee-config.
    */
   is_subtract?: boolean | null;
-  /** Тег/мемо назначения (TON Jetton). Максимум 120 символов. */
+  /** Destination tag/memo (TON Jetton). At most 120 characters. */
   memo?: string;
-  /** Сеть (tron, ethereum, …). Обязательна для монет с несколькими сетями. */
+  /** Network (tron, ethereum, …). Required for coins with several networks. */
   network?: string;
-  /** Ваш номер выплаты; ключ идемпотентности. */
+  /** Your payout number; the idempotency key. */
   order_id: string;
-  /** Метка происхождения: api (по умолчанию) или manual. */
+  /** The origin label: api (default) or manual. */
   source?: string;
   /**
-   * Свой URL вебхука для этой выплаты (проходит SSRF-проверку). Требует зарегистрированного
-   * эндпоинта (POST /v1/webhooks): доставка подписывается его секретом.
+   * Your own webhook URL for this payout (passes the SSRF check). Requires a registered endpoint
+   * (POST /v1/webhooks): the delivery is signed with its secret.
    */
   url_callback?: string;
 }
 
 export interface PayoutValidateRequest {
-  /** Адрес получателя. */
+  /** Recipient address. */
   address: string;
-  /** Сумма выплаты в валюте currency. */
+  /** The payout amount in currency. */
   amount: string;
-  /** Код валюты (например USDT). */
+  /** Currency code (e.g. USDT). */
   currency: string;
-  /** Профинансировать выплату конвертацией баланса. Только USDT → currency. */
+  /** Fund the payout by converting balance. USDT → currency only. */
   from_currency?: string;
   /**
-   * Кто платит сетевую комиссию: true — с баланса списывается amount+fee, получатель получает
-   * amount; false — получатель получает amount-fee; не передано — fee-config проекта.
+   * Who pays the network fee: true — amount+fee is debited from the balance, the recipient gets
+   * amount; false — the recipient gets amount-fee; omitted — the project's fee-config.
    */
   is_subtract?: boolean | null;
-  /** Тег/мемо назначения (TON Jetton). Максимум 120 символов. */
+  /** Destination tag/memo (TON Jetton). At most 120 characters. */
   memo?: string;
-  /** Сеть (tron, ethereum, …). Обязательна для монет с несколькими сетями. */
+  /** Network (tron, ethereum, …). Required for coins with several networks. */
   network?: string;
-  /** Ваш номер выплаты; ключ идемпотентности. */
+  /** Your payout number; the idempotency key. */
   order_id?: string;
-  /** Метка происхождения: api (по умолчанию) или manual. */
+  /** The origin label: api (default) or manual. */
   source?: string;
   /**
-   * Свой URL вебхука для этой выплаты (проходит SSRF-проверку). Требует зарегистрированного
-   * эндпоинта (POST /v1/webhooks): доставка подписывается его секретом.
+   * Your own webhook URL for this payout (passes the SSRF check). Requires a registered endpoint
+   * (POST /v1/webhooks): the delivery is signed with its secret.
    */
   url_callback?: string;
 }
 
 export interface PayoutValidateResult {
-  /** Сколько спишется с баланса. */
+  /** How much will be debited from the balance. */
   amount: string;
-  /** Сетевая комиссия. */
+  /** Network fee. */
   commission: string;
-  /** Валюта выплаты. */
+  /** Payout currency. */
   currency: string;
-  /** Кто платит сетевую комиссию. */
+  /** Who pays the network fee. */
   fee_bearer: OpenEnum<PayoutFeeBearer>;
   /**
-   * Валюта, конвертацией которой профинансируется выплата (from_currency); есть только у такой
-   * выплаты.
+   * The currency whose conversion funds the payout (from_currency); present only on such a payout.
    */
   funded_by?: string;
-  /** Что именно проверено по балансу и что проверится при исполнении. */
+  /** What exactly was checked against the balance and what will be checked at execution. */
   maturity_note: string;
-  /** Сеть выплаты в каноническом написании. */
+  /** The payout network in canonical spelling. */
   network: string;
-  /** Сколько дойдёт получателю. */
+  /** How much will reach the recipient. */
   payer_amount: string;
-  /** Всегда true: не прошедшая проверка отвечает ошибкой с кодом причины. */
+  /** Always true: a failed check responds with an error carrying the reason code. */
   valid: boolean;
 }
 
 export interface PayoutView {
-  /** Адрес получателя. */
+  /** Recipient address. */
   address: string;
-  /** Сумма выплаты в валюте currency, списанная с вашего баланса. */
+  /** The payout amount in currency, debited from your balance. */
   amount: string;
-  /** true — выплата ждёт подтверждения (внутренние сценарии; по API-ключу всегда false). */
+  /** true — the payout is awaiting approval (internal scenarios; always false with an API key). */
   approval_required: boolean;
-  /** Удержанная сетевая комиссия, в валюте выплаты. 0 — комиссию поглотил шлюз. */
+  /** The withheld network fee, in the payout currency. 0 — the gateway absorbed the fee. */
   commission: string;
-  /** Время создания (ISO 8601). */
+  /** Creation time (ISO 8601). */
   created_at: string;
-  /** Код валюты выплаты. */
+  /** Payout currency code. */
   currency: string;
   /**
-   * Подписанная ссылка на PDF-чек этой операции — открывается без API-ключа, можно вложить в письмо
-   * или отдать получателю. Пусто, если генерация документов не включена.
+   * A signed link to the PDF receipt of this operation — opens without an API key, can be attached
+   * to an email or given to the recipient. Empty if document generation is not enabled.
    */
   document_url: string;
   /**
-   * Кто заплатил сетевую комиссию: gateway — шлюз поглотил её (commission = 0); merchant — сумма
-   * списания увеличена на комиссию, получатель получает запрошенное целиком (is_subtract=true,
-   * выплатная ссылка с fee_bearer=merchant); recipient — комиссия удержана из выплаты, получателю
-   * приходит меньше запрошенного.
+   * Who paid the network fee: gateway — the gateway absorbed it (commission = 0); merchant — the
+   * debit amount was increased by the fee, the recipient gets the full requested amount
+   * (is_subtract=true, a payout link with fee_bearer=merchant); recipient — the fee was withheld
+   * from the payout, the recipient gets less than requested.
    */
   fee_bearer: OpenEnum<PayoutFeeBearer>;
-  /** true — статус финальный (confirmed / failed / cancelled). */
+  /** true — the status is final (confirmed / failed / cancelled). */
   is_final: boolean;
-  /** true — это возврат платежа, а не обычная выплата. */
+  /** true — this is a payment refund, not a regular payout. */
   is_refund: boolean;
-  /** Тег/мемо назначения, переданный при создании (TON Jetton, memo-биржи). Пусто — без мемо. */
+  /** The destination tag/memo passed at creation (TON Jetton, exchange memos). Empty — no memo. */
   memo: string;
-  /** Сеть блокчейна. */
+  /** Blockchain network. */
   network: string;
   /**
-   * Ваш номер (reference) выплаты. У возврата — null: возврат не имеет вашего идентификатора, см.
+   * Your payout number (reference). null for a refund: a refund has no identifier of yours, see
    * payment_order_id.
    */
   order_id: string | null;
-  /** Сколько реально уходит получателю на адрес: amount − commission. */
+  /** How much actually goes to the recipient's address: amount − commission. */
   payer_amount: string;
   /**
-   * Ваш order_id платежа, по которому сделан возврат (null у обычной выплаты). У возврата
-   * собственного order_id нет — он приходит null, а сверять возврат с заказом нужно по этому полю.
+   * Your order_id of the payment that was refunded (null for a regular payout). A refund has no
+   * order_id of its own — it comes as null, so match a refund to an order by this field.
    */
   payment_order_id: string | null;
-  /** Идентификатор возвращаемого платежа (null, если это не возврат). */
+  /** The id of the payment being refunded (null if this is not a refund). */
   refund_for: string | null;
-  /** api (через интеграцию) | manual (из кабинета). */
+  /** api (via the integration) | manual (from the dashboard). */
   source: OpenEnum<PayoutSource>;
   /**
-   * Статус выплаты: pending (создана, ждёт) | approved (одобрена) | awaiting_cosign (ждёт второй
-   * подписи) | broadcasting (отправляется) | sent (отправлена, ждёт подтверждений) | confirmed
-   * (подтверждена — готово) | failed | cancelled. Значение можно передать обратно в фильтр истории
-   * как есть.
+   * Payout status: pending (created, waiting) | approved (approved) | awaiting_cosign (waiting for
+   * the second signature) | broadcasting (being broadcast) | sent (sent, awaiting confirmations) |
+   * confirmed (confirmed — done) | failed | cancelled. The value can be passed back to the history
+   * filter as is.
    */
   status: OpenEnum<PayoutStatus>;
-  /** Хеш транзакции в блокчейне (появляется после отправки). */
+  /** The blockchain transaction hash (appears after sending). */
   txid: string;
-  /** Время последнего изменения (ISO 8601). */
+  /** Time of the last change (ISO 8601). */
   updated_at: string;
-  /** Идентификатор выплаты. */
+  /** Payout id. */
   uuid: string;
 }
 
 export interface PayoutViewList {
-  /** Записи этой страницы. */
+  /** The records of this page. */
   items: PayoutView[];
-  /** Блок пагинации. */
+  /** Pagination block. */
   paginate: Pagination;
 }
 
 /**
- * Приходит на каждом переходе выплаты. Тело — тот же объект, что отвечают ручки выплат. Возврат
- * платежа — это выплата с is_refund = true: его события тоже payout.*, сверять с платежом по
- * refund_for и payment_order_id.
+ * Sent on every payout transition. The body is the same object the payout endpoints return. A
+ * payment refund is a payout with is_refund = true: its events are payout.* as well; match it to
+ * the payment by refund_for and payment_order_id.
  */
 export interface PayoutWebhook {
-  /** Адрес получателя. */
+  /** Recipient address. */
   address: string;
-  /** Сумма выплаты в валюте currency, списанная с вашего баланса. */
+  /** The payout amount in currency, debited from your balance. */
   amount: string;
-  /** true — выплата ждёт подтверждения (внутренние сценарии; по API-ключу всегда false). */
+  /** true — the payout is awaiting approval (internal scenarios; always false with an API key). */
   approval_required: boolean;
-  /** Удержанная сетевая комиссия, в валюте выплаты. 0 — комиссию поглотил шлюз. */
+  /** The withheld network fee, in the payout currency. 0 — the gateway absorbed the fee. */
   commission: string;
-  /** Время создания (ISO 8601). */
+  /** Creation time (ISO 8601). */
   created_at: string;
-  /** Код валюты выплаты. */
+  /** Payout currency code. */
   currency: string;
   /**
-   * Подписанная ссылка на PDF-чек этой операции — открывается без API-ключа, можно вложить в письмо
-   * или отдать получателю. Пусто, если генерация документов не включена.
+   * A signed link to the PDF receipt of this operation — opens without an API key, can be attached
+   * to an email or given to the recipient. Empty if document generation is not enabled.
    */
   document_url: string;
-  /** Когда событие произошло, UTC с миллисекундами (ISO 8601). */
+  /** When the event happened, UTC with milliseconds (ISO 8601). */
   event_at: string;
   /**
-   * Кто заплатил сетевую комиссию: gateway — шлюз поглотил её (commission = 0); merchant — сумма
-   * списания увеличена на комиссию, получатель получает запрошенное целиком (is_subtract=true,
-   * выплатная ссылка с fee_bearer=merchant); recipient — комиссия удержана из выплаты, получателю
-   * приходит меньше запрошенного.
+   * Who paid the network fee: gateway — the gateway absorbed it (commission = 0); merchant — the
+   * debit amount was increased by the fee, the recipient gets the full requested amount
+   * (is_subtract=true, a payout link with fee_bearer=merchant); recipient — the fee was withheld
+   * from the payout, the recipient gets less than requested.
    */
   fee_bearer: OpenEnum<PayoutFeeBearer>;
-  /** true — статус финальный (confirmed / failed / cancelled). */
+  /** true — the status is final (confirmed / failed / cancelled). */
   is_final: boolean;
-  /** true — это возврат платежа, а не обычная выплата. */
+  /** true — this is a payment refund, not a regular payout. */
   is_refund: boolean;
-  /** Тег/мемо назначения, переданный при создании (TON Jetton, memo-биржи). Пусто — без мемо. */
+  /** The destination tag/memo passed at creation (TON Jetton, exchange memos). Empty — no memo. */
   memo: string;
-  /** Сеть блокчейна. */
+  /** Blockchain network. */
   network: string;
   /**
-   * Ваш номер (reference) выплаты. У возврата — null: возврат не имеет вашего идентификатора, см.
+   * Your payout number (reference). null for a refund: a refund has no identifier of yours, see
    * payment_order_id.
    */
   order_id: string | null;
-  /** Сколько реально уходит получателю на адрес: amount − commission. */
+  /** How much actually goes to the recipient's address: amount − commission. */
   payer_amount: string;
   /**
-   * Ваш order_id платежа, по которому сделан возврат (null у обычной выплаты). У возврата
-   * собственного order_id нет — он приходит null, а сверять возврат с заказом нужно по этому полю.
+   * Your order_id of the payment that was refunded (null for a regular payout). A refund has no
+   * order_id of its own — it comes as null, so match a refund to an order by this field.
    */
   payment_order_id: string | null;
-  /** Идентификатор возвращаемого платежа (null, если это не возврат). */
+  /** The id of the payment being refunded (null if this is not a refund). */
   refund_for: string | null;
   /**
-   * Глобальный номер события: в пределах одного объекта больший номер новее, меньший — опоздавшая
-   * доставка, её нужно отбросить. У репетиции (test: true) всегда 0.
+   * The global event number: within one object a higher number is newer, a lower one is a late
+   * delivery and must be discarded. Always 0 on a rehearsal (test: true).
    */
   sequence: number;
-  /** api (через интеграцию) | manual (из кабинета). */
+  /** api (via the integration) | manual (from the dashboard). */
   source: OpenEnum<PayoutSource>;
   /**
-   * Статус выплаты: pending (создана, ждёт) | approved (одобрена) | awaiting_cosign (ждёт второй
-   * подписи) | broadcasting (отправляется) | sent (отправлена, ждёт подтверждений) | confirmed
-   * (подтверждена — готово) | failed | cancelled. Значение можно передать обратно в фильтр истории
-   * как есть.
+   * Payout status: pending (created, waiting) | approved (approved) | awaiting_cosign (waiting for
+   * the second signature) | broadcasting (being broadcast) | sent (sent, awaiting confirmations) |
+   * confirmed (confirmed — done) | failed | cancelled. The value can be passed back to the history
+   * filter as is.
    */
   status: OpenEnum<PayoutStatus>;
   /**
-   * Есть только у репетиции (/v1/test-webhook/*, /v1/payment/testing-webhook) и всегда true —
-   * внутри подписи. Боевое событие этого поля не несёт никогда: тело с test: true обработчик обязан
-   * игнорировать, даже если подпись верна.
+   * Present only on a rehearsal (/v1/test-webhook/*, /v1/payment/testing-webhook) and always true —
+   * inside the signature. A live event never carries this field: your handler must ignore a body
+   * with test: true even if the signature is valid.
    */
   test?: boolean;
-  /** Хеш транзакции в блокчейне (появляется после отправки). */
+  /** The blockchain transaction hash (appears after sending). */
   txid: string;
-  /** Вид события: payment | payout | wallet | conversion — какое тело пришло. */
+  /** Event kind: payment | payout | wallet | conversion — which body arrived. */
   type: string;
-  /** Время последнего изменения (ISO 8601). */
+  /** Time of the last change (ISO 8601). */
   updated_at: string;
-  /** Идентификатор выплаты. */
+  /** Payout id. */
   uuid: string;
 }
 
 export interface PricingCurrency {
-  /** Код для поля currency при создании счёта. */
+  /** The code for the currency field when creating an invoice. */
   currency: string;
-  /** Знаков после запятой. */
+  /** Decimal places. */
   decimals: number;
-  /** Фиат: счёт в нём выставляется, но оплачивается монетой. */
+  /** Fiat: an invoice can be priced in it, but is paid with a coin. */
   fiat: boolean;
 }
 
 export interface PublicPayResult {
-  /** Способы оплаты, из которых выбирает покупатель; есть только у счёта в статусе select. */
+  /** The payment methods the buyer chooses from; present only on an invoice in status select. */
   accepted?: AcceptedMethod[];
   /**
-   * Адрес, на который клиент отправляет деньги. На XRP это классический r-адрес ОБЩЕГО кошелька —
-   * платёж обязан нести destination_tag, иначе сеть его отклонит.
+   * The address the customer sends money to. On XRP this is the classic r-address of a SHARED
+   * wallet — the payment must carry destination_tag, otherwise the network rejects it.
    */
   address: string;
   /**
-   * Только XLM: те же реквизиты одной строкой — muxed-адрес M… (SEP-23), адрес и memo вместе; его
-   * же кодирует QR. Пусто на остальных сетях.
+   * XLM only: the same payment details in one string — a muxed M… address (SEP-23), address and
+   * memo together; the QR code encodes it as well. Empty on other networks.
    */
   address_muxed: string;
   /**
-   * QR-код адреса как PNG data:-URI — можно сразу в <img src>. На XRP кодирует X-address (адрес+тег
-   * одной строкой).
+   * The address QR code as a PNG data: URI — can go straight into <img src>. On XRP it encodes the
+   * X-address (address + tag in one string).
    */
   address_qr_code: string;
   /**
-   * Только XRP: те же реквизиты одной строкой в формате X-address (XLS-5) — адрес и тег вместе; его
-   * же кодирует QR. Пусто на остальных сетях.
+   * XRP only: the same payment details in one string in X-address format (XLS-5) — address and tag
+   * together; the QR code encodes it as well. Empty on other networks.
    */
   address_xaddress: string;
-  /** Сумма к оплате в валюте цены (например, в USD). */
+  /** The amount to pay in the price currency (e.g. USD). */
   amount: string;
   /**
-   * Сколько уже подтверждённо оплачено, в крипте оплаты; всегда строка (0, если ничего не пришло).
-   * Пусто, пока валюта оплаты не выбрана (счёт без валюты).
+   * How much has already been paid and confirmed, in the payment crypto; always a string (0 if
+   * nothing has arrived). Empty until the payment currency is chosen (an invoice without a
+   * currency).
    */
   amount_paid: string;
   /**
-   * Сколько ещё осталось доплатить (к оплате − оплачено); 0, если хватает. Пусто, пока валюта
-   * оплаты не выбрана (счёт без валюты).
+   * How much is still left to pay (due − paid); 0 if enough has been paid. Empty until the payment
+   * currency is chosen (an invoice without a currency).
    */
   amount_remaining: string;
-  /** Текущее число подтверждений входящего платежа. */
+  /** The current number of confirmations of the incoming payment. */
   confirmations: number;
-  /** Время создания (ISO 8601). */
+  /** Creation time (ISO 8601). */
   created_at: string;
   /**
-   * Валюта цены: фиат (USD, EUR, RUB, JPY… — см. pricing_currencies) или монета. Говорит, сколько
-   * счёт СТОИТ, а не чем за него платят (это payer_currency).
+   * The price currency: fiat (USD, EUR, RUB, JPY… — see pricing_currencies) or a coin. It says how
+   * much the invoice COSTS, not what it is paid with (that is payer_currency).
    */
   currency: string;
   /**
-   * Только XRP: числовой destination tag, который клиент ОБЯЗАН указать в переводе (поле «тег/memo
-   * получателя» на бирже или в кошельке). Пусто на остальных сетях.
+   * XRP only: the numeric destination tag the customer MUST specify in the transfer (the "recipient
+   * tag/memo" field at the exchange or in the wallet). Empty on other networks.
    */
   destination_tag: string;
-  /** Когда истекает счёт (ISO 8601, как и все временные поля). */
+  /** When the invoice expires (ISO 8601, like all time fields). */
   expired_at: string;
-  /** Можно ли сейчас оплатить картой через он-рамп. */
+  /** Whether paying by card via an on-ramp is possible right now. */
   fiat_purchase_available: boolean;
-  /** true — статус финальный, больше не изменится. */
+  /** true — the status is final and will not change again. */
   is_final: boolean;
-  /** true — это валюто-агностичная ссылка, клиент ещё не выбрал валюту/сеть. */
+  /**
+   * true — this is a currency-agnostic link; the customer has not chosen the currency/network yet.
+   */
   is_multi: boolean;
   /**
-   * Только XLM (Stellar): числовой memo (тип ID), который клиент ОБЯЗАН указать в переводе — поле
-   * «memo» на бирже или в кошельке. Пусто на остальных сетях.
+   * XLM (Stellar) only: the numeric memo (ID type) the customer MUST specify in the transfer — the
+   * "memo" field at the exchange or in the wallet. Empty on other networks.
    */
   memo: string;
   /**
-   * Ваша скидка или наценка для ВЫБРАННОГО способа оплаты, в валюте оплаты: на столько сдвинулась
-   * сумма плательщика из-за настройки по этой монете и сети. Положительное — плательщик платит
-   * МЕНЬШЕ (скидка), отрицательное — больше (наценка). Пусто, если настройки для метода нет.
+   * Your discount or surcharge for the CHOSEN payment method, in the payment currency: how much the
+   * payer's amount shifted because of the setting for this coin and network. Positive — the payer
+   * pays LESS (discount), negative — more (surcharge). Empty if there is no setting for the method.
    */
   method_adjustment: string;
   /**
-   * Та же скидка/наценка в базисных пунктах (так она переживает переоценку курса). Знак тот же, что
-   * в настройке скидок: ПЛЮС — скидка, МИНУС — наценка.
+   * The same discount/surcharge in basis points (this way it survives a rate re-quote). The sign is
+   * the same as in the discount setting: PLUS — a discount, MINUS — a surcharge.
    */
   method_adjustment_bps: number;
-  /** Сеть блокчейна (например, tron). */
+  /** Blockchain network (e.g. tron). */
   network: string;
   /**
-   * Сетевая надбавка плательщика в валюте оплаты: стоимость сбора депозита в выбранной сети
-   * (активация адреса, если адрес новый, плюс энергия/газ с запасом), зафиксированная при выборе
-   * сети. Пусто до выбора сети; 0, если надбавка выключена.
+   * The payer's network surcharge in the payment currency: the cost of sweeping the deposit on the
+   * chosen network (address activation, if the address is new, plus energy/gas with a margin),
+   * locked in when the network is chosen. Empty until the network is chosen; 0 if the surcharge is
+   * disabled.
    */
   network_surcharge: string;
-  /** Та же надбавка в базисных пунктах от суммы к оплате (так она переживает переоценку курса). */
+  /**
+   * The same surcharge in basis points of the amount due (this way it survives a rate re-quote).
+   */
   network_surcharge_bps: number;
-  /** Ваш номер заказа, который вы передали при создании. */
+  /** Your order number that you passed at creation. */
   order_id: string;
   /**
-   * Сколько нужно отправить в крипте оплаты. Пусто, пока валюта оплаты не выбрана (счёт без
-   * валюты).
+   * How much must be sent in the payment crypto. Empty until the payment currency is chosen (an
+   * invoice without a currency).
    */
   payer_amount: string;
   /**
-   * Валюта, в которой платит клиент (например, USDT). Пусто у валюто-агностичного счёта (is_multi),
-   * пока клиент не выбрал монету — валюты расчёта у него ещё нет.
+   * The currency the customer pays in (e.g. USDT). Empty for a currency-agnostic invoice (is_multi)
+   * until the customer picks a coin — it has no settlement currency yet.
    */
   payer_currency: string;
   /**
-   * До какого момента действует зафиксированный payer_amount (ISO 8601; окно ~5 мин, после него
-   * страница оплаты перекотирует счёт). Пусто, когда перекотировки уже не будет: валюта не выбрана,
-   * депозит замечен, счёт вышел из created или истёк — сумма зафиксирована навсегда.
+   * Until when the locked payer_amount is valid (ISO 8601; a ~5 min window, after which the payment
+   * page re-quotes the invoice). Empty when there will be no more re-quotes: the currency has not
+   * been chosen, a deposit has been seen, the invoice has left created or expired — the amount is
+   * locked for good.
    */
   rate_expires_at: string;
-  /** Сколько подтверждений нужно для зачисления (зависит от суммы и сети). */
+  /** How many confirmations are required for crediting (depends on the amount and the network). */
   required_confirmations: number;
   /**
-   * Статус: select (клиент выбирает валюту) | created (ждём оплату) | confirm_check (видим оплату,
-   * ждём подтверждений; при amount_remaining > 0 — частичная, ждём остаток) | paid (оплачено) |
-   * paid_over (переплата) | wrong_amount (недоплата, срок вышел) | expired (просрочен) | cancelled
-   * (отменён) | under_review (поступление задержано на проверке, разбирает оператор).
+   * Status: select (the customer is choosing a currency) | created (awaiting payment) |
+   * confirm_check (payment seen, awaiting confirmations; with amount_remaining > 0 — partial,
+   * awaiting the remainder) | paid (paid) | paid_over (overpaid) | wrong_amount (underpaid,
+   * expired) | expired (expired) | cancelled (cancelled) | under_review (the deposit is held for
+   * review, an operator is handling it).
    */
   status: OpenEnum<PaymentStatus>;
-  /** Хеш входящей транзакции (когда замечена). */
+  /** The hash of the incoming transaction (once seen). */
   txid: string;
-  /** Время последнего изменения (ISO 8601). */
+  /** Time of the last change (ISO 8601). */
   updated_at: string;
-  /** Ссылка на готовую страницу оплаты. */
+  /** A link to the ready-made payment page. */
   url: string;
-  /** Ссылка «вернуться в магазин» до оплаты. */
+  /** The "back to store" link before payment. */
   url_return: string;
-  /** Куда перенаправить после успешной оплаты. */
+  /** Where to redirect after a successful payment. */
   url_success: string;
-  /** Наш идентификатор платежа (используйте его в info/refund). */
+  /** Our payment identifier (use it in info/refund). */
   uuid: string;
 }
 
 export interface PublicPaymentView {
   /**
-   * Адрес, на который клиент отправляет деньги. На XRP это классический r-адрес ОБЩЕГО кошелька —
-   * платёж обязан нести destination_tag, иначе сеть его отклонит.
+   * The address the customer sends money to. On XRP this is the classic r-address of a SHARED
+   * wallet — the payment must carry destination_tag, otherwise the network rejects it.
    */
   address: string;
   /**
-   * Только XLM: те же реквизиты одной строкой — muxed-адрес M… (SEP-23), адрес и memo вместе; его
-   * же кодирует QR. Пусто на остальных сетях.
+   * XLM only: the same payment details in one string — a muxed M… address (SEP-23), address and
+   * memo together; the QR code encodes it as well. Empty on other networks.
    */
   address_muxed: string;
   /**
-   * QR-код адреса как PNG data:-URI — можно сразу в <img src>. На XRP кодирует X-address (адрес+тег
-   * одной строкой).
+   * The address QR code as a PNG data: URI — can go straight into <img src>. On XRP it encodes the
+   * X-address (address + tag in one string).
    */
   address_qr_code: string;
   /**
-   * Только XRP: те же реквизиты одной строкой в формате X-address (XLS-5) — адрес и тег вместе; его
-   * же кодирует QR. Пусто на остальных сетях.
+   * XRP only: the same payment details in one string in X-address format (XLS-5) — address and tag
+   * together; the QR code encodes it as well. Empty on other networks.
    */
   address_xaddress: string;
-  /** Сумма к оплате в валюте цены (например, в USD). */
+  /** The amount to pay in the price currency (e.g. USD). */
   amount: string;
   /**
-   * Сколько уже подтверждённо оплачено, в крипте оплаты; всегда строка (0, если ничего не пришло).
-   * Пусто, пока валюта оплаты не выбрана (счёт без валюты).
+   * How much has already been paid and confirmed, in the payment crypto; always a string (0 if
+   * nothing has arrived). Empty until the payment currency is chosen (an invoice without a
+   * currency).
    */
   amount_paid: string;
   /**
-   * Сколько ещё осталось доплатить (к оплате − оплачено); 0, если хватает. Пусто, пока валюта
-   * оплаты не выбрана (счёт без валюты).
+   * How much is still left to pay (due − paid); 0 if enough has been paid. Empty until the payment
+   * currency is chosen (an invoice without a currency).
    */
   amount_remaining: string;
-  /** Текущее число подтверждений входящего платежа. */
+  /** The current number of confirmations of the incoming payment. */
   confirmations: number;
-  /** Время создания (ISO 8601). */
+  /** Creation time (ISO 8601). */
   created_at: string;
   /**
-   * Валюта цены: фиат (USD, EUR, RUB, JPY… — см. pricing_currencies) или монета. Говорит, сколько
-   * счёт СТОИТ, а не чем за него платят (это payer_currency).
+   * The price currency: fiat (USD, EUR, RUB, JPY… — see pricing_currencies) or a coin. It says how
+   * much the invoice COSTS, not what it is paid with (that is payer_currency).
    */
   currency: string;
   /**
-   * Только XRP: числовой destination tag, который клиент ОБЯЗАН указать в переводе (поле «тег/memo
-   * получателя» на бирже или в кошельке). Пусто на остальных сетях.
+   * XRP only: the numeric destination tag the customer MUST specify in the transfer (the "recipient
+   * tag/memo" field at the exchange or in the wallet). Empty on other networks.
    */
   destination_tag: string;
-  /** Когда истекает счёт (ISO 8601, как и все временные поля). */
+  /** When the invoice expires (ISO 8601, like all time fields). */
   expired_at: string;
-  /** true — статус финальный, больше не изменится. */
+  /** true — the status is final and will not change again. */
   is_final: boolean;
-  /** true — это валюто-агностичная ссылка, клиент ещё не выбрал валюту/сеть. */
+  /**
+   * true — this is a currency-agnostic link; the customer has not chosen the currency/network yet.
+   */
   is_multi: boolean;
   /**
-   * Только XLM (Stellar): числовой memo (тип ID), который клиент ОБЯЗАН указать в переводе — поле
-   * «memo» на бирже или в кошельке. Пусто на остальных сетях.
+   * XLM (Stellar) only: the numeric memo (ID type) the customer MUST specify in the transfer — the
+   * "memo" field at the exchange or in the wallet. Empty on other networks.
    */
   memo: string;
   /**
-   * Ваша скидка или наценка для ВЫБРАННОГО способа оплаты, в валюте оплаты: на столько сдвинулась
-   * сумма плательщика из-за настройки по этой монете и сети. Положительное — плательщик платит
-   * МЕНЬШЕ (скидка), отрицательное — больше (наценка). Пусто, если настройки для метода нет.
+   * Your discount or surcharge for the CHOSEN payment method, in the payment currency: how much the
+   * payer's amount shifted because of the setting for this coin and network. Positive — the payer
+   * pays LESS (discount), negative — more (surcharge). Empty if there is no setting for the method.
    */
   method_adjustment: string;
   /**
-   * Та же скидка/наценка в базисных пунктах (так она переживает переоценку курса). Знак тот же, что
-   * в настройке скидок: ПЛЮС — скидка, МИНУС — наценка.
+   * The same discount/surcharge in basis points (this way it survives a rate re-quote). The sign is
+   * the same as in the discount setting: PLUS — a discount, MINUS — a surcharge.
    */
   method_adjustment_bps: number;
-  /** Сеть блокчейна (например, tron). */
+  /** Blockchain network (e.g. tron). */
   network: string;
   /**
-   * Сетевая надбавка плательщика в валюте оплаты: стоимость сбора депозита в выбранной сети
-   * (активация адреса, если адрес новый, плюс энергия/газ с запасом), зафиксированная при выборе
-   * сети. Пусто до выбора сети; 0, если надбавка выключена.
+   * The payer's network surcharge in the payment currency: the cost of sweeping the deposit on the
+   * chosen network (address activation, if the address is new, plus energy/gas with a margin),
+   * locked in when the network is chosen. Empty until the network is chosen; 0 if the surcharge is
+   * disabled.
    */
   network_surcharge: string;
-  /** Та же надбавка в базисных пунктах от суммы к оплате (так она переживает переоценку курса). */
+  /**
+   * The same surcharge in basis points of the amount due (this way it survives a rate re-quote).
+   */
   network_surcharge_bps: number;
-  /** Ваш номер заказа, который вы передали при создании. */
+  /** Your order number that you passed at creation. */
   order_id: string;
   /**
-   * Сколько нужно отправить в крипте оплаты. Пусто, пока валюта оплаты не выбрана (счёт без
-   * валюты).
+   * How much must be sent in the payment crypto. Empty until the payment currency is chosen (an
+   * invoice without a currency).
    */
   payer_amount: string;
   /**
-   * Валюта, в которой платит клиент (например, USDT). Пусто у валюто-агностичного счёта (is_multi),
-   * пока клиент не выбрал монету — валюты расчёта у него ещё нет.
+   * The currency the customer pays in (e.g. USDT). Empty for a currency-agnostic invoice (is_multi)
+   * until the customer picks a coin — it has no settlement currency yet.
    */
   payer_currency: string;
   /**
-   * До какого момента действует зафиксированный payer_amount (ISO 8601; окно ~5 мин, после него
-   * страница оплаты перекотирует счёт). Пусто, когда перекотировки уже не будет: валюта не выбрана,
-   * депозит замечен, счёт вышел из created или истёк — сумма зафиксирована навсегда.
+   * Until when the locked payer_amount is valid (ISO 8601; a ~5 min window, after which the payment
+   * page re-quotes the invoice). Empty when there will be no more re-quotes: the currency has not
+   * been chosen, a deposit has been seen, the invoice has left created or expired — the amount is
+   * locked for good.
    */
   rate_expires_at: string;
-  /** Сколько подтверждений нужно для зачисления (зависит от суммы и сети). */
+  /** How many confirmations are required for crediting (depends on the amount and the network). */
   required_confirmations: number;
   /**
-   * Статус: select (клиент выбирает валюту) | created (ждём оплату) | confirm_check (видим оплату,
-   * ждём подтверждений; при amount_remaining > 0 — частичная, ждём остаток) | paid (оплачено) |
-   * paid_over (переплата) | wrong_amount (недоплата, срок вышел) | expired (просрочен) | cancelled
-   * (отменён) | under_review (поступление задержано на проверке, разбирает оператор).
+   * Status: select (the customer is choosing a currency) | created (awaiting payment) |
+   * confirm_check (payment seen, awaiting confirmations; with amount_remaining > 0 — partial,
+   * awaiting the remainder) | paid (paid) | paid_over (overpaid) | wrong_amount (underpaid,
+   * expired) | expired (expired) | cancelled (cancelled) | under_review (the deposit is held for
+   * review, an operator is handling it).
    */
   status: OpenEnum<PaymentStatus>;
-  /** Хеш входящей транзакции (когда замечена). */
+  /** The hash of the incoming transaction (once seen). */
   txid: string;
-  /** Время последнего изменения (ISO 8601). */
+  /** Time of the last change (ISO 8601). */
   updated_at: string;
-  /** Ссылка на готовую страницу оплаты. */
+  /** A link to the ready-made payment page. */
   url: string;
-  /** Ссылка «вернуться в магазин» до оплаты. */
+  /** The "back to store" link before payment. */
   url_return: string;
-  /** Куда перенаправить после успешной оплаты. */
+  /** Where to redirect after a successful payment. */
   url_success: string;
-  /** Наш идентификатор платежа (используйте его в info/refund). */
+  /** Our payment identifier (use it in info/refund). */
   uuid: string;
 }
 
 export interface QrRequest {
-  /** Произвольный адрес для рендера в QR-код (PNG как data:-URI). */
+  /** An arbitrary address to render into a QR code (PNG as a data: URI). */
   address: string;
 }
 
 export interface ReferralInfoResult {
-  /** Реферальный код мерчанта. */
+  /** The merchant's referral code. */
   code: string;
-  /** Заработано по активам, десятичными строками. */
+  /** Earned per asset, as decimal strings. */
   earnings_by_asset: Record<string, string>;
-  /** Реферальная ссылка (или сам код, если публичный адрес не настроен). */
+  /** The referral link (or the code itself if the public address is not configured). */
   link: string;
-  /** Сколько мерчантов приглашено. */
+  /** How many merchants have been invited. */
   referred_count: number;
-  /** Доля нашей комиссии по месяцам, в базисных пунктах. */
+  /** The share of our fee by month, in basis points. */
   tier_bps: number[];
-  /** То же за скользящие 7 дней. */
+  /** The same over a rolling 7 days. */
   week: ReferralWeek;
 }
 
 export interface ReferralWeek {
-  /** Заработано за 7 дней по активам, десятичными строками. */
+  /** Earned over 7 days per asset, as decimal strings. */
   earnings_by_asset: Record<string, string>;
-  /** Приглашено за 7 дней. */
+  /** Invited over 7 days. */
   referred_count: number;
 }
 
 export interface RefundBatchItem {
   /**
-   * Адрес назначения возврата. По умолчанию — payer_address платежа; обязателен только для
+   * Refund destination address. Defaults to the payment's payer_address; required only for
    * Bitcoin/UTXO.
    */
   address?: string;
-  /** Частичная сумма. По умолчанию — вся полученная. */
+  /** A partial amount. Defaults to the full received amount. */
   amount?: string;
   /**
-   * Профинансировать возврат конвертацией баланса: только USDT → валюта платежа. Нужен, когда
-   * монета платежа уже сведена автообменом.
+   * Fund the refund by converting balance: USDT → the payment currency only. Needed when the
+   * payment coin has already been converted by auto-exchange.
    */
   from_currency?: string;
-  /** Сеть. */
+  /** Network. */
   network?: string;
-  /** Ваша ссылка на заказ платежа. Нужен uuid или order_id. */
+  /** Your order reference of the payment. Either uuid or order_id is required. */
   order_id?: string;
   /**
-   * Необязательный ключ идемпотентности возврата: различает два разных возврата с одинаковыми
-   * (платёж, адрес, сумма); повтор с тем же значением дедуплицируется. Это не order_id.
+   * An optional refund idempotency key: distinguishes two different refunds with the same (payment,
+   * address, amount); a retry with the same value is deduplicated. This is not order_id.
    */
   reference: string;
-  /** Идентификатор платежа. Нужен uuid или order_id. */
+  /** Payment id. Either uuid or order_id is required. */
   uuid?: string;
 }
 
 export interface RefundBatchRequest {
   /**
-   * Что делать при ошибке элемента: continue (по умолчанию) — обрабатывать остальные; stop —
-   * прекратить обработку после первой ошибки.
+   * What to do when an item fails: continue (default) — process the rest; stop — stop processing
+   * after the first error.
    */
   on_error?: OpenEnum<BatchOnError>;
   /**
-   * Массив от 1 до 5000 элементов — те же поля, что у POST /v1/payment/refund; у каждого элемента
-   * обязательны reference (ключ идемпотентности) и uuid либо order_id платежа.
+   * An array of 1 to 5000 items — the same fields as in POST /v1/payment/refund; each item requires
+   * reference (the idempotency key) and the payment's uuid or order_id.
    */
   refunds: RefundBatchItem[];
 }
 
 export interface RefundFeeResult {
-  /** true — проект задал настройку сам; false — действует умолчание шлюза. */
+  /** true — the project set this setting itself; false — the gateway default applies. */
   configured: boolean;
-  /** Действующее значение: настройка проекта, а без неё — умолчание шлюза. */
+  /** The effective value: the project setting, or the gateway default if there is none. */
   fee_on_customer: boolean;
 }
 
 export interface RefundRequest {
   /**
-   * Адрес назначения возврата. По умолчанию — payer_address платежа; обязателен только для
+   * Refund destination address. Defaults to the payment's payer_address; required only for
    * Bitcoin/UTXO.
    */
   address?: string;
-  /** Частичная сумма. По умолчанию — вся полученная. */
+  /** A partial amount. Defaults to the full received amount. */
   amount?: string;
   /**
-   * Профинансировать возврат конвертацией баланса: только USDT → валюта платежа. Нужен, когда
-   * монета платежа уже сведена автообменом.
+   * Fund the refund by converting balance: USDT → the payment currency only. Needed when the
+   * payment coin has already been converted by auto-exchange.
    */
   from_currency?: string;
-  /** Сеть. */
+  /** Network. */
   network?: string;
-  /** Ваша ссылка на заказ платежа. Нужен uuid или order_id. */
+  /** Your order reference of the payment. Either uuid or order_id is required. */
   order_id?: string;
   /**
-   * Необязательный ключ идемпотентности возврата: различает два разных возврата с одинаковыми
-   * (платёж, адрес, сумма); повтор с тем же значением дедуплицируется. Это не order_id.
+   * An optional refund idempotency key: distinguishes two different refunds with the same (payment,
+   * address, amount); a retry with the same value is deduplicated. This is not order_id.
    */
   reference?: string;
-  /** Идентификатор платежа. Нужен uuid или order_id. */
+  /** Payment id. Either uuid or order_id is required. */
   uuid?: string;
 }
 
 export interface RegisterWebhookRequest {
-  /** HTTPS-URL коллбэка. SSRF-проверка: приватные и локальные адреса запрещены. */
+  /** HTTPS callback URL. SSRF check: private and local addresses are forbidden. */
   url: string;
 }
 
 export interface RegisterWebhookResult {
-  /** Идентификатор эндпоинта. */
+  /** Endpoint id. */
   endpoint_id: string;
   /**
-   * Секрет подписи — только в ответе на ПЕРВУЮ регистрацию, показывается один раз; при смене URL
-   * его нет (потеряли — перевыпустите: /v1/webhooks/rotate-secret).
+   * The signing secret — only in the response to the FIRST registration, shown once; absent when
+   * the URL changes (lost it? reissue it: /v1/webhooks/rotate-secret).
    */
   secret?: string;
-  /** Зарегистрированный URL коллбэка. */
+  /** The registered callback URL. */
   url: string;
 }
 
 export interface ReplayRequest {
-  /** Идентификатор доставки из GET /v1/sandbox/webhooks. */
+  /** The delivery id from GET /v1/sandbox/webhooks. */
   delivery_id: string;
 }
 
 export interface ReplayResult {
-  /** Идентификатор доставки, как передан. */
+  /** The delivery id, as passed. */
   delivery_id: string;
-  /** Всегда true: доставка поставлена в очередь; иначе — ошибка. */
+  /** Always true: the delivery has been queued; otherwise — an error. */
   ok: boolean;
 }
 
 export interface RequeueWebhookDeliveryRequest {
-  /** Идентификатор доставки из журнала (POST /v1/webhooks/deliveries). */
+  /** The delivery id from the log (POST /v1/webhooks/deliveries). */
   id: string;
 }
 
 export interface RequeueWebhookDeliveryResult {
-  /** Идентификатор доставки. */
+  /** Delivery id. */
   id: string;
   /**
-   * true — этот вызов вернул доставку в очередь; false — она уже была в очереди или доставлена
-   * (повтор вызова ничего не меняет).
+   * true — this call re-queued the delivery; false — it was already queued or delivered (repeating
+   * the call changes nothing).
    */
   ok: boolean;
   /**
-   * Статус доставки после вызова: pending — снова в очереди; delivered — уже доставлена, повторять
-   * нечего.
+   * The delivery status after the call: pending — queued again; delivered — already delivered,
+   * nothing to repeat.
    */
   status: OpenEnum<WebhookDeliveryStatus>;
 }
 
 export interface ResetResult {
-  /** Сколько балансов (по активам) обнулено компенсирующей проводкой. */
+  /** How many balances (per asset) were zeroed by a compensating posting. */
   balances_zeroed: number;
-  /** Сколько открытых счетов отменено. */
+  /** How many open invoices were cancelled. */
   invoices_cancelled: number;
-  /** Сколько профинансированных выплатных ссылок отменено (резерв вернулся до обнуления). */
+  /** How many funded payout links were cancelled (the reserve was returned before zeroing). */
   payout_links_cancelled: number;
-  /** Сколько профинансированных ссылок отменить не удалось — их резерв остался. */
+  /** How many funded links could not be cancelled — their reserve remains. */
   payout_links_left: number;
 }
 
 export interface ResolveAcceptResult {
-  /** Сколько оставлено мерчанту — всё, что пришло. */
+  /** How much was left to the merchant — everything that arrived. */
   amount_kept: string;
-  /** Валюта оплаты. */
+  /** Payment currency. */
   currency: string;
-  /** Номер заказа мерчанта. */
+  /** The merchant's order number. */
   order_id: string;
-  /** Идентификатор платежа. */
+  /** Payment id. */
   payment_uuid: string;
-  /** Принятое решение: accepted. */
+  /** The decision taken: accepted. */
   resolution: string;
 }
 
 export interface ResolveRefundResult {
-  /** Адрес получателя. */
+  /** Recipient address. */
   address: string;
-  /** Сумма выплаты в валюте currency, списанная с вашего баланса. */
+  /** The payout amount in currency, debited from your balance. */
   amount: string;
-  /** true — выплата ждёт подтверждения (внутренние сценарии; по API-ключу всегда false). */
+  /** true — the payout is awaiting approval (internal scenarios; always false with an API key). */
   approval_required: boolean;
-  /** Удержанная сетевая комиссия, в валюте выплаты. 0 — комиссию поглотил шлюз. */
+  /** The withheld network fee, in the payout currency. 0 — the gateway absorbed the fee. */
   commission: string;
-  /** Время создания (ISO 8601). */
+  /** Creation time (ISO 8601). */
   created_at: string;
-  /** Код валюты выплаты. */
+  /** Payout currency code. */
   currency: string;
   /**
-   * Подписанная ссылка на PDF-чек этой операции — открывается без API-ключа, можно вложить в письмо
-   * или отдать получателю. Пусто, если генерация документов не включена.
+   * A signed link to the PDF receipt of this operation — opens without an API key, can be attached
+   * to an email or given to the recipient. Empty if document generation is not enabled.
    */
   document_url: string;
   /**
-   * Кто заплатил сетевую комиссию: gateway — шлюз поглотил её (commission = 0); merchant — сумма
-   * списания увеличена на комиссию, получатель получает запрошенное целиком (is_subtract=true,
-   * выплатная ссылка с fee_bearer=merchant); recipient — комиссия удержана из выплаты, получателю
-   * приходит меньше запрошенного.
+   * Who paid the network fee: gateway — the gateway absorbed it (commission = 0); merchant — the
+   * debit amount was increased by the fee, the recipient gets the full requested amount
+   * (is_subtract=true, a payout link with fee_bearer=merchant); recipient — the fee was withheld
+   * from the payout, the recipient gets less than requested.
    */
   fee_bearer: OpenEnum<PayoutFeeBearer>;
-  /** true — статус финальный (confirmed / failed / cancelled). */
+  /** true — the status is final (confirmed / failed / cancelled). */
   is_final: boolean;
-  /** true — это возврат платежа, а не обычная выплата. */
+  /** true — this is a payment refund, not a regular payout. */
   is_refund: boolean;
-  /** Тег/мемо назначения, переданный при создании (TON Jetton, memo-биржи). Пусто — без мемо. */
+  /** The destination tag/memo passed at creation (TON Jetton, exchange memos). Empty — no memo. */
   memo: string;
-  /** Сеть блокчейна. */
+  /** Blockchain network. */
   network: string;
   /**
-   * Ваш номер (reference) выплаты. У возврата — null: возврат не имеет вашего идентификатора, см.
+   * Your payout number (reference). null for a refund: a refund has no identifier of yours, see
    * payment_order_id.
    */
   order_id: string | null;
-  /** Сколько реально уходит получателю на адрес: amount − commission. */
+  /** How much actually goes to the recipient's address: amount − commission. */
   payer_amount: string;
   /**
-   * Ваш order_id платежа, по которому сделан возврат (null у обычной выплаты). У возврата
-   * собственного order_id нет — он приходит null, а сверять возврат с заказом нужно по этому полю.
+   * Your order_id of the payment that was refunded (null for a regular payout). A refund has no
+   * order_id of its own — it comes as null, so match a refund to an order by this field.
    */
   payment_order_id: string | null;
-  /** Идентификатор возвращаемого платежа (null, если это не возврат). */
+  /** The id of the payment being refunded (null if this is not a refund). */
   refund_for: string | null;
-  /** Принятое решение: refunded. */
+  /** The decision taken: refunded. */
   resolution: string;
-  /** api (через интеграцию) | manual (из кабинета). */
+  /** api (via the integration) | manual (from the dashboard). */
   source: OpenEnum<PayoutSource>;
   /**
-   * Статус выплаты: pending (создана, ждёт) | approved (одобрена) | awaiting_cosign (ждёт второй
-   * подписи) | broadcasting (отправляется) | sent (отправлена, ждёт подтверждений) | confirmed
-   * (подтверждена — готово) | failed | cancelled. Значение можно передать обратно в фильтр истории
-   * как есть.
+   * Payout status: pending (created, waiting) | approved (approved) | awaiting_cosign (waiting for
+   * the second signature) | broadcasting (being broadcast) | sent (sent, awaiting confirmations) |
+   * confirmed (confirmed — done) | failed | cancelled. The value can be passed back to the history
+   * filter as is.
    */
   status: OpenEnum<PayoutStatus>;
-  /** Хеш транзакции в блокчейне (появляется после отправки). */
+  /** The blockchain transaction hash (appears after sending). */
   txid: string;
-  /** Время последнего изменения (ISO 8601). */
+  /** Time of the last change (ISO 8601). */
   updated_at: string;
-  /** Идентификатор выплаты. */
+  /** Payout id. */
   uuid: string;
 }
 
 export interface ResolveRequest {
-  /** accept — принять частичную оплату, refund — вернуть плательщику. */
+  /** accept — accept the partial payment, refund — return it to the payer. */
   action: string;
   /**
-   * Только для refund: адрес возврата. По умолчанию — записанный payer_address платежа; если он
-   * пуст (Bitcoin/UTXO), адрес обязателен, иначе refund.no_address.
+   * Only for refund: the refund address. Defaults to the payment's recorded payer_address; if that
+   * is empty (Bitcoin/UTXO), the address is required, otherwise refund.no_address.
    */
   address?: string;
-  /** Только для refund: сеть возврата, по умолчанию — сеть платежа. */
+  /** Only for refund: the refund network, defaults to the payment's network. */
   network?: string;
-  /** Ваш идентификатор платежа. */
+  /** Your payment identifier. */
   order_id?: string;
-  /** Только для refund: ваш ключ дедупликации возврата. */
+  /** Only for refund: your refund deduplication key. */
   reference?: string;
-  /** UUID платежа. Нужен uuid или order_id. */
+  /** Payment UUID. Either uuid or order_id is required. */
   uuid?: string;
 }
 
 export interface RotateWebhookSecretResult {
-  /** Идентификатор эндпоинта. */
+  /** Endpoint id. */
   endpoint_id: string;
   /**
-   * До этого момента доставки дополнительно подписываются старым секретом
+   * Until this moment deliveries are additionally signed with the old secret
    * (X-Webhook-Signature-Prev), RFC 3339 UTC.
    */
   previous_secret_valid_until: string;
-  /** Новый секрет подписи — показывается только здесь. */
+  /** The new signing secret — shown only here. */
   secret: string;
-  /** URL коллбэка. */
+  /** Callback URL. */
   url: string;
 }
 
 export interface SandboxDelivery {
-  /** Сделано попыток. */
+  /** Attempts made. */
   attempts: number;
-  /** Когда поставлена, RFC 3339 UTC. */
+  /** When queued, RFC 3339 UTC. */
   created_at: string;
-  /** Событие в теле. */
+  /** The event in the body. */
   event_type: string;
-  /** Идентификатор доставки (для replay). */
+  /** Delivery id (for replay). */
   id: string;
-  /** Ошибка последней попытки; пусто, если её не было. */
+  /** The error of the last attempt; empty if there was none. */
   last_error: string;
-  /** Тело вебхука ровно так, как оно подписано и отправлено. */
+  /** The webhook body exactly as it was signed and sent. */
   payload: unknown;
-  /** Состояние доставки. */
+  /** Delivery state. */
   status: OpenEnum<WebhookDeliveryStatus>;
-  /** Последнее изменение, RFC 3339 UTC. */
+  /** Last change, RFC 3339 UTC. */
   updated_at: string;
-  /** Куда доставляется. */
+  /** Where it is delivered. */
   url: string;
 }
 
 export interface SandboxDeliveryList {
-  /** Записи этой страницы. */
+  /** The records of this page. */
   items: SandboxDelivery[];
-  /** Блок пагинации. */
+  /** Pagination block. */
   paginate: Pagination;
 }
 
 export interface SandboxOnboardResult {
-  /** Ключ API мерчанта. */
+  /** The merchant's API key. */
   api_key: OnboardKey;
-  /** true — dev store создан сейчас; false — уже был, секрет ключа пуст. */
+  /**
+   * true — the dev store was created just now; false — it already existed, the key secret is empty.
+   */
   created: boolean;
-  /** Мерчант. */
+  /** Merchant. */
   merchant_id: string;
-  /** Первый проект мерчанта. */
+  /** The merchant's first project. */
   project_id: string;
 }
 
 export interface SendEmailRequest {
-  /** Кому отправить. По умолчанию — payer_email, заданный у платежа. */
+  /** Whom to send to. Defaults to the payer_email set on the payment. */
   email?: string;
-  /** Ваша ссылка на заказ. */
+  /** Your order reference. */
   order_id?: string;
-  /** Идентификатор платежа в Oblodai. Нужен uuid или order_id. */
+  /** The payment id in Oblodai. Either uuid or order_id is required. */
   uuid?: string;
 }
 
 export interface SendEmailResult {
-  /** Кому ушло письмо. */
+  /** Who the email was sent to. */
   email: string;
-  /** Письмо поставлено в очередь отправки; неудача отвечает ошибкой. */
+  /** The email has been queued for sending; a failure responds with an error. */
   ok: boolean;
-  /** Идентификатор платежа. */
+  /** Payment id. */
   uuid: string;
 }
 
 export interface SetAccuracyRequest {
   /**
-   * Допуск в процентах, 1–5. Обязателен при enabled: true; при enabled: false игнорируется
-   * (сбрасывается в 0). Кэп 5 %
+   * Tolerance in percent, 1–5. Required when enabled: true; ignored (reset to 0) when enabled:
+   * false. Capped at 5 %
    */
   accuracy_percent?: number;
-  /** Включить/выключить допуск */
+  /** Enable/disable the tolerance */
   enabled: boolean;
 }
 
 export interface SetAutoConvertRequest {
-  /** Выключатель приказа целиком. Не передан — считается включённым. */
+  /** The master switch for the whole order. If omitted, it is considered enabled. */
   enabled?: boolean | null;
   /**
-   * Пол одной конвертации в долларах, десятичной строкой; пусто — умолчание процесса ($10). Ниже
-   * него спред съедает больше, чем сводит.
+   * The floor for a single conversion in dollars, as a decimal string; empty — the process default
+   * ($10). Below it the spread eats more than the conversion is worth.
    */
   min_amount?: string;
   /**
-   * Режим зачисления: "economy" — заявка в партию казначейской ликвидации, зачисляется факт
-   * исполнения (комиссия минимальная); "instant" — мгновенно по спред-курсу. Не передан — instant:
-   * автообмен включают ради мгновенного зачисления, а ждать партию — осознанный выбор. Иное
-   * значение — 400 request.invalid_mode.
+   * The crediting mode: "economy" — an order in a treasury liquidation batch, the actual execution
+   * is credited (minimal fee); "instant" — immediately at the spread rate. Omitted — instant:
+   * auto-exchange is enabled for instant crediting, and waiting for a batch is a deliberate choice.
+   * Any other value — 400 request.invalid_mode.
    */
   mode?: OpenEnum<AutoConvertMode> | null;
-  /** Монеты, которые сводить. Пусто — приказ есть, но не включён ни для чего. */
+  /** The coins to convert. Empty — the order exists but is not enabled for anything. */
   sources?: string[];
-  /**
-   * Монета, в которую сводится выручка (стейбл). Проверяется на возможность ликвидации при
-   * сохранении.
-   */
+  /** The coin revenue is converted into (a stablecoin). Checked for liquidity on save. */
   target: string;
 }
 
 export interface SetAutoRefundRequest {
-  /** Возвращать излишек при переплате (paid_over) */
+  /** Refund the excess of an overpayment (paid_over) */
   overpay: boolean;
-  /** Возвращать средства при истёкшей недоплате (wrong_amount) */
+  /** Refund the funds of an expired underpayment (wrong_amount) */
   underpay: boolean;
 }
 
 export interface SetDiscountRequest {
-  /** Валюта. Пусто = глобальный дефолт для всех монет */
+  /** Currency. Empty = the global default for all coins */
   currency?: string;
-  /** Процент, от -99 до 99. Плюс — скидка, минус — наценка */
+  /** Percent, from -99 to 99. Plus — a discount, minus — a surcharge */
   discount_percent: number;
-  /** Сеть. Пусто = любая сеть данной валюты */
+  /** Network. Empty = any network of the given currency */
   network?: string;
 }
 
 export interface SetPaymentFeeRequest {
   /**
-   * Доля НАШЕЙ комиссии, которую платит покупатель: 0 — платит мерчант (как сейчас), 100 — платит
-   * покупатель, счёт выставляется с наценкой. Действует на счета, созданные ПОСЛЕ изменения.
+   * The share of OUR fee paid by the buyer: 0 — the merchant pays (as now), 100 — the buyer pays,
+   * the invoice is issued with a markup. Applies to invoices created AFTER the change.
    */
   payer_pays_percent: number;
 }
 
 export interface SetPayoutFeeRequest {
-  /** true — сетевую комиссию платит получатель (получает меньше); false — комиссию несёт мерчант */
+  /**
+   * true — the network fee is paid by the recipient (who receives less); false — the merchant bears
+   * the fee
+   */
   fee_on_recipient: boolean;
 }
 
 export interface SetRefundFeeRequest {
   /**
-   * true — клиент получает net (комиссию платит клиент); false — мерчант платит комиссию, клиент
-   * получает gross
+   * true — the customer receives net (the customer pays the fee); false — the merchant pays the
+   * fee, the customer receives gross
    */
   fee_on_customer: boolean;
 }
 
 export interface SetWebhookActiveRequest {
-  /**
-   * true — доставка возобновляется, false — прекращается (очередь по этому проекту больше не
-   * наполняется).
-   */
+  /** true — delivery resumes, false — it stops (the queue for this project is no longer filled). */
   active: boolean | null;
 }
 
 export interface SetWebhookActiveResult {
-  /** Включена ли теперь доставка. */
+  /** Whether delivery is now enabled. */
   active: boolean;
 }
 
 export interface SimulateDepositRequest {
   /**
-   * Сумма в валюте счёта; пусто — оплатить ровно сколько нужно, иное — способ получить
-   * недо/переплату.
+   * The amount in the invoice currency; empty — pay exactly the amount due, anything else — a way
+   * to produce an under/overpayment.
    */
   amount?: string;
   /**
-   * С каким числом подтверждений пришёл депозит; 0 — полностью подтверждён; меньше требуемого —
-   * способ проверить переход pending→confirmed (повторите тот же txid с большим числом).
+   * The number of confirmations the deposit arrived with; 0 — fully confirmed; fewer than required
+   * — a way to test the pending→confirmed transition (repeat the same txid with a higher number).
    */
   confirmations?: number;
-  /** UUID тестового счёта, который «оплачивается». */
+  /** The UUID of the test invoice being "paid". */
   invoice_id: string;
-  /** Повтор того же txid проверяет вашу идемпотентность; пусто — новый txid. */
+  /** Repeating the same txid tests your idempotency; empty — a new txid. */
   txid?: string;
 }
 
 export interface SimulateDepositResult {
-  /** Сумма депозита в валюте счёта. */
+  /** The deposit amount in the invoice currency. */
   amount: string;
-  /** С каким числом подтверждений депозит отдан конвейеру. */
+  /** The number of confirmations with which the deposit was handed to the pipeline. */
   confirmations: number;
-  /** Оплачиваемый тестовый счёт. */
+  /** The test invoice being paid. */
   invoice_id: string;
   /**
-   * Транзакция депозита (с префиксом песочницы); повтор того же txid проверяет вашу
-   * идемпотентность.
+   * The deposit transaction (with a sandbox prefix); repeating the same txid tests your
+   * idempotency.
    */
   txid: string;
 }
 
 export interface SoFSubmitRequest {
-  /** Как связаться для уточнений. */
+  /** How to get in touch for clarifications. */
   contact?: string;
-  /** Чем подтверждается: ссылки на выписки, идентификаторы транзакций. */
+  /** What supports it: links to statements, transaction ids. */
   evidence?: string;
-  /** Откуда средства. */
+  /** Where the funds come from. */
   origin: string;
 }
 
 export interface SoFSubmitted {
-  /** Анкета принята к рассмотрению; это не решение о разблокировке. */
+  /** The questionnaire has been accepted for review; this is not a decision to unblock. */
   accepted: boolean;
-  /** Статус анкеты после приёма — completed. */
+  /** The questionnaire status after acceptance — completed. */
   status: OpenEnum<SoFStatus>;
 }
 
 export interface SoFView {
-  /** Срок ссылки вышел — анкету уже не принять. */
+  /** The link has expired — the questionnaire can no longer be accepted. */
   expired: boolean;
-  /** Статус анкеты. */
+  /** Questionnaire status. */
   status: OpenEnum<SoFStatus>;
 }
 
 export interface SplitConfigRequest {
   /**
-   * На сколько секунд откладывать расчёт по сплитам; диапазон 0–7776000 (до 90 суток). 0 —
-   * отправлять доли сразу: риск невозможности возврата берёте на себя.
+   * How many seconds to defer split settlement; range 0–7776000 (up to 90 days). 0 — send shares
+   * immediately: you bear the risk of being unable to refund.
    */
   refund_hold_seconds: number | null;
 }
 
 export interface SplitConfigView {
-  /** На сколько секунд откладывается расчёт по сплитам после оплаты; 0 — доли уходят сразу. */
+  /**
+   * How many seconds split settlement is deferred after payment; 0 — shares are sent immediately.
+   */
   refund_hold_seconds: number;
 }
 
 export interface SplitRecipientOptInRequest {
   /**
-   * Разрешить другим мерчантам направлять доли сплитов на ваш баланс. true — включить приём, false
-   * — выключить (новые правила на вас перестанут создаваться; уже созданные продолжают
-   * исполняться).
+   * Allow other merchants to route split shares to your balance. true — enable receiving, false —
+   * disable (new rules targeting you can no longer be created; existing ones keep executing).
    */
   enabled: boolean | null;
 }
 
 export interface SplitRecipientOptInView {
-  /** true — другие мерчанты могут направлять доли на ваш баланс. */
+  /** true — other merchants may route shares to your balance. */
   enabled: boolean;
 }
 
 export interface SplitRuleCreated {
-  /** Сохранённая доля в процентах, два знака после точки. */
+  /** The saved share in percent, two digits after the point. */
   percent: string;
-  /** Идентификатор правила. */
+  /** Rule id. */
   rule_id: string;
 }
 
 export interface SplitRuleDeleteRequest {
-  /** Идентификатор правила из POST /v1/split/rule или списка. */
+  /** The rule id from POST /v1/split/rule or the list. */
   rule_id: string;
 }
 
 export interface SplitRuleDeleted {
-  /** Правило удалено; неудача отвечает ошибкой. */
+  /** The rule has been deleted; a failure responds with an error. */
   ok: boolean;
 }
 
 export interface SplitRuleRequest {
   /**
-   * Внешний криптоадрес партнёра; доля уходит реальной транзакцией в блокчейне — необратимо. Ровно
-   * один вариант получателя: либо address+network, либо merchant_id.
+   * The partner's external crypto address; the share is sent as a real on-chain transaction —
+   * irreversibly. Exactly one recipient option: either address+network or merchant_id.
    */
   address?: string;
   /**
-   * Идентификатор мерчанта-партнёра внутри Oblodai; доля движется по внутреннему учёту и при
-   * возврате отзывается обратно.
+   * The id of the partner merchant within Oblodai; the share moves within internal accounting and
+   * is clawed back on refund.
    */
   merchant_id?: string;
-  /** Сеть адреса. Обязательна вместе с address. */
+  /** The address network. Required together with address. */
   network?: string;
-  /** Комментарий для себя (виден в списке правил). */
+  /** A note for yourself (visible in the rule list). */
   note?: string;
   /**
-   * Доля от каждого платежа, строкой: "10" = 10 %, "2.5" = 2.5 %. Больше 0 и не больше 100, шаг
-   * 0.01 %; сумма всех правил не может превышать 100 %.
+   * The share of each payment, as a string: "10" = 10 %, "2.5" = 2.5 %. Greater than 0 and at most
+   * 100, in steps of 0.01 %; the sum of all rules cannot exceed 100 %.
    */
   percent: string;
 }
 
 export interface SplitRuleView {
-  /** Правило действует. */
+  /** The rule is active. */
   active: boolean;
-  /** Внешний адрес партнёра; есть у внешнего получателя. */
+  /** The partner's external address; present for an external recipient. */
   address?: string;
-  /** Мерчант-партнёр внутри Oblodai; есть у внутреннего получателя. */
+  /** A partner merchant within Oblodai; present for an internal recipient. */
   merchant_id?: string;
-  /** Сеть внешнего адреса; есть у внешнего получателя. */
+  /** The external address's network; present for an external recipient. */
   network?: string;
-  /** Комментарий из создания. */
+  /** The note from creation. */
   note: string;
-  /** Доля от каждого платежа в процентах. */
+  /** The share of each payment, in percent. */
   percent: string;
   /**
-   * true — доля движется по внутреннему учёту и отзывается при возврате; false — уходит в блокчейн
-   * необратимо.
+   * true — the share moves within internal accounting and is clawed back on refund; false — it goes
+   * on-chain irreversibly.
    */
   reversible: boolean;
-  /** Идентификатор правила. */
+  /** Rule id. */
   rule_id: string;
 }
 
 export interface SplitRuleViewList {
-  /** Записи этой страницы. */
+  /** The records of this page. */
   items: SplitRuleView[];
-  /** Блок пагинации. */
+  /** Pagination block. */
   paginate: Pagination;
 }
 
 export interface StaticWalletView {
   /**
-   * Постоянный адрес для пополнений. На XRP — классический r-адрес ОБЩЕГО кошелька; пополнение
-   * обязано нести destination_tag. На XLM — G-адрес; пополнение обязано нести memo.
+   * A permanent deposit address. On XRP — the classic r-address of a SHARED wallet; a deposit must
+   * carry destination_tag. On XLM — a G-address; a deposit must carry memo.
    */
   address: string;
-  /** Только XLM: адрес и memo одной строкой (muxed M…, SEP-23). */
+  /** XLM only: address and memo in one string (muxed M…, SEP-23). */
   address_muxed?: string;
-  /** Только XRP: адрес и тег одной строкой (X-address, XLS-5). */
+  /** XRP only: address and tag in one string (X-address, XLS-5). */
   address_xaddress?: string;
   /**
-   * true — кошелёк заблокирован: пополнения на этот адрес НЕ зачисляются (уходят в карантин
-   * оператору, без вебхука и без автовозврата). Публиковать такой адрес нельзя.
+   * true — the wallet is blocked: deposits to this address are NOT credited (they go to operator
+   * quarantine, with no webhook and no auto-refund). Do not publish such an address.
    */
   blocked: boolean;
-  /** Валюта пополнений. */
+  /** Deposit currency. */
   currency: string;
   /**
-   * Только XRP: числовой destination tag этого кошелька — клиент обязан указывать его в каждом
-   * переводе.
+   * XRP only: this wallet's numeric destination tag — the customer must specify it in every
+   * transfer.
    */
   destination_tag?: string;
-  /** Подписанная ссылка на PDF-справку о реквизитах. Пусто, когда рендер документов выключен. */
+  /**
+   * A signed link to the PDF payment details certificate. Empty when document rendering is
+   * disabled.
+   */
   document_url: string;
   /**
-   * Только XLM: числовой memo (тип ID) этого кошелька — клиент обязан указывать его в каждом
-   * переводе.
+   * XLM only: this wallet's numeric memo (ID type) — the customer must specify it in every
+   * transfer.
    */
   memo?: string;
-  /** Сеть блокчейна. */
+  /** Blockchain network. */
   network: string;
   /**
-   * Ваш идентификатор клиента, за которым закреплён адрес (часть тройки идемпотентности
-   * currency+network+order_id).
+   * Your customer identifier the address is assigned to (part of the currency+network+order_id
+   * idempotency triple).
    */
   order_id: string;
-  /** Зарезервировано (обычно пусто). */
+  /** Reserved (usually empty). */
   url: string;
-  /** Идентификатор статического кошелька. */
+  /** Static wallet id. */
   uuid: string;
 }
 
 export interface SummaryAmount {
-  /** Сумма в единицах монеты. */
+  /** The amount in coin units. */
   amount: string;
-  /** Монета оплаты. */
+  /** Payment coin. */
   asset: string;
 }
 
 export interface SummaryRequest {
-  /** Начало окна, включительно (RFC 3339). */
+  /** Start of the window, inclusive (RFC 3339). */
   from: string;
-  /** Конец окна, не включительно (RFC 3339). */
+  /** End of the window, exclusive (RFC 3339). */
   to: string;
 }
 
 export interface SummaryResult {
-  /** Выплат в работе прямо сейчас (статус не финальный), без возвратов; от окна не зависит. */
+  /**
+   * Payouts in progress right now (non-final status), excluding refunds; independent of the window.
+   */
   pending_payouts: number;
   /**
-   * Оборот окна: оплаченное по оплаченным счетам (paid, paid_over), созданным в окне, — по монете
-   * оплаты, по алфавиту. Пусто — оплат не было.
+   * Turnover for the window: amounts paid on paid invoices (paid, paid_over) created within the
+   * window — per payment coin, alphabetically. Empty — there were no payments.
    */
   turnover: SummaryAmount[];
 }
 
 export interface TestWebhookKindRequest {
-  /** Валюта в теле */
+  /** Currency in the body */
   currency?: string;
-  /** Сеть в теле */
+  /** Network in the body */
   network?: string;
-  /** Ваш order_id, который попадёт в пробное тело события */
+  /** Your order_id placed in the sample event body */
   order_id?: string;
   /**
-   * Статус в теле — только те, с которыми боевой вебхук этого вида действительно приходит (кошелёк
-   * — только paid); иначе 400 webhook.bad_status. По умолчанию paid (для выплаты — confirmed, для
-   * конвертации — completed)
+   * The status in the body — only those with which a live webhook of this kind actually arrives
+   * (wallet — paid only); otherwise 400 webhook.bad_status. Default paid (for a payout — confirmed,
+   * for a conversion — completed)
    */
   status?: string;
-  /** Куда отправить пробное тело */
+  /** Where to send the sample body */
   url_callback: string;
-  /** UUID объекта (платежа, кошелька или выплаты), который попадёт в пробное тело события */
+  /** The UUID of the object (payment, wallet or payout) placed in the sample event body */
   uuid?: string;
 }
 
 export interface TestWebhookKindResult {
-  /** Всегда true: тело доставлено. */
+  /** Always true: the body was delivered. */
   ok: boolean;
-  /** Тело подписано секретом endpoint'а проекта. */
+  /** The body is signed with the project endpoint's secret. */
   signed: boolean;
-  /** HTTP-статус, которым ответил ваш endpoint. */
+  /** The HTTP status your endpoint responded with. */
   status_code: number;
 }
 
 export interface TestWebhookRequest {
-  /** Статус в теле. По умолчанию paid */
+  /** The status in the body. Default paid */
   status?: string;
   /**
-   * Куда отправить пробное тело. Не передан — доставка уходит на зарегистрированный endpoint
-   * проекта; без endpoint — ошибка webhook.no_endpoint. Подпись — секретом endpoint'а проекта, в
-   * том числе при явном url
+   * Where to send the sample body. If omitted, the delivery goes to the project's registered
+   * endpoint; without an endpoint — the webhook.no_endpoint error. Signed with the project
+   * endpoint's secret, including when url is given explicitly
    */
   url?: string;
 }
 
 export interface TestWebhookResult {
-  /** Сколько длилась доставка, мс. */
+  /** How long the delivery took, ms. */
   duration_ms: number;
-  /** Почему доставка не состоялась; только при ok=false. */
+  /** Why the delivery did not take place; only when ok=false. */
   error?: string;
-  /** Доставка состоялась (endpoint ответил, любым статусом). */
+  /** The delivery took place (the endpoint responded, with any status). */
   ok: boolean;
-  /** Тело подписано секретом endpoint'а проекта. */
+  /** The body is signed with the project endpoint's secret. */
   signed: boolean;
-  /** HTTP-статус ответа endpoint'а; только при ok=true. */
+  /** The HTTP status returned by the endpoint; only when ok=true. */
   status_code?: number;
-  /** Куда ушло пробное тело. */
+  /** Where the sample body was sent. */
   url: string;
 }
 
 export interface TransferBatchItem {
-  /** Сумма перевода в currency. */
+  /** The transfer amount in currency. */
   amount: string;
-  /** Код валюты (криптовалюта). */
+  /** Currency code (cryptocurrency). */
   currency: string;
-  /** Ключ идемпотентности: повтор с тем же order_id — no-op; в батче переводов обязателен. */
+  /** Idempotency key: a retry with the same order_id is a no-op; required in a transfer batch. */
   order_id: string;
   /**
-   * Платформенный user id получателя (UUID, не username); username резолвится в id через публичный
-   * профиль кабинета /public/users/{username}.
+   * The recipient's platform user id (a UUID, not a username); a username is resolved to an id via
+   * the dashboard's public profile /public/users/{username}.
    */
   to_user_id: string;
 }
 
 export interface TransferBatchRequest {
   /**
-   * Что делать при ошибке элемента: continue (по умолчанию) — обрабатывать остальные; stop —
-   * прекратить обработку после первой ошибки.
+   * What to do when an item fails: continue (default) — process the rest; stop — stop processing
+   * after the first error.
    */
   on_error?: OpenEnum<BatchOnError>;
   /**
-   * Массив от 1 до 5000 элементов — те же поля, что у POST /v1/transfer/to-user; у каждого элемента
-   * обязательны order_id (ключ идемпотентности) и to_user_id (UUID пользователя).
+   * An array of 1 to 5000 items — the same fields as in POST /v1/transfer/to-user; each item
+   * requires order_id (the idempotency key) and to_user_id (the user's UUID).
    */
   transfers: TransferBatchItem[];
 }
 
 export interface TransferRequest {
-  /** Сумма перевода в currency. */
+  /** The transfer amount in currency. */
   amount: string;
-  /** Код валюты (криптовалюта). */
+  /** Currency code (cryptocurrency). */
   currency: string;
   /**
-   * Ключ идемпотентности: повтор с тем же order_id — no-op. Настоятельно передавайте всегда, иначе
-   * повтор запроса при сетевом таймауте создаст второй перевод.
+   * Idempotency key: a retry with the same order_id is a no-op. Always pass it, otherwise retrying
+   * the request after a network timeout creates a second transfer.
    */
   order_id?: string;
 }
 
 export interface TransferResult {
-  /** Сумма перевода. */
+  /** Transfer amount. */
   amount: string;
-  /** Актив перевода. */
+  /** Transfer asset. */
   currency: string;
-  /** Ссылка на PDF-документ перевода; пусто, если документы выключены. */
+  /** A link to the transfer PDF document; empty if documents are disabled. */
   document_url: string;
-  /** Получатель — пользователь личного кошелька. */
+  /** The recipient is a personal wallet user. */
   to_user_id: string;
-  /** Идентификатор проводки перевода. */
+  /** The transfer posting id. */
   uuid: string;
 }
 
 export interface TransferToPersonalResult {
-  /** Сумма перевода. */
+  /** Transfer amount. */
   amount: string;
-  /** Актив перевода. */
+  /** Transfer asset. */
   currency: string;
-  /** Направление: to_personal. */
+  /** Direction: to_personal. */
   direction: string;
-  /** Ссылка на PDF-документ перевода; пусто, если документы выключены. */
+  /** A link to the transfer PDF document; empty if documents are disabled. */
   document_url: string;
-  /** Баланс личного кошелька владельца после перевода. */
+  /** The balance of the owner's personal wallet after the transfer. */
   personal_balance: string;
-  /** Идентификатор проводки перевода. */
+  /** The transfer posting id. */
   uuid: string;
 }
 
 export interface TransferToUserRequest {
-  /** Сумма перевода в currency. */
+  /** The transfer amount in currency. */
   amount: string;
-  /** Код валюты (криптовалюта). */
+  /** Currency code (cryptocurrency). */
   currency: string;
-  /** Ключ идемпотентности: повтор с тем же order_id — no-op; в батче переводов обязателен. */
+  /** Idempotency key: a retry with the same order_id is a no-op; required in a transfer batch. */
   order_id?: string;
   /**
-   * Платформенный user id получателя (UUID, не username); username резолвится в id через публичный
-   * профиль кабинета /public/users/{username}.
+   * The recipient's platform user id (a UUID, not a username); a username is resolved to an id via
+   * the dashboard's public profile /public/users/{username}.
    */
   to_user_id: string;
 }
 
 export interface VRCSRequest {
   /**
-   * true — включить автоконвертацию волатильных поступлений в USDT, false — выключить; без поля —
-   * только прочитать текущее состояние.
+   * true — enable auto-conversion of volatile incoming funds to USDT, false — disable it; without
+   * the field — only read the current state.
    */
   enabled?: boolean | null;
 }
 
 export interface VRCSResult {
-  /** Включена ли автоконвертация волатильных поступлений в USDT. */
+  /** Whether auto-conversion of volatile incoming funds to USDT is enabled. */
   enabled: boolean;
 }
 
 export interface WalletQRResult {
-  /** PNG QR-кода как data:-URI; "" — не удалось отрисовать. */
+  /** The QR code PNG as a data: URI; "" — rendering failed. */
   image: string;
 }
 
-/** Приходит, когда депозит на статический кошелёк зачислен. */
+/** Sent when a deposit to a static wallet is credited. */
 export interface WalletWebhook {
-  /** Адрес кошелька, на который пришёл платёж. */
+  /** The wallet address the payment arrived at. */
   address: string;
-  /** Код валюты зачисления. */
+  /** Credit currency code. */
   currency: string;
-  /** Когда событие произошло, UTC с миллисекундами (ISO 8601). */
+  /** When the event happened, UTC with milliseconds (ISO 8601). */
   event_at: string;
-  /** true — статус финальный. */
+  /** true — the status is final. */
   is_final: boolean;
-  /** Сеть блокчейна. */
+  /** Blockchain network. */
   network: string;
-  /** Ваш order_id кошелька. */
+  /** Your order_id for the wallet. */
   order_id: string;
-  /** Валюта, в которой заплатил плательщик (совпадает с currency). */
+  /** The currency the payer paid in (matches currency). */
   payer_currency: string;
-  /** Зачисленная сумма депозита (десятичное число строкой). */
+  /** The credited deposit amount (a decimal number as a string). */
   payment_amount: string;
   /**
-   * Глобальный номер события: в пределах одного объекта больший номер новее, меньший — опоздавшая
-   * доставка, её нужно отбросить. У репетиции (test: true) всегда 0.
+   * The global event number: within one object a higher number is newer, a lower one is a late
+   * delivery and must be discarded. Always 0 on a rehearsal (test: true).
    */
   sequence: number;
-  /** Статус в словаре платежа; живой поток шлёт только paid. */
+  /** A status from the payment vocabulary; the live flow sends only paid. */
   status: string;
   /**
-   * Есть только у репетиции (/v1/test-webhook/*, /v1/payment/testing-webhook) и всегда true —
-   * внутри подписи. Боевое событие этого поля не несёт никогда: тело с test: true обработчик обязан
-   * игнорировать, даже если подпись верна.
+   * Present only on a rehearsal (/v1/test-webhook/*, /v1/payment/testing-webhook) and always true —
+   * inside the signature. A live event never carries this field: your handler must ignore a body
+   * with test: true even if the signature is valid.
    */
   test?: boolean;
-  /** Хеш транзакции депозита. */
+  /** The deposit transaction hash. */
   txid: string;
-  /** Вид события: payment | payout | wallet | conversion — какое тело пришло. */
+  /** Event kind: payment | payout | wallet | conversion — which body arrived. */
   type: string;
-  /** Идентификатор статического кошелька. */
+  /** Static wallet id. */
   uuid: string;
 }
 
 export interface WebhookDeliveryLogItem {
-  /** Сделано попыток. */
+  /** Attempts made. */
   attempts: number;
-  /** Почему доставка cancelled не будет отправлена; пусто у остальных статусов. */
+  /** Why a cancelled delivery will not be sent; empty for other statuses. */
   cancel_reason: string;
-  /** Когда поставлена, RFC 3339 UTC. */
+  /** When queued, RFC 3339 UTC. */
   created_at: string;
-  /** Событие в теле. */
+  /** The event in the body. */
   event_type: string;
-  /** Идентификатор доставки. */
+  /** Delivery id. */
   id: string;
-  /** Ошибка последней попытки; пусто, если её не было. */
+  /** The error of the last attempt; empty if there was none. */
   last_error: string;
-  /** Глобальный номер события (тот же, что в теле). */
+  /** The global event number (the same as in the body). */
   sequence: number;
-  /** Состояние доставки. */
+  /** Delivery state. */
   status: OpenEnum<WebhookDeliveryStatus>;
-  /** Последнее изменение, RFC 3339 UTC. */
+  /** Last change, RFC 3339 UTC. */
   updated_at: string;
-  /** Куда доставляется. */
+  /** Where it is delivered. */
   url: string;
 }
 
 export interface WebhookDeliveryLogItemList {
-  /** Записи этой страницы. */
+  /** The records of this page. */
   items: WebhookDeliveryLogItem[];
-  /** Блок пагинации. */
+  /** Pagination block. */
   paginate: Pagination;
 }
 
 export interface WebhookResendResult {
-  /** Всегда true: вебхук поставлен в очередь; неудача отвечает ошибкой. */
+  /** Always true: the webhook has been queued; a failure responds with an error. */
   ok: boolean;
 }
 
