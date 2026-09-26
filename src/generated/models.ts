@@ -852,20 +852,23 @@ export interface FaucetResult {
 
 export interface HistoryRequest {
   /**
-   * Only for /v1/payout/history: true — return refunds together with payouts (the former behavior
-   * of the feed without kind). Default false: refunds are separate, kind=refund.
+   * true — return refunds together with payouts (the former behavior of the feed without kind).
+   * Default false: refunds are separate, kind=refund.
    */
   include_refunds?: boolean;
   /**
-   * Only for /v1/payout/history: payout — regular payouts, refund — refunds; empty — regular
-   * payouts (with include_refunds=true — everything together).
+   * payout — regular payouts, refund — refunds; empty — regular payouts (with include_refunds=true
+   * — everything together).
    */
   kind?: OpenEnum<PayoutKind>;
   /** Page size, 1–100; out of range — 25. */
   limit?: number;
   /** Offset from the start of the list (newest first). */
   offset?: number;
-  /** Filter by status (an exact value from the status vocabulary); empty — all. */
+  /**
+   * Filter by payout status (an exact value from the payout status vocabulary: pending, approved,
+   * awaiting_cosign, broadcasting, sent, confirmed, failed, cancelled); empty — all.
+   */
   status?: string;
 }
 
@@ -892,9 +895,16 @@ export interface LinkCheckoutRequest {
 }
 
 export interface LookupRequest {
-  /** Your order reference. */
+  /**
+   * Your order_id of the object: the payment's for /v1/payment/info, the payout's for
+   * /v1/payout/info.
+   */
   order_id?: string;
-  /** The invoice id in Oblodai. Either uuid or order_id is required; uuid takes precedence. */
+  /**
+   * The Oblodai id of the object being looked up: the invoice (payment) for /v1/payment/info, the
+   * payout or refund for /v1/payout/info. Either uuid or order_id is required; uuid takes
+   * precedence.
+   */
   uuid?: string;
 }
 
@@ -1156,6 +1166,18 @@ export interface PaymentFeeResult {
   fee_percent?: string;
   /** The share the next invoice will apply; 0 if the operator has disabled fee pass-through. */
   payer_pays_percent: number;
+}
+
+export interface PaymentHistoryRequest {
+  /** Page size, 1–100; out of range — 25. */
+  limit?: number;
+  /** Offset from the start of the list (newest first). */
+  offset?: number;
+  /**
+   * Filter by payment status (an exact value from the payment status vocabulary: select, created,
+   * confirm_check, paid, paid_over, wrong_amount, expired, cancelled); empty — all.
+   */
+  status?: string;
 }
 
 export interface PaymentInfoResult {
@@ -2939,7 +2961,12 @@ export interface RefundBatchItem {
    * Bitcoin/UTXO.
    */
   address?: string;
-  /** A partial amount. Defaults to the full received amount. */
+  /**
+   * The amount to refund, in the payment coin; overrides the default. Without it the refund is the
+   * amount paid minus the payer's network surcharge and — when the store's refund fee setting
+   * (getRefundFeeConfig) puts the commission on the customer — minus the Oblodai commission too,
+   * never more than was credited to your balance for this payment.
+   */
   amount?: string;
   /**
    * Fund the refund by converting balance: USDT → the payment currency only. Needed when the
@@ -2985,7 +3012,12 @@ export interface RefundRequest {
    * Bitcoin/UTXO.
    */
   address?: string;
-  /** A partial amount. Defaults to the full received amount. */
+  /**
+   * The amount to refund, in the payment coin; overrides the default. Without it the refund is the
+   * amount paid minus the payer's network surcharge and — when the store's refund fee setting
+   * (getRefundFeeConfig) puts the commission on the customer — minus the Oblodai commission too,
+   * never more than was credited to your balance for this payment.
+   */
   amount?: string;
   /**
    * Fund the refund by converting balance: USDT → the payment currency only. Needed when the
@@ -3557,11 +3589,18 @@ export interface TestWebhookKindRequest {
 }
 
 export interface TestWebhookKindResult {
-  /** Always true: the body was delivered. */
+  /**
+   * Always true: your endpoint received the body and answered, with any HTTP status — ok does not
+   * mean it was accepted; check status_code. If the endpoint cannot be reached, the call fails with
+   * webhook.test_failed.
+   */
   ok: boolean;
   /** The body is signed with the project endpoint's secret. */
   signed: boolean;
-  /** The HTTP status your endpoint responded with. */
+  /**
+   * The HTTP status your endpoint responded with. Only 2xx counts as accepted: a live delivery
+   * answered with anything else is retried and eventually marked dead.
+   */
   status_code: number;
 }
 
@@ -3581,11 +3620,17 @@ export interface TestWebhookResult {
   duration_ms: number;
   /** Why the delivery did not take place; only when ok=false. */
   error?: string;
-  /** The delivery took place (the endpoint responded, with any status). */
+  /**
+   * The delivery took place: the endpoint answered, with any HTTP status — ok does not mean it was
+   * accepted; check status_code.
+   */
   ok: boolean;
   /** The body is signed with the project endpoint's secret. */
   signed: boolean;
-  /** The HTTP status returned by the endpoint; only when ok=true. */
+  /**
+   * The HTTP status returned by the endpoint; only when ok=true. Only 2xx counts as accepted: a
+   * live delivery answered with anything else is retried.
+   */
   status_code?: number;
   /** Where the sample body was sent. */
   url: string;
