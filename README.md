@@ -16,7 +16,7 @@ Payments, payouts, payment links, splits, static wallets, webhooks — one API k
 <img src="https://img.shields.io/badge/types-TypeScript-3178C6?style=flat-square" alt="TypeScript">
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-000000?style=flat-square" alt="License: MIT"></a>
 
-[Documentation](https://docs.oblodai.com) · [Dashboard](https://my.oblodai.com) · [Читать по-русски →](README.ru.md)
+[Documentation](https://docs.oblodai.com) · [Dashboard](https://my.oblodai.com) · [Read in Russian →](README.ru.md)
 
 </div>
 
@@ -228,7 +228,7 @@ Every route the gateway exposes has a method here; the table is generated from t
 
 <!-- prettier-ignore-start -->
 <!-- sdkgen:methods -->
-16 resources, 120 methods.
+17 resources, 123 methods.
 
 | Resource | Methods |
 | --- | --- |
@@ -248,6 +248,7 @@ Every route the gateway exposes has a method here; the table is generated from t
 | `documents` | `getSigned` · `getBalance` · `getFees` · `getLedger` · `getSplit` · `getPayoutLinkCheque` · `getStatement` · `getBatch` · `getPaymentLink` · `getWalletStatement` · `getReferrals` · `createJob` · `getJob` · `downloadJobFile` |
 | `checkout` | `getSourceOfFundsForm` · `submitSourceOfFunds` · `getPublicPaymentLink` · `paymentLink` · `listCurrencies` · `get` · `selectMethod` · `startOnramp` · `getOnramp` · `getQr` |
 | `sandbox` | `onboardStore` · `faucet` · `simulateDeposit` · `reset` · `listWebhooks` · `replayWebhook` |
+| `cliLogin` | `start` · `poll` · `logoutCli` |
 <!-- /sdkgen:methods -->
 <!-- prettier-ignore-end -->
 
