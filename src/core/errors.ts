@@ -3,7 +3,7 @@ import { ErrorCode } from "../generated/enums.js";
 /**
  * Error model. One family, `OblodaiError`, mirrors the core's error envelope:
  *
- *   { "error": { "code", "message", "field"?, "retryable", "retry_after"?, "request_id"? } }
+ *   { "error": { "code", "message", "field"?, "details"?, "retryable", "retry_after"?, "request_id"? } }
  *
  * `retryable` is authoritative when the core wrote the envelope: it is the core's own classification
  * of the failure. A response without an envelope (a proxy 502, an HTML 503) is `synthetic` — the
@@ -14,6 +14,7 @@ export interface ErrorDetail {
   code: string;
   message?: string;
   field?: string;
+  details?: Record<string, string>;
   retryable?: boolean;
   retry_after?: number;
   request_id?: string;
@@ -50,6 +51,7 @@ export interface OblodaiErrorInit {
   retryAfter?: number;
   requestId?: string;
   field?: string;
+  details?: Record<string, string>;
   /** True when no core envelope was present (proxy/LB answer, empty body). */
   synthetic?: boolean;
   /** The decoded error body (or raw text when the body was not JSON). Not serialized by toJSON. */
@@ -70,6 +72,11 @@ export class OblodaiError extends Error {
   readonly requestId?: string;
   /** The request field the error refers to, for validation failures. */
   readonly field?: string;
+  /**
+   * Machine-readable facts about the refusal, keys documented by its code (e.g.
+   * `cli.permission_denied` carries `required_role` and `role`); undefined when absent.
+   */
+  readonly details?: Readonly<Record<string, string>>;
   /** No core envelope: the answer came from something in front of the core. */
   readonly synthetic: boolean;
   /** Raw body, non-enumerable so loggers do not dump it. */
@@ -84,6 +91,7 @@ export class OblodaiError extends Error {
     this.retryAfter = init.retryAfter;
     this.requestId = init.requestId;
     this.field = init.field;
+    this.details = init.details;
     this.synthetic = init.synthetic ?? false;
     Object.defineProperty(this, "raw", { value: init.raw, enumerable: false, writable: false });
     // An uncaught error prints its stack, whose first line is `name: message` — make it the same
@@ -133,6 +141,7 @@ export class OblodaiError extends Error {
       retryAfter: this.retryAfter,
       requestId: this.requestId,
       field: this.field,
+      details: this.details,
     };
   }
 }
@@ -244,6 +253,20 @@ function stringOrUndefined(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
+/** The string values of the envelope's `details` object; undefined when there are none. */
+function detailsOrUndefined(v: unknown): Record<string, string> | undefined {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return undefined;
+  const out: Record<string, string> = {};
+  let any = false;
+  for (const [key, value] of Object.entries(v)) {
+    if (typeof value === "string") {
+      out[key] = value;
+      any = true;
+    }
+  }
+  return any ? out : undefined;
+}
+
 /**
  * Decode `{error: {...}}` field by field. A peer that answers with the right shape but the wrong
  * types (`code: 123`, `retryable: "yes"`) must not be able to change how the SDK behaves: an
@@ -261,6 +284,7 @@ export function decodeErrorDetail(raw: unknown): { detail: ErrorDetail; usable: 
       code,
       message: stringOrUndefined(src.message),
       field: stringOrUndefined(src.field),
+      details: detailsOrUndefined(src.details),
       retryable,
       retry_after: coerceRetryAfterSeconds(src.retry_after),
       request_id: requestId,
@@ -295,6 +319,7 @@ export function apiErrorFrom(
       coerceRetryAfterSeconds(source.retryAfterHeader),
     requestId: stringOrUndefined(detail.request_id),
     field: stringOrUndefined(detail.field),
+    details: synthetic ? undefined : detailsOrUndefined(detail.details),
     synthetic,
     raw,
   };

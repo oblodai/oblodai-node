@@ -30,6 +30,25 @@ describe("error envelope decoded field by field", () => {
     expect(err.synthetic).toBe(true); // no usable code == no usable envelope
   });
 
+  it("keeps only the string values of `details`", async () => {
+    const { fetch } = mockFetch([
+      apiError(403, {
+        code: "cli.permission_denied",
+        message: "no",
+        retryable: false,
+        details: { required_role: "finance", role: "viewer", n: 3, x: null },
+      }),
+      apiError(403, { code: "cli.permission_denied", message: "no", details: ["finance"] }),
+    ]);
+    const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
+    const err = await ob.account.getBalance().catch((e) => e);
+    expect(err.details).toEqual({ required_role: "finance", role: "viewer" });
+    expect(err.toJSON().details).toEqual({ required_role: "finance", role: "viewer" });
+    const noDetails = await ob.account.getBalance().catch((e) => e);
+    expect(noDetails.code).toBe("cli.permission_denied");
+    expect(noDetails.details).toBeUndefined();
+  });
+
   it("does not stringify a non-string message into [object Object]", async () => {
     const { fetch } = mockFetch([apiError(400, { code: "payment.bad_amount", message: { a: 1 } })]);
     const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
