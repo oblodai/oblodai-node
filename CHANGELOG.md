@@ -16,9 +16,19 @@ All notable changes to this package are documented here. The format follows
 - Every method's documentation names the minimum team role a CLI key needs to call it;
   money-out operations (payouts, refunds, transfers, auto-withdrawal, split rules) take only the
   store owner's own CLI key.
+- `client.refunds.calculate` (POST /v1/payment/refund/calculate): dry-run a refund and get back a
+  `RefundCalculation` — `amount`, `currency`, `network`, `address`, `amountPaid`, `surcharge`,
+  `commission`/`commissionBearer`, `credited`, `refundable`, `refunded`, `remaining`, and, with
+  `fromCurrency` set, the estimated `fromAmount`. Runs the same checks as `refunds.payment` and
+  reserves/sends nothing.
 
 ### Changed
 
+- `PayoutValidateResult` (`payouts.validate`) gains `address` (the destination), and, for a
+  `fromCurrency` payout, `fromAmount` and `rate` alongside the existing `fundedBy`.
+- `PayoutRequest.memo` / `PayoutValidateRequest.memo` docs are now network-specific: the XRP
+  destination tag, the Stellar memo id, a TON comment (at most 64 bytes), and at most 120 bytes on
+  every other network.
 - **Breaking:** `payments.listHistory` takes its own request model `PaymentHistoryRequest` (`limit`,
   `offset`, `status`) instead of the shared `HistoryRequest`; `HistoryRequest` now serves
   `payouts.listHistory` only. The payment feed never honoured `kind`/`include_refunds`, so the new
@@ -170,7 +180,7 @@ Migration notes: [MIGRATION-1.3.md](MIGRATION-1.3.md).
 - An `idempotencyKey` passed to a list method now raises `sdk.idempotency_unsupported` immediately
   instead of being silently dropped.
 - `ConfigError` is exported from the package root (the docs told callers to use `instanceof
-  ConfigError` while it was unreachable), along with `WebhookPayloadError`, `PaymentBatchParams`,
+ConfigError` while it was unreachable), along with `WebhookPayloadError`, `PaymentBatchParams`,
   `PageParams`, `Credentials` and the error-code type aliases.
 - `webhooks.test(kind, params)` types `params` per kind instead of always as the payment body.
 - Generated docs are English only: the codegen no longer copies a non-ASCII example string out of

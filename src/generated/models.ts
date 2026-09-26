@@ -31,6 +31,7 @@ import type {
   PayoutLinkStatus,
   PayoutSource,
   PayoutStatus,
+  RefundCommissionBearer,
   RefundRollup,
   Role,
   SoFStatus,
@@ -896,14 +897,14 @@ export interface LinkCheckoutRequest {
 
 export interface LookupRequest {
   /**
-   * Your order_id of the object: the payment's for /v1/payment/info, the payout's for
-   * /v1/payout/info.
+   * Your order_id of that object: the payment's in payment operations, the payout's in payout
+   * operations. Used only when uuid is empty.
    */
   order_id?: string;
   /**
-   * The Oblodai id of the object being looked up: the invoice (payment) for /v1/payment/info, the
-   * payout or refund for /v1/payout/info. Either uuid or order_id is required; uuid takes
-   * precedence.
+   * Our id (a UUID) of the object the operation acts on: the payment (invoice) in payment
+   * operations, the payout or refund in payout operations. Either uuid or order_id is required;
+   * when both are passed, uuid is used and order_id is ignored.
    */
   uuid?: string;
 }
@@ -1070,7 +1071,12 @@ export interface PaymentBatchItem {
   accuracy_payment_percent?: number;
   /** The merchant's private data, echoed in webhooks (not visible to the buyer). */
   additional_data?: string;
-  /** The amount to pay in currency. */
+  /**
+   * The price in currency — what you are paid for the order. The payer can be asked for more: the
+   * invoice's payer_amount adds the network surcharge (the cost of accepting the deposit on the
+   * chosen network, see network_surcharge) and any per-method discount or surcharge; your credit is
+   * amount minus the commission.
+   */
   amount: string;
   /**
    * The price currency code: any of the 23 fiat currencies (USD, EUR, RUB, …) or any coin (USDT,
@@ -1606,7 +1612,12 @@ export interface PaymentRequest {
   accuracy_payment_percent?: number;
   /** The merchant's private data, echoed in webhooks (not visible to the buyer). */
   additional_data?: string;
-  /** The amount to pay in currency. */
+  /**
+   * The price in currency — what you are paid for the order. The payer can be asked for more: the
+   * invoice's payer_amount adds the network surcharge (the cost of accepting the deposit on the
+   * chosen network, see network_surcharge) and any per-method discount or surcharge; your credit is
+   * amount minus the commission.
+   */
   amount: string;
   /**
    * The price currency code: any of the 23 fiat currencies (USD, EUR, RUB, …) or any coin (USDT,
@@ -1960,19 +1971,31 @@ export interface PayoutCalculateRequest {
 }
 
 export interface PayoutCalculation {
-  /** How much will be debited from the balance; null — unknown (the fee cannot be estimated). */
+  /**
+   * How much will be debited from YOUR balance, in currency (the fee included when you bear it);
+   * null — cannot be estimated right now (the fee is unknown and you bear it).
+   */
   amount: string | null;
-  /** Network fee; null — cannot be estimated right now. */
+  /**
+   * The network fee of the payout, in currency; who bears it is fee_bearer. null — cannot be
+   * estimated right now (the fee oracle or the rate is unavailable), not zero: retry later.
+   */
   commission: string | null;
   /** Payout asset. */
   currency: string;
-  /** Who pays the fee: gateway, merchant or recipient. */
+  /**
+   * Who pays the network fee: gateway (Oblodai absorbs it, commission is 0), merchant (added to
+   * amount, the recipient gets the full sum) or recipient (deducted from payer_amount).
+   */
   fee_bearer: OpenEnum<PayoutFeeBearer>;
   /** exact — the fee is contractual (the gateway absorbs it); estimated — an oracle estimate. */
   fee_type: OpenEnum<FeeType>;
   /** The network — as it came in the request. */
   network: string;
-  /** How much the address will receive; null — unknown. */
+  /**
+   * How much the RECIPIENT receives at the address, in currency (not what you pay — that is
+   * amount). null — cannot be estimated right now (the fee is unknown and the recipient bears it).
+   */
   payer_amount: string | null;
 }
 
@@ -2437,7 +2460,13 @@ export interface PayoutRequest {
    * amount; false — the recipient gets amount-fee; omitted — the project's fee-config.
    */
   is_subtract?: boolean | null;
-  /** Destination tag/memo (TON Jetton). At most 120 characters. */
+  /**
+   * Destination tag / memo / comment, by network: XRP — the destination tag, a uint32 (required
+   * unless the X-address carries one; 0 for a wallet without a tag); Stellar — the memo id, a
+   * uint64 (required unless the muxed M… address carries one); TON — a comment of at most 64 bytes
+   * (it must fit the transfer's message cell); other networks — at most 120 bytes. Omit it where
+   * the network has none.
+   */
   memo?: string;
   /** Network (tron, ethereum, …). Required for coins with several networks. */
   network?: string;
@@ -2466,7 +2495,13 @@ export interface PayoutValidateRequest {
    * amount; false — the recipient gets amount-fee; omitted — the project's fee-config.
    */
   is_subtract?: boolean | null;
-  /** Destination tag/memo (TON Jetton). At most 120 characters. */
+  /**
+   * Destination tag / memo / comment, by network: XRP — the destination tag, a uint32 (required
+   * unless the X-address carries one; 0 for a wallet without a tag); Stellar — the memo id, a
+   * uint64 (required unless the muxed M… address carries one); TON — a comment of at most 64 bytes
+   * (it must fit the transfer's message cell); other networks — at most 120 bytes. Omit it where
+   * the network has none.
+   */
   memo?: string;
   /** Network (tron, ethereum, …). Required for coins with several networks. */
   network?: string;
@@ -2482,14 +2517,25 @@ export interface PayoutValidateRequest {
 }
 
 export interface PayoutValidateResult {
-  /** How much will be debited from the balance. */
+  /** The destination address the payout will be sent to. */
+  address: string;
+  /**
+   * How much will be debited from the balance, in currency (for a from_currency payout the currency
+   * balance is first funded with it by the conversion, see from_amount).
+   */
   amount: string;
-  /** Network fee. */
+  /** Network fee, in currency; who bears it is fee_bearer. */
   commission: string;
   /** Payout currency. */
   currency: string;
   /** Who pays the network fee. */
   fee_bearer: OpenEnum<PayoutFeeBearer>;
+  /**
+   * How much funded_by (USDT) the conversion will debit to fund amount, at the current rate plus
+   * the conversion spread; the conversion re-prices at execution, so the final figure can differ
+   * slightly. Present only on a from_currency payout.
+   */
+  from_amount?: string;
   /**
    * The currency whose conversion funds the payout (from_currency); present only on such a payout.
    */
@@ -2498,8 +2544,13 @@ export interface PayoutValidateResult {
   maturity_note: string;
   /** The payout network in canonical spelling. */
   network: string;
-  /** How much will reach the recipient. */
+  /** How much the recipient will receive at address, in currency. */
   payer_amount: string;
+  /**
+   * The rate the from_amount estimate used: USDT per 1 unit of currency. Present only on a
+   * from_currency payout.
+   */
+  rate?: string;
   /** Always true: a failed check responds with an error carrying the reason code. */
   valid: boolean;
 }
@@ -2962,10 +3013,12 @@ export interface RefundBatchItem {
    */
   address?: string;
   /**
-   * The amount to refund, in the payment coin; overrides the default. Without it the refund is the
-   * amount paid minus the payer's network surcharge and — when the store's refund fee setting
+   * The amount to refund, in the payment coin. Without it the refund is what is still refundable:
+   * the amount paid minus the payer's network surcharge and — when the store's refund fee setting
    * (getRefundFeeConfig) puts the commission on the customer — minus the Oblodai commission too,
-   * never more than was credited to your balance for this payment.
+   * never more than was credited to your balance for this payment, less the refunds already made.
+   * All refunds of a payment together cannot exceed that refundable amount
+   * (refund.exceeds_refundable); POST /v1/payment/refund/calculate shows it.
    */
   amount?: string;
   /**
@@ -2999,6 +3052,68 @@ export interface RefundBatchRequest {
   refunds: RefundBatchItem[];
 }
 
+export interface RefundCalculation {
+  /** Where the refund would go. */
+  address: string;
+  /**
+   * true — address was omitted and the refund goes to the recorded payer_address (allowed only when
+   * payer_address_is_refundable = true); false — the address you passed.
+   */
+  address_is_payer: boolean;
+  /**
+   * What this refund would send: the amount you passed, or by default the remaining refundable
+   * amount.
+   */
+  amount: string;
+  /** What the buyer paid in total, including the network surcharge. */
+  amount_paid: string;
+  /**
+   * The Oblodai commission withheld from the refund: the payment's commission when
+   * commission_bearer is customer, 0 when it is merchant.
+   */
+  commission: string;
+  /**
+   * Who bears the Oblodai commission on this refund (the store's refund fee setting,
+   * getRefundFeeConfig): customer — it is deducted from the refund; merchant — it is not.
+   */
+  commission_bearer: OpenEnum<RefundCommissionBearer>;
+  /**
+   * What this payment credited to your balance; null — cannot be reconstructed (a legacy payment).
+   */
+  credited: string | null;
+  /** The refund coin — the one the buyer paid with. */
+  currency: string;
+  /**
+   * How much USDT the funding conversion would debit, at the current rate plus the conversion
+   * spread; it re-prices at execution. Present only with from_currency.
+   */
+  from_amount?: string;
+  /** The currency whose conversion would fund the refund (from_currency); present only then. */
+  funded_by?: string;
+  /** The network the refund would be sent on (canonical). */
+  network: string;
+  /** Your order_id of the payment; null if it has none. */
+  order_id: string | null;
+  /** USDT per 1 unit of currency used for from_amount. Present only with from_currency. */
+  rate?: string;
+  /**
+   * The most that all refunds of this payment together may send: amount_paid minus surcharge (minus
+   * commission when commission_bearer is customer), never more than credited.
+   */
+  refundable: string;
+  /** Already refunded (live and completed refunds; failed and cancelled ones do not count). */
+  refunded: string;
+  /** refundable minus refunded: what can still be refunded before this refund. */
+  remaining: string;
+  /**
+   * The payer's network surcharge inside amount_paid: the cost of accepting the deposit, never
+   * refunded from your balance.
+   */
+  surcharge: string;
+  /** The payment id. */
+  uuid: string;
+}
+
 export interface RefundFeeResult {
   /** true — the project set this setting itself; false — the gateway default applies. */
   configured: boolean;
@@ -3013,10 +3128,12 @@ export interface RefundRequest {
    */
   address?: string;
   /**
-   * The amount to refund, in the payment coin; overrides the default. Without it the refund is the
-   * amount paid minus the payer's network surcharge and — when the store's refund fee setting
+   * The amount to refund, in the payment coin. Without it the refund is what is still refundable:
+   * the amount paid minus the payer's network surcharge and — when the store's refund fee setting
    * (getRefundFeeConfig) puts the commission on the customer — minus the Oblodai commission too,
-   * never more than was credited to your balance for this payment.
+   * never more than was credited to your balance for this payment, less the refunds already made.
+   * All refunds of a payment together cannot exceed that refundable amount
+   * (refund.exceeds_refundable); POST /v1/payment/refund/calculate shows it.
    */
   amount?: string;
   /**
@@ -3553,7 +3670,7 @@ export interface SummaryAmount {
 export interface SummaryRequest {
   /** Start of the window, inclusive (RFC 3339). */
   from: string;
-  /** End of the window, exclusive (RFC 3339). */
+  /** End of the window, exclusive (RFC 3339); must be after from, otherwise summary.bad_window. */
   to: string;
 }
 
@@ -3641,7 +3758,11 @@ export interface TransferBatchItem {
   amount: string;
   /** Currency code (cryptocurrency). */
   currency: string;
-  /** Idempotency key: a retry with the same order_id is a no-op; required in a transfer batch. */
+  /**
+   * Idempotency key: a retry with the same order_id is a no-op; required in a transfer batch.
+   * Always pass it (or an Idempotency-Key header, which the SDKs send for you): without either,
+   * retrying the request after a network timeout creates a second transfer.
+   */
   order_id: string;
   /**
    * The recipient's platform user id (a UUID, not a username); a username is resolved to an id via
@@ -3669,8 +3790,9 @@ export interface TransferRequest {
   /** Currency code (cryptocurrency). */
   currency: string;
   /**
-   * Idempotency key: a retry with the same order_id is a no-op. Always pass it, otherwise retrying
-   * the request after a network timeout creates a second transfer.
+   * Idempotency key: a retry with the same order_id is a no-op. Always pass it (or an
+   * Idempotency-Key header, which the SDKs send for you): without either, retrying the request
+   * after a network timeout creates a second transfer.
    */
   order_id?: string;
 }
@@ -3708,7 +3830,11 @@ export interface TransferToUserRequest {
   amount: string;
   /** Currency code (cryptocurrency). */
   currency: string;
-  /** Idempotency key: a retry with the same order_id is a no-op; required in a transfer batch. */
+  /**
+   * Idempotency key: a retry with the same order_id is a no-op; required in a transfer batch.
+   * Always pass it (or an Idempotency-Key header, which the SDKs send for you): without either,
+   * retrying the request after a network timeout creates a second transfer.
+   */
   order_id?: string;
   /**
    * The recipient's platform user id (a UUID, not a username); a username is resolved to an id via

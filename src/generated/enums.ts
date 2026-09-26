@@ -637,6 +637,13 @@ export const PayoutStatus = {
 } as const;
 export type PayoutStatus = (typeof PayoutStatus)[keyof typeof PayoutStatus];
 
+export const RefundCommissionBearer = {
+  CUSTOMER: "customer",
+  MERCHANT: "merchant",
+} as const;
+export type RefundCommissionBearer =
+  (typeof RefundCommissionBearer)[keyof typeof RefundCommissionBearer];
+
 export const RefundRollup = {
   NONE: "none",
   PARTIAL: "partial",
