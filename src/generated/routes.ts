@@ -1225,8 +1225,8 @@ export const ROUTES = {
     bare: false,
     listKind: null,
   },
-  logoutCli: {
-    operationId: "logoutCli",
+  logoutCliLogin: {
+    operationId: "logoutCliLogin",
     method: "POST",
     path: "/v1/cli/logout",
     auth: "key",

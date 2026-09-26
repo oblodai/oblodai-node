@@ -573,7 +573,8 @@ export class Payments extends Resource {
    * (address/network default to the recorded payer address). It moves money — it is signed with
    * your API key like everything else: a merchant has one key and it has full access.
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/payment/resolve`
    *
@@ -739,7 +740,8 @@ export class Refunds extends Resource {
    * shares are reversed. You can also send the money as a regular payout, but reports will show it
    * as a payout, not a refund.
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/payment/refund`
    *
@@ -793,7 +795,8 @@ export class Refunds extends Resource {
    * and waits for an operator's decision; you can refund it with this endpoint once the operator
    * has reviewed it. Until then it is not yours yet, and the response will be "nothing to refund".
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/wallet/blocked-address-refund`
    *
@@ -845,7 +848,8 @@ export class Payouts extends Resource {
    *
    * Also: `memo` (tag/memo for TON), `url_callback` (your own webhook URL for this payout).
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/payout`
    *
@@ -887,7 +891,8 @@ export class Payouts extends Resource {
    * Many payouts in one request (up to 100). Each one is independent: an error in one does not stop
    * the rest, and a result is returned for each. Idempotent on `order_id`, like a regular payout.
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/payout/mass`
    *
@@ -1140,7 +1145,8 @@ export class Payouts extends Resource {
    * fee, instant, off-chain). The recipient is addressed by user id; a username is resolved by the
    * dashboard's public endpoint /public/users/{username}.
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/transfer/to-user`
    *
@@ -1170,7 +1176,8 @@ export class Payouts extends Resource {
    * An asynchronous batch of internal transfers: {"transfers":[<as in /v1/transfer/to-user>...],
    * "on_error":"continue"}. Status and per-row results — POST /v1/batch/info.
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/transfer/batch`
    *
@@ -1203,7 +1210,8 @@ export class PayoutLinks extends Resource {
    * hour to 30 days). ⚠ If the field is omitted or `0`, the link lives ONE HOUR, not the maximum —
    * set the lifetime explicitly. Idempotency: `reference` (or the `Idempotency-Key` header).
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/payout/link`
    *
@@ -1234,7 +1242,8 @@ export class PayoutLinks extends Resource {
    * Up to 500 links per call; each succeeds or fails independently, the response is aligned with
    * the request indices. Retrying with the same `reference` values is safe.
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/payout/link/batch`
    *
@@ -1440,7 +1449,8 @@ export class Batches extends Resource {
    * silently collapse into one. Returns `batch_id`; per-item status via `/v1/batch/info`.
    * `on_error`: `continue`/`stop`.
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/refund/batch`
    *
@@ -1465,7 +1475,8 @@ export class Batches extends Resource {
    * processed in the background, status via `/v1/batch/info`. Each item is a regular `/v1/payout`
    * object, idempotent on `order_id`.
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/payout/batch`
    *
@@ -1528,7 +1539,8 @@ export class Splits extends Resource {
    * funds to refund. A refund AFTER sending: an external share cannot be recovered (top up your
    * balance); an on-platform partner's share is clawed back automatically.
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/split/rule`
    *
@@ -2492,7 +2504,8 @@ export class Settings extends Resource {
    *
    * Automatically withdraw incoming funds to a given address.
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/auto-withdraw/set`
    *
@@ -2533,7 +2546,8 @@ export class Settings extends Resource {
   /**
    * Delete an auto-withdrawal rule
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/auto-withdraw/delete`
    *
@@ -2855,7 +2869,8 @@ export class Documents extends Resource {
    * again, so the cheque can only be printed while you still have the token. ⚠ The document is
    * money: anyone who has it can claim the funds. The response is `application/pdf`.
    *
-   * Requires role: Finance when called with a CLI key.
+   * With a CLI key: only the store owner's own key (role Owner); other team members use the
+   * dashboard, where each such operation is confirmed with 2FA.
    *
    * `POST /v1/payout/link/cheque`
    *
@@ -3619,8 +3634,8 @@ export class CliLogin extends Resource {
    * request.control_char, request.duplicate_field, request.nul_byte, request.overloaded,
    * request.rate_limited, request.too_deep
    */
-  logoutCli(options?: RequestOptions): Promise<CLILogoutResult> {
-    return this._request(ROUTES.logoutCli, undefined, options);
+  logout(options?: RequestOptions): Promise<CLILogoutResult> {
+    return this._request(ROUTES.logoutCliLogin, undefined, options);
   }
 }
 

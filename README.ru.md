@@ -250,7 +250,7 @@ await oblodai.sandbox.reset(); // cancel open invoices, zero the balances
 | `documents` | `getSigned` · `getBalance` · `getFees` · `getLedger` · `getSplit` · `getPayoutLinkCheque` · `getStatement` · `getBatch` · `getPaymentLink` · `getWalletStatement` · `getReferrals` · `createJob` · `getJob` · `downloadJobFile` |
 | `checkout` | `getSourceOfFundsForm` · `submitSourceOfFunds` · `getPublicPaymentLink` · `paymentLink` · `listCurrencies` · `get` · `selectMethod` · `startOnramp` · `getOnramp` · `getQr` |
 | `sandbox` | `onboardStore` · `faucet` · `simulateDeposit` · `reset` · `listWebhooks` · `replayWebhook` |
-| `cliLogin` | `start` · `poll` · `logoutCli` |
+| `cliLogin` | `start` · `poll` · `logout` |
 <!-- /sdkgen:methods -->
 <!-- prettier-ignore-end -->
 
