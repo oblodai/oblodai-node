@@ -16,7 +16,8 @@ everything below holds for every method.
 - **One API key.** `publicId` + `secret` (or `OBLODAI_PUBLIC_ID` / `OBLODAI_SECRET`) sign every
   signed route. `ROUTES.<operationId>.auth` is `"key"`, `"public"` (no credentials: `checkout.*`,
   `account.listExchangeRates`, `payoutLinks.getPayoutClaim/claimPayout`, `documents.getSigned`) or
-  `"onboard"` (`adminToken`, `sandbox.onboardStore` only).
+  `"onboard"` (operator-only: `sandbox.onboardStore` throws `sdk.operator_channel_unsupported`
+  before any request; `adminToken` is deprecated and ignored).
 - Idempotency keys are automatic where the gateway deduplicates (`ROUTES.x.idempotent`) and reused on
   every retry. `idempotencyKey` on any other route throws `sdk.idempotency_unsupported` — except
   `sandbox.faucet`, whose own `idempotency_key` body field the option fills.
@@ -67,12 +68,12 @@ cancelled` (`isPaymentPaid`, `isPaymentFinal`; `wrong_amount` → `payments.reso
 
 ```ts
 import { verifyWebhookDelivery, isKnownEvent, isStaleEvent } from "@oblodai-npm/sdk/webhooks";
-const { event, id, isTest } = verifyWebhookDelivery(rawBody, req.headers, { secret });
+const { event, eventKey, isTest } = verifyWebhookDelivery(rawBody, req.headers, { secret });
 ```
 
 Verify over the raw bytes. Order of checks: headers → HMAC (current, then `previousSecret`) →
-freshness (`toleranceSec`, default 300) → body. Deduplicate on `eventId` (`X-Webhook-Event-Id`,
-stable across retries and resends; `id` changes on a resend), order by `event.sequence`
-(`isStaleEvent`), skip `isTest` rehearsals, narrow with `isKnownEvent(event)` before switching on
+freshness (`toleranceSec`, default 300) → body. Deduplicate on `eventKey` (`type:objectId:sequence`
+from the signed body; the `X-Webhook-*` id/test headers are unsigned and only under `unverified`),
+order by `event.sequence` (`isStaleEvent`), always ignore `isTest` rehearsals (signed body `test`), narrow with `isKnownEvent(event)` before switching on
 `event.type` (`payment | payout | wallet | conversion`). Answer 4xx to `SignatureError`, 5xx to
 `WebhookPayloadError`.

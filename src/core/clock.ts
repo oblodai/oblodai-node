@@ -2,8 +2,10 @@
  * Injectable clock for signing. The core rejects timestamps more than ±`SKEW_SECONDS` (the
  * contract's `x-oblodai-signing.skew_seconds`) from its own time; a host with a drifting clock
  * would get `merchant.bad_signature` on every call. The transport
- * learns the server's time from the `Date` header of a signature-failure response, re-signs once,
- * and keeps the offset only if that re-signed attempt got past authentication.
+ * learns the server's time from the `Date` header of a signature-failure response, re-signs once
+ * with it, and adopts the offset for the whole client only when that re-signed attempt succeeds
+ * (2xx). A `Date` that is off by more than {@link MAX_PLAUSIBLE_OFFSET_SECONDS} is ignored: one
+ * response — from a broken proxy or a hostile peer — never moves the signing clock further.
  */
 export interface Clock {
   /** Current unix time in seconds. */
@@ -14,8 +16,8 @@ export const systemClock: Clock = {
   now: () => Math.floor(Date.now() / 1000),
 };
 
-/** Offsets beyond this are implausible clock drift and are ignored (a broken proxy `Date`). */
-export const MAX_PLAUSIBLE_OFFSET_SECONDS = 24 * 3600;
+/** Offsets beyond this (±15 min) are implausible clock drift and are ignored (a broken proxy `Date`). */
+export const MAX_PLAUSIBLE_OFFSET_SECONDS = 900;
 
 export class SkewCorrectingClock implements Clock {
   private offsetSec = 0;
@@ -24,6 +26,11 @@ export class SkewCorrectingClock implements Clock {
 
   now(): number {
     return this.base.now() + this.offsetSec;
+  }
+
+  /** Current unix time shifted by a candidate offset instead of the adopted one. */
+  nowWith(offsetSec: number): number {
+    return this.base.now() + offsetSec;
   }
 
   /** Server-minus-local offset currently applied, seconds. */

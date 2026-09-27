@@ -2,8 +2,10 @@ import { ContractError } from "./errors.js";
 import { isRecord } from "./util.js";
 
 /**
- * Offset pagination over the core's `{items, paginate}` lists. `paginate.has_pages` is the server's
- * own "there is more" flag; iteration stops on it, or on an empty page, whichever comes first.
+ * Offset pagination over the core's `{items, paginate}` lists. Iteration stops on an empty page, or
+ * once the offset reaches `paginate.total` — never because a page came back shorter than the
+ * requested limit: the core clamps an out-of-range limit (to 25) instead of refusing it, so a
+ * short page is not the last page.
  *
  * A list method returns a lazy {@link Page}: nothing is requested until it is consumed, and the
  * first page is requested once however many ways it is consumed.
@@ -115,7 +117,9 @@ export class Page<T> implements AsyncIterable<T>, PromiseLike<PageResult<T>> {
       yield page;
       const got = page.items.length;
       offset += got;
-      if (got === 0 || !page.hasPages) return;
+      if (got === 0) return;
+      const total = page.paginate.total;
+      if (typeof total === "number" && Number.isFinite(total) && offset >= total) return;
       page = await this.fetchPage(this.limit, offset);
     }
   }

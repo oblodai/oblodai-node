@@ -190,8 +190,8 @@ describe("an event type from a newer core", () => {
   });
 });
 
-describe("the rehearsal header (HEADER_WEBHOOK_TEST)", () => {
-  it('recognises "true" whatever its case or padding', () => {
+describe("the rehearsal header (HEADER_WEBHOOK_TEST) is not signed", () => {
+  it("is reported under `unverified.test` and never makes a live delivery a test", () => {
     for (const flag of ["true", "True", "TRUE", " true "]) {
       const info = verifyWebhookDelivery(
         body,
@@ -201,14 +201,30 @@ describe("the rehearsal header (HEADER_WEBHOOK_TEST)", () => {
           now,
         },
       );
-      expect(info.isTest, flag).toBe(true);
+      expect(info.unverified.test, flag).toBe(true);
+      // An attacker who adds the header to a captured live delivery must not get it dropped.
+      expect(info.isTest, flag).toBe(false);
     }
     expect(
       verifyWebhookDelivery(body, headers({ [HEADER_WEBHOOK_TEST.toLowerCase()]: "false" }), {
         secret: SECRET,
         now,
-      }).isTest,
+      }).unverified.test,
     ).toBe(false);
+  });
+
+  it("cannot make a signed test body look live", () => {
+    const testBody = JSON.stringify({ ...JSON.parse(body), test: true });
+    const info = verifyWebhookDelivery(
+      testBody,
+      {
+        [HEADER_WEBHOOK_TIMESTAMP.toLowerCase()]: String(ts),
+        [HEADER_WEBHOOK_SIGNATURE.toLowerCase()]: signWebhook(SECRET, ts, testBody),
+        [HEADER_WEBHOOK_TEST.toLowerCase()]: "false",
+      },
+      { secret: SECRET, now },
+    );
+    expect(info.isTest).toBe(true);
   });
 });
 

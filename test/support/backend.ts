@@ -7,9 +7,18 @@ export function backendRoot(): string {
   return configured ? resolve(configured) : resolve(__dirname, "..", "..", "..", "oblodai-backend");
 }
 
-/** The shared conformance suite: `$SDKGEN_CONFORMANCE`, else the backend's `tools/sdkgen/conformance`. */
+/** The vendored contract snapshot (`scripts/sync-contract.mjs`), used when no backend is at hand. */
+export const VENDORED_CONTRACT = resolve(__dirname, "..", "..", "contract");
+
+/**
+ * The shared conformance suite: `$SDKGEN_CONFORMANCE`, else the backend's
+ * `tools/sdkgen/conformance`, else the vendored snapshot in `contract/conformance` (CI).
+ */
 export function conformanceDir(): string {
-  return process.env.SDKGEN_CONFORMANCE ?? join(backendRoot(), "tools", "sdkgen", "conformance");
+  if (process.env.SDKGEN_CONFORMANCE) return process.env.SDKGEN_CONFORMANCE;
+  const fromBackend = join(backendRoot(), "tools", "sdkgen", "conformance");
+  if (process.env.OBLODAI_BACKEND || existsSync(fromBackend)) return fromBackend;
+  return join(VENDORED_CONTRACT, "conformance");
 }
 
 export function hasBackend(): boolean {

@@ -6,6 +6,44 @@ All notable changes to this package are documented here. The format follows
 
 ## Unreleased
 
+### Security
+
+- **Breaking — webhooks:** `verifyWebhookDelivery` no longer reports the unsigned delivery headers
+  as if they were verified. The new `eventKey` (`type:objectId:sequence`, also exported as the
+  `eventKey(event)` helper) is built from the signed body and is the deduplication key; `isTest`
+  now comes from the signed body's `test` only. `id`, `eventId`, `eventType` and `eventTime` moved
+  to `unverified.deliveryId` / `unverified.eventId` / `unverified.eventType` /
+  `unverified.eventTime`, next to `unverified.test` (the `X-Webhook-Test` header). A captured
+  delivery replayed with a fresh `X-Webhook-Event-Id`, or with `X-Webhook-Test: true` added, no
+  longer slips past deduplication or gets a real payment dropped.
+- The Express example ignores test deliveries before any side effect and deduplicates on
+  `eventKey`; the README receiver does the same.
+- Error classes thrown from `@oblodai-npm/sdk/webhooks` are now `instanceof` the classes of the
+  main entry (and across the ESM and CJS builds): a forged delivery no longer escapes a
+  `catch (e) { if (e instanceof SignatureError) … }` written against the other entry.
+- **Breaking:** the SDK never sends an admin token. `adminToken` / `OBLODAI_ADMIN_TOKEN` are
+  deprecated and ignored (a one-time warning is logged when a logger is configured), and the
+  operator-only `sandbox.onboardStore` fails with `sdk.operator_channel_unsupported` ("operator
+  channel is not supported by the SDK; use the dashboard") before any request.
+- Clock-skew correction: a `Date` header more than 900 s away is ignored, and the offset is
+  adopted by the client only after the re-signed attempt succeeds (2xx) — a 401 with a far `Date`
+  followed by any other failure no longer moves the signing clock.
+- Claim/AML tokens in the path, signed-link `sig`/`exp`/`token` query values, and the
+  `Authorization`, `Proxy-Authorization`, `X-Api-Key`, `X-Claim-Passcode` and `Cookie` headers are
+  masked in hook `RequestInfo` and in response-too-large / unexpected-redirect error messages.
+  A CLI `device_code` is hidden from JSON/inspect of responses and from logs.
+- **Breaking:** a base URL with `user:password@` is refused, and plain `http://` needs
+  `allowInsecureBaseUrl` (or `OBLODAI_ALLOW_INSECURE=1`) — loopback included.
+- A request body larger than the contract's `MAX_BODY` is refused with `sdk.body_too_large` before
+  it is signed or sent.
+- `FileResult.filename` is reduced to a safe base name (no directories, no control characters,
+  never `.`/`..`).
+- Pagination stops only on an empty page or once the offset reaches `paginate.total`.
+- CI and release: third-party actions pinned to commit SHAs, `npm ci`, `permissions: contents:
+  read`; the release runs the gates in a job without the npm token and publishes with
+  `--ignore-scripts --provenance`. The conformance suite runs in CI against a vendored contract
+  snapshot (`contract/`, checked against the backend by `make ci`). `.env*` is git-ignored.
+
 ### Added
 
 - `client.cliLogin` — `start`, `poll`, `logout`: the browser login of the `oblodai` CLI (OAuth

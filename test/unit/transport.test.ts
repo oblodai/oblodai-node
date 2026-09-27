@@ -140,7 +140,7 @@ describe("transport", () => {
   });
 
   it("re-signs once with the server clock when a 401 reveals skew", async () => {
-    const serverNow = Math.floor(Date.now() / 1000) + 3600;
+    const serverNow = Math.floor(Date.now() / 1000) + 600;
     const { fetch, calls } = mockFetch([
       apiError(
         401,

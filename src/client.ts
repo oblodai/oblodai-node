@@ -38,8 +38,8 @@ export interface Oblodai extends Resources {}
  * const invoice = await oblodai.payments.create({ amount: "25", currency: "USDT", order_id: "o-1" });
  * ```
  *
- * Credentials, base URL and admin token fall back to `OBLODAI_PUBLIC_ID`, `OBLODAI_SECRET`,
- * `OBLODAI_BASE_URL` and `OBLODAI_ADMIN_TOKEN`.
+ * Credentials and base URL fall back to `OBLODAI_PUBLIC_ID`, `OBLODAI_SECRET` and
+ * `OBLODAI_BASE_URL`.
  */
 export class Oblodai {
   /**
@@ -61,7 +61,6 @@ export class Oblodai {
         retry: cfg.retry,
         logger: cfg.logger,
         headers: cfg.headers,
-        adminToken: cfg.adminToken,
         hooks: cfg.hooks,
       }),
     );

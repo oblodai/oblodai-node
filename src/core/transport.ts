@@ -9,7 +9,7 @@ import {
   TransportError,
   type ApiError,
 } from "./errors.js";
-import { redactHeaders, type Hooks, type RequestInfo } from "./hooks.js";
+import { redactHeaders, redactUrl, type Hooks, type RequestInfo } from "./hooks.js";
 import { assertIdempotencyKey, newIdempotencyKey } from "./idempotency.js";
 import { noopLogger, redactingLogger, type Logger } from "./logger.js";
 import type { RequestOptions } from "./options.js";
@@ -25,7 +25,6 @@ import { DEFAULT_RETRY, retryDelayMs, shouldRetry, type RetryOptions } from "./r
 import { routeLabel, type RouteSpec } from "./route.js";
 import {
   INSPECT_CUSTOM,
-  REDACTED,
   defineHidden,
   describeCredential,
   protectResponseSecrets,
@@ -60,8 +59,6 @@ export interface TransportSettings {
   logger?: Logger | undefined;
   /** Extra headers on every request. Never signed material. */
   headers?: Record<string, string> | undefined;
-  /** Sent as `X-Admin-Token` on `onboard` routes only. */
-  adminToken?: string | undefined;
   hooks?: Hooks | undefined;
 }
 
@@ -117,7 +114,6 @@ interface Resolved {
   clock: SkewCorrectingClock;
   logger: Logger;
   headers: Record<string, string> | undefined;
-  adminToken: string | undefined;
   hooks: Hooks | undefined;
 }
 
@@ -148,7 +144,6 @@ export class Transport {
       // Wrapped, not trusted: whatever logger the caller injected receives redacted fields only.
       logger: settings.logger ? redactingLogger(settings.logger) : noopLogger,
       headers: settings.headers,
-      adminToken: settings.adminToken,
       hooks: settings.hooks,
     } satisfies Resolved);
   }
@@ -196,7 +191,6 @@ export class Transport {
     return {
       baseUrl: s.baseUrl,
       credentials: describeCredential(s.credentials?.publicId),
-      adminToken: s.adminToken ? REDACTED : undefined,
       timeout: s.timeout,
       deadline: s.deadline,
       retry: s.retry,
@@ -237,6 +231,15 @@ export class Transport {
     requestId: string,
   ): Promise<RawResponse> {
     const s = this.s;
+    if (route.auth === "onboard") {
+      // Operator-only routes: the core accepts them only over the operator HMAC channel, which the
+      // SDK does not implement (and must never fake with a raw admin token). Refused before any
+      // byte leaves the process.
+      throw new ConfigError(
+        "sdk.operator_channel_unsupported",
+        `${label}: operator channel is not supported by the SDK; use the dashboard`,
+      );
+    }
     const retry =
       options.maxRetries !== undefined ? { ...s.retry, maxRetries: options.maxRetries } : s.retry;
     if (!Number.isInteger(retry.maxRetries) || retry.maxRetries < 0) {
@@ -268,12 +271,12 @@ export class Transport {
 
     let attempt = 0;
     let skewTried = false;
-    let skewInstalled = 0;
-    let skewBefore = 0;
+    // A server-time offset being tried on this call only; adopted by the shared clock on a 2xx.
+    let skewCandidate: number | undefined;
     for (;;) {
       // The offset this attempt is signed with. Compared against the server's own time below —
       // never against the shared offset, which a concurrent call may already have corrected.
-      const signedOffset = s.clock.offset;
+      const signedOffset = skewCandidate ?? s.clock.offset;
       const req = buildRequest({
         baseUrl: s.baseUrl,
         route,
@@ -282,18 +285,16 @@ export class Transport {
         body,
         credentials: s.credentials,
         idempotencyKey,
-        ts: s.clock.now(),
+        ts: skewCandidate !== undefined ? s.clock.nowWith(skewCandidate) : s.clock.now(),
         userAgent: s.userAgent,
         extraHeaders: headers,
-        // Never on a signed merchant route: the admin token provisions merchants, and a gateway
-        // operator's token must not travel on every call a merchant integration makes.
-        adminToken: route.auth === "onboard" ? s.adminToken : undefined,
         requestId,
       });
       s.logger.debug("request", { route: label, attempt, requestId, idempotencyKey });
+      const displayUrl = redactUrl(req.url, route.path);
       const info: RequestInfo = {
         method: req.method,
-        url: req.url,
+        url: displayUrl,
         headers: redactHeaders(req.headers),
         attempt: attempt + 1,
         requestId,
@@ -318,6 +319,7 @@ export class Transport {
           Math.min(perAttempt * 1000, Math.max(1, deadline - Date.now())),
           route.bare ? MAX_BARE_BODY_BYTES : MAX_JSON_BODY_BYTES,
           requestId,
+          displayUrl,
         );
       } catch (err) {
         emit(0, new Headers(), err);
@@ -330,9 +332,14 @@ export class Transport {
       }
 
       if (raw.status >= 200 && raw.status < 300) {
+        // The re-signed attempt got through: the server's time was right, adopt it client-wide.
+        if (skewCandidate !== undefined) s.clock.correct(skewCandidate);
         emit(raw.status, raw.headers);
         return raw;
       }
+      // Anything but a 2xx after a re-sign: the offset is not proven, so it is dropped here and never
+      // reaches the shared clock (a 404 or a 5xx says nothing about whether the time was right).
+      skewCandidate = undefined;
 
       const failure = this.classify(route, raw);
       emit(raw.status, raw.headers, failure);
@@ -343,29 +350,19 @@ export class Transport {
         requestId: failure.requestId ?? requestId,
       });
 
-      // Clock skew: the core rejected the timestamp/MAC. Learn its time from the `Date` header,
-      // re-sign once, and keep the offset only if that attempt got past authentication.
-      if (raw.status === 401 && SIGNATURE_FAILURE_CODES.has(failure.code)) {
-        if (!skewTried) {
-          const offset = s.clock.observeServerDate(raw.headers.get("date"));
-          if (
-            offset !== undefined &&
-            Math.abs(offset - signedOffset) > SIGNATURE_SKEW_SECONDS / 2
-          ) {
-            s.logger.warn("clock skew detected; re-signing with server time", {
-              route: label,
-              offsetSec: offset,
-            });
-            skewTried = true;
-            skewBefore = signedOffset;
-            skewInstalled = offset;
-            s.clock.correct(offset);
-            continue;
-          }
-        } else {
-          // The corrected timestamp did not help, so it was not skew — but only this call's own
-          // correction may be undone; a sibling's newer one stays.
-          s.clock.revertIfUnchanged(skewInstalled, skewBefore);
+      // Clock skew: the core rejected the timestamp/MAC. Learn its time from the `Date` header
+      // (bounded to ±MAX_PLAUSIBLE_OFFSET_SECONDS) and re-sign once with it; the offset is adopted
+      // only if that attempt succeeds.
+      if (raw.status === 401 && SIGNATURE_FAILURE_CODES.has(failure.code) && !skewTried) {
+        const offset = s.clock.observeServerDate(raw.headers.get("date"));
+        if (offset !== undefined && Math.abs(offset - signedOffset) > SIGNATURE_SKEW_SECONDS / 2) {
+          s.logger.warn("clock skew suspected; re-signing once with server time", {
+            route: label,
+            offsetSec: offset,
+          });
+          skewTried = true;
+          skewCandidate = offset;
+          continue;
         }
       }
       if (shouldRetry(failure, { attempt, safeToRepeat }, retry)) {
@@ -431,6 +428,7 @@ export class Transport {
     timeoutMs: number,
     maxBytes: number,
     requestId: string,
+    displayUrl: string,
   ): Promise<RawResponse> {
     const controller = new AbortController();
     const timer = setTimeout(
@@ -454,9 +452,9 @@ export class Transport {
         signal: controller.signal,
         redirect: "manual",
       });
-      assertNotRedirected(req.url, res);
+      assertNotRedirected(req.url, res, displayUrl);
       // The timeout above is still armed here: it covers reading the body, not just the headers.
-      const bytes = await readCapped(res, maxBytes, `${req.method} ${req.url}`);
+      const bytes = await readCapped(res, maxBytes, `${req.method} ${displayUrl}`);
       return {
         status: res.status,
         headers: res.headers,

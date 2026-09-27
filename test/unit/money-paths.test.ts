@@ -99,7 +99,9 @@ describe("Page", () => {
 });
 
 describe("clock skew", () => {
-  const dateFar = () => ({ date: new Date(Date.now() + 4000 * 1000).toUTCString() });
+  const dateFar = (sec = 600) => ({ date: new Date(Date.now() + sec * 1000).toUTCString() });
+  const localTs = (call: { headers: Record<string, string> }) =>
+    Math.abs(Number(call.headers[HEADER_TIMESTAMP.toLowerCase()]) - Math.floor(Date.now() / 1000));
 
   it("ignores the Date header on a 401 that is not a signature failure", async () => {
     const { fetch, calls } = mockFetch([
@@ -121,6 +123,43 @@ describe("clock skew", () => {
     await ob.account.getBalance();
     const ts = Number(calls[2]!.headers[HEADER_TIMESTAMP.toLowerCase()]);
     expect(Math.abs(ts - Math.floor(Date.now() / 1000))).toBeLessThan(5);
+  });
+
+  it("does not adopt the Date offset when the re-signed attempt fails for another reason (404)", async () => {
+    const { fetch, calls } = mockFetch([
+      apiError(401, { code: "merchant.bad_signature", retryable: false }, dateFar()),
+      apiError(404, { code: "payment.not_found", retryable: false }),
+      ok({ balance: { merchant: [] } }),
+    ]);
+    const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
+    await expect(ob.account.getBalance()).rejects.toMatchObject({ code: "payment.not_found" });
+    expect(localTs(calls[1]!)).toBeGreaterThan(500); // the one re-signed attempt used server time
+    await ob.account.getBalance();
+    expect(localTs(calls[2]!)).toBeLessThan(5); // …but the client's clock never moved
+  });
+
+  it("adopts the offset for later calls only after the re-signed attempt succeeds", async () => {
+    const { fetch, calls } = mockFetch([
+      apiError(401, { code: "merchant.bad_signature", retryable: false }, dateFar()),
+      ok({ balance: { merchant: [] } }),
+      ok({ balance: { merchant: [] } }),
+    ]);
+    const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
+    await ob.account.getBalance();
+    await ob.account.getBalance();
+    expect(localTs(calls[2]!)).toBeGreaterThan(500);
+  });
+
+  it("never lets one response move the clock by more than 900 s", async () => {
+    const { fetch, calls } = mockFetch([
+      apiError(401, { code: "merchant.bad_signature", retryable: false }, dateFar(5000)),
+      ok({ balance: { merchant: [] } }),
+    ]);
+    const ob = new Oblodai({ ...creds, fetch, retry: { maxRetries: 0 } });
+    await expect(ob.account.getBalance()).rejects.toMatchObject({ code: "merchant.bad_signature" });
+    expect(calls).toHaveLength(1); // no re-sign with an implausible Date
+    await ob.account.getBalance();
+    expect(localTs(calls[1]!)).toBeLessThan(5);
   });
 });
 
@@ -221,7 +260,9 @@ describe("abort, deadline, redirects, serialization", () => {
   });
 
   it("accepts IPv6 loopback and rejects half a key pair", () => {
-    expect(() => new Oblodai({ ...creds, baseUrl: "http://[::1]:8093" })).not.toThrow();
+    expect(
+      () => new Oblodai({ ...creds, baseUrl: "http://[::1]:8093", allowInsecureBaseUrl: true }),
+    ).not.toThrow();
     expect(() => new Oblodai({ publicId: "pk", baseUrl: "https://api.test" })).toThrow(ConfigError);
   });
 });

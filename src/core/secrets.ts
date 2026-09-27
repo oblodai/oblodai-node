@@ -70,13 +70,15 @@ export function describeCredential(publicId: string | undefined): string {
 
 /**
  * Response fields that carry a credential: a webhook signing secret, a freshly minted API secret,
- * a payout link's claim token, the claim URL that embeds it, and its passcode.
+ * a payout link's claim token, the claim URL that embeds it, its passcode, and the CLI device
+ * flow's polling secret.
  */
 export const SECRET_RESPONSE_FIELDS: readonly string[] = [
   "secret",
   "claim_token",
   "claim_url",
   "passcode",
+  "device_code",
 ];
 
 /**

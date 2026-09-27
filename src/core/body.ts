@@ -1,4 +1,5 @@
 import { ContractError } from "./errors.js";
+import { redactUrl } from "./hooks.js";
 
 /**
  * Reading a response body safely. Two things can go wrong between "the peer answered" and "the SDK
@@ -67,12 +68,14 @@ function tooLarge(label: string, seen: number, maxBytes: number): ContractError 
 export function assertNotRedirected(
   requestedUrl: string,
   res: { url?: string; redirected?: boolean },
+  /** How to name the requested URL in the message (secrets masked); defaults to a cleaned copy. */
+  displayUrl: string = redactUrl(requestedUrl),
 ): void {
   const landed = typeof res.url === "string" && res.url !== "" ? res.url : undefined;
   const moved = res.redirected === true || (landed !== undefined && !sameUrl(landed, requestedUrl));
   if (!moved) return;
   throw new ContractError(
-    `unexpected redirect: the request to ${requestedUrl} was answered by ${landed ?? "another location"}; the SDK never follows redirects — check baseUrl`,
+    `unexpected redirect: the request to ${displayUrl} was answered by ${landed !== undefined ? redactUrl(landed) : "another location"}; the SDK never follows redirects — check baseUrl`,
     0,
     undefined,
     "sdk.bad_envelope",

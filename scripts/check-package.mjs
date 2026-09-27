@@ -57,7 +57,37 @@ console.log("ok");
     join(consumer, "cjs.cjs"),
     `const lib = require("@oblodai-npm/sdk");\nconst hooks = require("@oblodai-npm/sdk/webhooks");\n(async () => {${body()}})().catch((e) => { console.error(e); process.exit(1); });\n`,
   );
-  for (const f of ["esm.mjs", "cjs.cjs"]) {
+  // One error family across every bundle: the main entry and /webhooks, ESM and CJS, each carry
+  // their own copy of the classes, and `instanceof` must hold across all of them.
+  writeFileSync(
+    join(consumer, "identity.mjs"),
+    `import { createRequire } from "node:module";
+import * as esm from "@oblodai-npm/sdk";
+import * as esmHooks from "@oblodai-npm/sdk/webhooks";
+const require = createRequire(import.meta.url);
+const cjs = require("@oblodai-npm/sdk");
+const cjsHooks = require("@oblodai-npm/sdk/webhooks");
+const caught = (f) => { try { f(); } catch (e) { return e; } throw new Error("did not throw"); };
+for (const [name, hooks] of [["esm webhooks", esmHooks], ["cjs webhooks", cjsHooks], ["esm main", esm], ["cjs main", cjs]]) {
+  const sig = caught(() => hooks.verifyWebhook("{}", {}, { secret: "s" }));
+  const cfg = caught(() => hooks.verifyWebhook("{}", {}, { secret: "" }));
+  for (const lib of [esm, esmHooks, cjs, cjsHooks]) {
+    if (!(sig instanceof lib.SignatureError) || !(sig instanceof lib.OblodaiError))
+      throw new Error(name + ": SignatureError is not instanceof another entry's class");
+    if (!(cfg instanceof lib.ConfigError) || !(cfg instanceof lib.OblodaiError))
+      throw new Error(name + ": ConfigError is not instanceof another entry's class");
+    if (sig instanceof lib.ConfigError || sig instanceof lib.WebhookPayloadError)
+      throw new Error(name + ": SignatureError matches an unrelated class");
+  }
+}
+if (!(new esm.RateLimitError({ code: "x", message: "m", httpStatus: 429, retryable: true }) instanceof cjs.ApiError))
+  throw new Error("RateLimitError is not a CJS ApiError");
+if ({} instanceof esm.OblodaiError || new Error("x") instanceof esm.OblodaiError)
+  throw new Error("plain objects must not match");
+console.log("ok");
+`,
+  );
+  for (const f of ["esm.mjs", "cjs.cjs", "identity.mjs"]) {
     const out = run(process.execPath, [f], consumer);
     if (!out.includes("ok")) throw new Error(`${f}: ${out}`);
   }
@@ -101,7 +131,7 @@ export async function use(client: Oblodai): Promise<void> {
     consumer,
   );
   console.log(
-    `package: ${packed.filename} installs, imports, requires and type-checks (ESM + CJS)`,
+    `package: ${packed.filename} installs, imports, requires and type-checks (ESM + CJS); error classes match across entries`,
   );
 } catch (err) {
   console.error(`check-package: ${err.stderr || err.stdout || err.message}`);

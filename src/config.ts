@@ -27,9 +27,14 @@ export interface ClientOptions {
   logger?: Logger;
   /** Extra headers on every request. */
   headers?: Record<string, string>;
-  /** Admin token of a self-hosted gateway; only the merchant-provisioning routes use it. Falls back to `OBLODAI_ADMIN_TOKEN`. */
+  /**
+   * @deprecated Ignored. The SDK never sends a raw admin token: the core accepts operator-only
+   * routes over the operator HMAC channel only, which the SDK does not implement — those routes
+   * fail with `sdk.operator_channel_unsupported` before any request. Setting this (or
+   * `OBLODAI_ADMIN_TOKEN`) logs a one-time warning when a logger is configured.
+   */
   adminToken?: string;
-  /** Permit plain http:// base URLs (local core, CI). Default false. */
+  /** Permit plain http:// base URLs (local core, CI) — loopback included. Default false. */
   allowInsecureBaseUrl?: boolean;
   /** Called once per attempt: before it is sent and when it ends. */
   hooks?: Hooks;
@@ -46,9 +51,10 @@ export interface ResolvedConfig {
   retry?: Partial<RetryOptions>;
   logger?: Logger;
   headers?: Record<string, string>;
-  adminToken?: string;
   hooks?: Hooks;
 }
+
+let adminTokenWarned = false;
 
 /** Merge explicit options with the environment and validate what can be validated up front. */
 export function resolveConfig(
@@ -73,6 +79,13 @@ export function resolveConfig(
       logger = consoleLogger(lvl);
   }
 
+  if ((opts.adminToken || env.OBLODAI_ADMIN_TOKEN) && logger && !adminTokenWarned) {
+    adminTokenWarned = true;
+    logger.warn(
+      "adminToken / OBLODAI_ADMIN_TOKEN is deprecated and ignored: the SDK never sends an admin token; operator-only routes are not supported, use the dashboard",
+    );
+  }
+
   return {
     baseUrl,
     credentials: publicId && secret ? makeCredentials(publicId, secret) : undefined,
@@ -82,7 +95,6 @@ export function resolveConfig(
     retry: opts.retry,
     logger,
     headers: opts.headers,
-    adminToken: opts.adminToken ?? (env.OBLODAI_ADMIN_TOKEN || undefined),
     hooks: opts.hooks,
   };
 }
@@ -92,18 +104,22 @@ function assertBaseUrl(baseUrl: string, allowInsecure: boolean): void {
   try {
     parsed = new URL(baseUrl);
   } catch {
-    throw new ConfigError("sdk.bad_config", `baseUrl is not a valid URL: ${baseUrl}`, "baseUrl");
+    // Not echoed: an unparsable value may still carry a password.
+    throw new ConfigError("sdk.bad_config", "baseUrl is not a valid URL", "baseUrl");
+  }
+  if (parsed.username !== "" || parsed.password !== "") {
+    // Credentials in the URL would ride along into every log line, hook and error that names it.
+    throw new ConfigError(
+      "sdk.bad_config",
+      "baseUrl must not contain user:password@ credentials",
+      "baseUrl",
+    );
   }
   if (parsed.protocol === "https:") return;
-  const local =
-    parsed.hostname === "localhost" ||
-    parsed.hostname === "127.0.0.1" ||
-    parsed.hostname === "[::1]" ||
-    parsed.hostname === "::1";
-  if (parsed.protocol === "http:" && (allowInsecure || local)) return;
+  if (parsed.protocol === "http:" && allowInsecure) return;
   throw new ConfigError(
     "sdk.bad_config",
-    `baseUrl must use https (got ${parsed.protocol}//${parsed.host}); set allowInsecureBaseUrl for a local core`,
+    `baseUrl must use https (got ${parsed.protocol}//${parsed.host}); set allowInsecureBaseUrl (OBLODAI_ALLOW_INSECURE=1) for a local core`,
     "baseUrl",
   );
 }

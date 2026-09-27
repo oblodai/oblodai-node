@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   pull_request:
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,9 +14,13 @@ jobs:
         # The engines floor and the current LTS.
         node-version: ["20", "22"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node-version }}
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
+      # No backend checkout here: the conformance suite runs against the vendored snapshot in
+      # contract/ (`make ci` locally also checks that snapshot and the generated code are current).
       - run: npm run ci

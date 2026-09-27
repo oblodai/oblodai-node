@@ -39,7 +39,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "check-generated": "node scripts/check-generated.mjs",
+    "check-generated": "node scripts/check-generated.mjs && node scripts/sync-contract.mjs --check",
     "build": "tsup && node scripts/build-types.mjs",
     "typecheck": "tsc --noEmit && tsc -p test/tsconfig.json && tsc -p examples/tsconfig.json",
     "test": "vitest run",

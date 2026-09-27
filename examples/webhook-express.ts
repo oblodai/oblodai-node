@@ -1,4 +1,5 @@
-// Express receiver: verify over the RAW body, deduplicate by the event id, ignore stale sequences.
+// Express receiver: verify over the RAW body, ignore test deliveries, deduplicate on the signed
+// event key, ignore stale sequences.
 import express from "express";
 import {
   verifyWebhookDelivery,
@@ -9,8 +10,9 @@ import {
 } from "@oblodai-npm/sdk/webhooks";
 
 export const app = express();
-// delivery.eventId: the same for retries AND resends of a state (delivery.id changes on a
-// resend). Use your database in production.
+// delivery.eventKey: `type:objectId:sequence` from the SIGNED body — the same for retries AND
+// resends of a state. Never key on the X-Webhook-* id headers: they are not signed. Use your
+// database in production.
 const seenEvents = new Set<string>();
 const lastSequence = new Map<string, number>(); // per object id
 
@@ -28,8 +30,10 @@ app.post("/oblodai/webhook", express.raw({ type: "*/*" }), (req, res) => {
     throw err;
   }
   const { event } = delivery;
-  // A core that does not send the event id yet leaves the delivery id as the next best key.
-  const key = delivery.eventId ?? delivery.id;
+  // A rehearsal (`test: true` in the signed body): signed with the real secret and may name a real
+  // order, but no money moved. Acknowledge it and do nothing else — before any side effect.
+  if (delivery.isTest) return res.sendStatus(200);
+  const key = delivery.eventKey;
   if (key && seenEvents.has(key)) return res.sendStatus(200); // a retry or resend we already handled
   if (key) seenEvents.add(key);
   // An event type this SDK release does not model: log it and acknowledge, never crash.

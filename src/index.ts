@@ -69,6 +69,7 @@ export {
   isStaleEvent,
   isTestEvent,
   objectId,
+  eventKey,
   DEFAULT_TOLERANCE_SECONDS,
   HEADER_WEBHOOK_ID,
   HEADER_WEBHOOK_EVENT_ID,
@@ -83,6 +84,7 @@ export type {
   VerifyWebhookOptions,
   WebhookHeaders,
   WebhookDeliveryInfo,
+  UnverifiedDeliveryHeaders,
   AnyWebhookEvent,
   UnknownWebhookEvent,
 } from "./webhooks.js";

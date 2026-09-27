@@ -104,19 +104,22 @@ describe("secrets never print", () => {
     expect(inspect(batch, { depth: 5 })).not.toContain("CLAIM-1");
   });
 
-  it("keeps a freshly minted merchant key secret out of logs", async () => {
+  it("keeps a CLI device code out of logs", async () => {
     const { fetch } = mockFetch([
       ok({
-        merchant_id: "m1",
-        project_id: "p1",
-        api_key: { public_id: "pk_x", secret: "MINTED-1" },
+        device_code: "DEVICE-CODE-1",
+        user_code: "ABCD-EFGH",
+        verification_uri: "https://x",
+        verification_uri_complete: "https://x?c=ABCD-EFGH",
+        expires_in: 600,
+        interval: 5,
       }),
     ]);
     const ob = new Oblodai({ ...creds, fetch });
-    const minted = await ob.sandbox.onboardStore("m1");
-    expect(minted.api_key.secret).toBe("MINTED-1"); // still usable
-    const dumped = JSON.stringify(minted) + inspect(minted, { depth: 10 });
-    expect(dumped).not.toContain("MINTED-1");
+    const auth = await ob.cliLogin.start({});
+    expect(auth.device_code).toBe("DEVICE-CODE-1"); // still usable
+    const dumped = JSON.stringify(auth) + inspect(auth, { depth: 10 });
+    expect(dumped).not.toContain("DEVICE-CODE-1");
   });
 
   it("keeps resolved credentials out of JSON and inspect", async () => {

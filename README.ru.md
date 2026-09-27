@@ -32,8 +32,8 @@ Node.js ≥ 20, ESM и CommonJS в одном пакете, без runtime-за�
 есть метод, у каждого запроса и ответа — тип.
 
 > **Base URL.** По умолчанию `https://api.oblodai.com`. При необходимости задайте свой `baseUrl` и
-> ключи при инициализации. Схема должна быть `https://`; обычный `http://` допускается только для
-> loopback (`http://127.0.0.1:8095`) или с явной опцией `allowInsecureBaseUrl`.
+> ключи при инициализации. Схема должна быть `https://`; обычный `http://` (и на loopback тоже)
+> допускается только с явной опцией `allowInsecureBaseUrl`, а `user:password@` отклоняется.
 
 ## Установка
 
@@ -57,11 +57,11 @@ CommonJS и объявления типов для обеих. Проверка 
 **Один API-ключ подписывает всё.** У мерчанта один ключ, и он аутентифицирует каждый подписанный
 маршрут — приём и выплаты, настройки, документы, песочницу. Отдельного ключа для выплат нет.
 
-| Учётные данные         | Задаётся как                                                  | Для чего                                                     |
-| ---------------------- | ------------------------------------------------------------- | ------------------------------------------------------------ |
-| API-ключ               | `publicId` / `secret` (`OBLODAI_PUBLIC_ID`, `OBLODAI_SECRET`) | каждый подписанный маршрут                                   |
-| Песочный API-ключ      | то же, пара `test_oblodai_<hex>`                              | та же поверхность на копии шлюза без блокчейна               |
-| Админ-токен онбординга | `adminToken` (`OBLODAI_ADMIN_TOKEN`)                          | `sandbox.onboardStore` на self-hosted шлюзе, и больше ничего |
+| Учётные данные     | Задаётся как                                                  | Для чего                                                                                          |
+| ------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| API-ключ           | `publicId` / `secret` (`OBLODAI_PUBLIC_ID`, `OBLODAI_SECRET`) | каждый подписанный маршрут                                                                        |
+| Песочный API-ключ  | то же, пара `test_oblodai_<hex>`                              | та же поверхность на копии шлюза без блокчейна                                                    |
+| Операции оператора | не поддерживаются (`adminToken` устарел и игнорируется)       | `sandbox.onboardStore` падает с `sdk.operator_channel_unsupported` до запроса; используйте панель |
 
 ```ts
 import { Oblodai } from "@oblodai-npm/sdk";
@@ -349,18 +349,28 @@ import { createServer } from "node:http";
 import { SignatureError, isKnownEvent, verifyWebhookDelivery } from "@oblodai-npm/sdk/webhooks";
 
 const paidOrders = new Set<string>();
+const seenEvents = new Set<string>(); // your database in production
 
 export const server = createServer((req, res) => {
   const chunks: Buffer[] = [];
   req.on("data", (chunk: Buffer) => chunks.push(chunk));
   req.on("end", () => {
     try {
-      const { event, isTest } = verifyWebhookDelivery(Buffer.concat(chunks), req.headers, {
-        secret: process.env.OBLODAI_WEBHOOK_SECRET ?? "",
-        previousSecret: process.env.OBLODAI_WEBHOOK_SECRET_PREV || undefined, // during rotation
-      });
-      // A rehearsal never moves money; a type from a newer gateway is acknowledged and skipped.
-      if (!isTest && isKnownEvent(event) && event.type === "payment" && event.status === "paid") {
+      const { event, eventKey, isTest } = verifyWebhookDelivery(
+        Buffer.concat(chunks),
+        req.headers,
+        {
+          secret: process.env.OBLODAI_WEBHOOK_SECRET ?? "",
+          previousSecret: process.env.OBLODAI_WEBHOOK_SECRET_PREV || undefined, // during rotation
+        },
+      );
+      // A rehearsal never moves money: acknowledge it and stop.
+      if (isTest) return void res.writeHead(200).end();
+      // A retry or resend of a state already handled (the key comes from the signed body).
+      if (eventKey !== undefined && seenEvents.has(eventKey)) return void res.writeHead(200).end();
+      if (eventKey !== undefined) seenEvents.add(eventKey);
+      // A type from a newer gateway is acknowledged and skipped.
+      if (isKnownEvent(event) && event.type === "payment" && event.status === "paid") {
         paidOrders.add(event.order_id ?? event.uuid);
       }
       res.writeHead(200).end();
@@ -377,14 +387,16 @@ export const server = createServer((req, res) => {
 для неаутентифицированного отправителя. Пустой `secret` — `ConfigError`, а не проверка пустым
 ключом. `toleranceSec` по умолчанию 300, `0` отключает проверку свежести.
 
-- **Дедуплицируйте по `eventId`** (`X-Webhook-Event-Id`): он называет состояние и одинаков у всех
-  повторов и переотправок. `id` (`X-Webhook-Id`) называет одну доставку и меняется при переотправке
-  (`webhooks.resendPayment`, повтор в песочнице) — с ним ключом переотправленный `invoice.paid`
-  обработается дважды.
+- **Дедуплицируйте по `eventKey`** (`type:objectId:sequence`, из подписанного тела): он называет
+  состояние и одинаков у всех повторов и переотправок. Заголовки `X-Webhook-Id` /
+  `X-Webhook-Event-Id` / `X-Webhook-Event` / `X-Webhook-Test` **не подписаны** — при повторе в них
+  может стоять что угодно, — поэтому они отдаются только в `unverified` и никогда не должны решать,
+  обрабатывать ли доставку.
 - **Упорядочивайте по `event.sequence`**: `isStaleEvent(event, lastSequence)`, храня последний номер
   по объекту — `objectId(event)`, поле id, которое контракт называет для вида события.
-- **Репетиции** подписаны как боевые и несут `test: true` (и `X-Webhook-Test: true`);
-  `verifyWebhookDelivery(...).isTest` об этом сообщает.
+- **Репетиции** подписаны как боевые и несут `test: true` в подписанном теле;
+  `verifyWebhookDelivery(...).isTest` об этом сообщает (только по телу). Всегда подтверждайте их и
+  ничего не делайте.
 - **Незнакомые типы событий** от более нового шлюза возвращаются как есть (`UnknownWebhookEvent`), а
   не бросаются — вызывайте `isKnownEvent(event)` перед `switch` по `type`.
 - **Ротация**: после `webhooks.rotateSecret()` продолжайте передавать `previousSecret` не меньше
@@ -491,7 +503,7 @@ const payment = raw.parse(); // what getInfo() returns
 console.log(payment.status);
 ```
 
-Хуки видят каждую попытку (подпись и админ-токен скрыты), с `X-Request-ID` вызова и `operationId`
+Хуки видят каждую попытку (подпись и заголовки с ключами скрыты, токены чеков и параметры подписанных ссылок в URL замаскированы), с `X-Request-ID` вызова и `operationId`
 маршрута — достаточно для метрик и трассировки без зависимостей.
 
 ## Настройка
@@ -514,8 +526,8 @@ console.log(JSON.stringify(oblodai)); // redacted: the secret never prints
 | ---------------------- | -------------------------------------- | -------------------------------------------------------------------- |
 | `publicId` / `secret`  | `OBLODAI_PUBLIC_ID` / `OBLODAI_SECRET` | Единственный API-ключ мерчанта; оба или ни одного                    |
 | `baseUrl`              | `https://api.oblodai.com`              | Адрес API; префикс пути сохраняется                                  |
-| `allowInsecureBaseUrl` | `false`                                | Разрешить обычный `http://` не на loopback                           |
-| `adminToken`           | `OBLODAI_ADMIN_TOKEN`                  | Токен онбординга self-hosted шлюза; только `sandbox.onboardStore`    |
+| `allowInsecureBaseUrl` | `false`                                | Разрешить обычный `http://` (и на loopback)                          |
+| `adminToken`           | `OBLODAI_ADMIN_TOKEN`                  | Устарел и игнорируется (не отправляется); один раз пишется warning   |
 | `timeout`              | `30`                                   | Таймаут одной попытки, секунды                                       |
 | `deadline`             | `90`                                   | Бюджет всего вызова с повторами, секунды                             |
 | `retry`                | см. выше                               | `{ maxRetries, baseDelayMs, maxDelayMs, maxRetryAfterMs }`           |
@@ -528,10 +540,10 @@ console.log(JSON.stringify(oblodai)); // redacted: the secret never prints
 | ------------------------ | ------------------------------------------------------------------- |
 | `OBLODAI_PUBLIC_ID`      | Публичный id API-ключа мерчанта (боевого или песочного)             |
 | `OBLODAI_SECRET`         | Его секрет                                                          |
-| `OBLODAI_ADMIN_TOKEN`    | Админ-токен онбординга self-hosted шлюза                            |
+| `OBLODAI_ADMIN_TOKEN`    | Устарел и игнорируется (не отправляется)                            |
 | `OBLODAI_BASE_URL`       | Адрес API                                                           |
 | `OBLODAI_LOG`            | `debug` \| `info` \| `warn` \| `error` — включает консольный логгер |
-| `OBLODAI_ALLOW_INSECURE` | `1` разрешает обычный `http://` не на loopback                      |
+| `OBLODAI_ALLOW_INSECURE` | `1` разрешает обычный `http://` (и на loopback)                     |
 
 Заголовки, которыми владеет SDK (`Accept`, `Content-Type`, `User-Agent`, `X-Public-Id`,
 `X-Signature`, `X-Timestamp`, `Idempotency-Key`, `X-Admin-Token`), всегда важнее ваших; значение

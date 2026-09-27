@@ -17,6 +17,8 @@ locally; `-n` only checks. Pushing the tag — the step that publishes — stays
 1. Bump `version` in `package.json` and `src/version.ts` (a test holds them equal) and add a
    `CHANGELOG.md` entry.
 2. `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. The **Release** workflow builds and runs `npm publish --access public`.
+3. The **Release** workflow runs every gate in a job without the token, then — in a separate job —
+   installs from the lockfile, builds, and runs `npm publish --access public --provenance
+--ignore-scripts` (no dependency code runs while the token is in the environment).
 
 CI (build + tests) runs on every push and pull request via `.github/workflows/ci.yml`.

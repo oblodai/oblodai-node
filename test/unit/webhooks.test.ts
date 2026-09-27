@@ -30,14 +30,15 @@ describe("verifyWebhook against real deliveries", () => {
     it(`verifies ${s.headers[HEADER_WEBHOOK_EVENT]}`, () => {
       const raw = s.raw ?? JSON.stringify(s.body); // the recorder keeps the exact delivered bytes
       const ts = Number(s.headers[HEADER_WEBHOOK_TIMESTAMP]);
-      const { event, id, eventId, eventType } = verifyWebhookDelivery(raw, s.headers, {
+      const { event, eventKey, unverified } = verifyWebhookDelivery(raw, s.headers, {
         secret,
         now: () => ts,
       });
       expect(objectId(event)).toBe(s.body.uuid);
-      expect(id).toBe(s.headers[HEADER_WEBHOOK_ID]);
-      expect(eventId).toBe(s.headers[HEADER_WEBHOOK_EVENT_ID]);
-      expect(eventType).toBe(s.headers[HEADER_WEBHOOK_EVENT]);
+      expect(eventKey).toBe(`${s.body.type}:${s.body.uuid}:${s.body.sequence}`);
+      expect(unverified.deliveryId).toBe(s.headers[HEADER_WEBHOOK_ID]);
+      expect(unverified.eventId).toBe(s.headers[HEADER_WEBHOOK_EVENT_ID]);
+      expect(unverified.eventType).toBe(s.headers[HEADER_WEBHOOK_EVENT]);
       expect(() =>
         verifyWebhook(raw, s.headers, {
           secret: "some-other-secret",
@@ -117,16 +118,35 @@ describe("verifyWebhook rules", () => {
     ).toMatchObject({ uuid: "u1" });
   });
 
-  it("reads the event id apart from the delivery id", () => {
+  it("keeps the unsigned id headers under `unverified` only", () => {
     const withIds = headers({
       [HEADER_WEBHOOK_ID.toLowerCase()]: "d-1",
       [HEADER_WEBHOOK_EVENT_ID.toLowerCase()]: "e-1",
     });
     const delivery = verifyWebhookDelivery(body, withIds, { secret: "whsec", now: () => ts });
-    expect([delivery.id, delivery.eventId]).toEqual(["d-1", "e-1"]);
+    expect([delivery.unverified.deliveryId, delivery.unverified.eventId]).toEqual(["d-1", "e-1"]);
+    expect(delivery).not.toHaveProperty("id");
+    expect(delivery).not.toHaveProperty("eventId");
     expect(
-      verifyWebhookDelivery(body, headers(), { secret: "whsec", now: () => ts }).eventId,
+      verifyWebhookDelivery(body, headers(), { secret: "whsec", now: () => ts }).unverified.eventId,
     ).toBeUndefined();
+  });
+
+  it("derives the dedupe key from the signed body, not from a replayed header", () => {
+    // A captured delivery replayed with a fresh X-Webhook-Event-Id: the MAC still holds (the header
+    // is not signed), and the dedupe key must stay the same so the replay is recognised.
+    const original = verifyWebhookDelivery(
+      body,
+      headers({ [HEADER_WEBHOOK_EVENT_ID.toLowerCase()]: "e-1" }),
+      { secret: "whsec", now: () => ts },
+    );
+    const replayed = verifyWebhookDelivery(
+      body,
+      headers({ [HEADER_WEBHOOK_EVENT_ID.toLowerCase()]: "e-forged" }),
+      { secret: "whsec", now: () => ts },
+    );
+    expect(original.eventKey).toBeDefined();
+    expect(replayed.eventKey).toBe(original.eventKey);
   });
 
   it("parses the discriminated union and detects stale sequences", () => {

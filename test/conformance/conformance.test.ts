@@ -2,7 +2,8 @@
  * The shared conformance suite every Oblodai SDK runs (backend `tools/sdkgen/conformance`).
  *
  * Scenarios are read from `$SDKGEN_CONFORMANCE`, else from `tools/sdkgen/conformance` of the backend
- * checkout the drift check uses (`$OBLODAI_BACKEND`, else `../oblodai-backend`). Signing vectors are
+ * checkout the drift check uses (`$OBLODAI_BACKEND`, else `../oblodai-backend`), else from the
+ * vendored snapshot in `contract/` (CI has no backend; `make ci` checks the snapshot is current). Signing vectors are
  * not in the scenario files: each suite names the backend `openapi.json` and a pointer into its
  * `x-oblodai-signing`, and the vectors are read from there.
  *
@@ -25,7 +26,7 @@ import {
   verifyWebhookDelivery,
 } from "../../src/webhooks.js";
 import { WEBHOOK_EVENTS } from "../../src/generated/events.js";
-import { conformanceDir } from "../support/backend.js";
+import { VENDORED_CONTRACT, conformanceDir } from "../support/backend.js";
 import { HEADER_IDEMPOTENCY_KEY } from "../../src/generated/signing.js";
 
 const DIR = conformanceDir();
@@ -56,7 +57,12 @@ function source(s: Json): {
   names: Record<string, string>;
   testHeader: string;
 } {
-  const spec = JSON.parse(readFileSync(join(DIR, s.source.spec), "utf8"));
+  // The suite names the backend's openapi.json; the vendored snapshot carries only its
+  // `x-oblodai-signing` block (contract/signing.json), which is all the pointers reach into.
+  const specPath = join(DIR, s.source.spec);
+  const spec = JSON.parse(
+    readFileSync(existsSync(specPath) ? specPath : join(VENDORED_CONTRACT, "signing.json"), "utf8"),
+  );
   const names: Record<string, string> = {};
   let testHeader = "";
   if (s.header_names) {
@@ -219,7 +225,14 @@ describe.skipIf(!found)("conformance", () => {
         headers[testHeader] = "true";
       }
       const delivery = verifyWebhookDelivery(d.payload, headers, { secret, now: () => d.ts });
-      expect(delivery.isTest, `isTest (rehearsal header ${testHeader})`).toBe(Boolean(check.test));
+      // The rehearsal header is not signed: the SDK reports it under `unverified.test` only, and
+      // `isTest` follows the signed body's `test` (none of the spec's delivery bodies carry it).
+      expect(delivery.unverified.test, `unverified.test (header ${testHeader})`).toBe(
+        Boolean(check.test),
+      );
+      expect(delivery.isTest, "isTest comes from the signed body only").toBe(
+        JSON.parse(d.payload as string).test === true,
+      );
       expect(isKnownEvent(delivery.event)).toBe(true);
       expect(delivery.event.type).toBe(d.kind);
       expect(WEBHOOK_EVENTS[d.kind as keyof typeof WEBHOOK_EVENTS]).toContain(d.event);
@@ -227,7 +240,14 @@ describe.skipIf(!found)("conformance", () => {
         if (field === "") continue;
         const header = deliveryNames[role]!;
         expect(header, `no header name for role ${role}`).toBeTruthy();
-        const value = (delivery as unknown as Record<string, unknown>)[camel(field)];
+        // Every header but the timestamp is unsigned and lives under `unverified`; `id` is named
+        // `deliveryId` there.
+        const value =
+          field === "sent_at"
+            ? delivery.sentAt
+            : (delivery.unverified as unknown as Record<string, unknown>)[
+                field === "id" ? "deliveryId" : camel(field)
+              ];
         const want: string = d.headers[header];
         expect(value, `${camel(field)} ≠ ${header}`).toBe(
           typeof value === "number" ? Number(want) : want,

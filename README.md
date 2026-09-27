@@ -32,8 +32,8 @@ route table are generated from the gateway's own OpenAPI contract: every route i
 a method here, and every request and response has a type.
 
 > **Base URL.** Defaults to `https://api.oblodai.com`. Override `baseUrl` and supply your own keys at
-> initialisation if needed. The scheme must be `https://`; plain `http://` is accepted only for
-> loopback (`http://127.0.0.1:8095`) or with the explicit `allowInsecureBaseUrl` option.
+> initialisation if needed. The scheme must be `https://`; plain `http://` (loopback included) is
+> accepted only with the explicit `allowInsecureBaseUrl` option, and `user:password@` is refused.
 
 ## Installation
 
@@ -57,11 +57,11 @@ secret is shown once, at creation. A live pair is a public id `oblodai_<hex>` wi
 **One API key signs everything.** A merchant has a single key, and it authenticates every signed
 route — money in and money out, settings, documents, sandbox. There is no separate payout credential.
 
-| Credential             | Configured as                                                 | Used for                                                          |
-| ---------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------- |
-| API key                | `publicId` / `secret` (`OBLODAI_PUBLIC_ID`, `OBLODAI_SECRET`) | every signed route                                                |
-| Sandbox API key        | the same, a `test_oblodai_<hex>` pair                         | the same surface, against a chainless copy of the gateway         |
-| Onboarding admin token | `adminToken` (`OBLODAI_ADMIN_TOKEN`)                          | `sandbox.onboardStore` on a self-hosted gateway, and nothing else |
+| Credential           | Configured as                                                 | Used for                                                                                                   |
+| -------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| API key              | `publicId` / `secret` (`OBLODAI_PUBLIC_ID`, `OBLODAI_SECRET`) | every signed route                                                                                         |
+| Sandbox API key      | the same, a `test_oblodai_<hex>` pair                         | the same surface, against a chainless copy of the gateway                                                  |
+| Operator-only routes | not supported (`adminToken` is deprecated and ignored)        | `sandbox.onboardStore` fails with `sdk.operator_channel_unsupported` before any request; use the dashboard |
 
 ```ts
 import { Oblodai } from "@oblodai-npm/sdk";
@@ -345,18 +345,28 @@ import { createServer } from "node:http";
 import { SignatureError, isKnownEvent, verifyWebhookDelivery } from "@oblodai-npm/sdk/webhooks";
 
 const paidOrders = new Set<string>();
+const seenEvents = new Set<string>(); // your database in production
 
 export const server = createServer((req, res) => {
   const chunks: Buffer[] = [];
   req.on("data", (chunk: Buffer) => chunks.push(chunk));
   req.on("end", () => {
     try {
-      const { event, isTest } = verifyWebhookDelivery(Buffer.concat(chunks), req.headers, {
-        secret: process.env.OBLODAI_WEBHOOK_SECRET ?? "",
-        previousSecret: process.env.OBLODAI_WEBHOOK_SECRET_PREV || undefined, // during rotation
-      });
-      // A rehearsal never moves money; a type from a newer gateway is acknowledged and skipped.
-      if (!isTest && isKnownEvent(event) && event.type === "payment" && event.status === "paid") {
+      const { event, eventKey, isTest } = verifyWebhookDelivery(
+        Buffer.concat(chunks),
+        req.headers,
+        {
+          secret: process.env.OBLODAI_WEBHOOK_SECRET ?? "",
+          previousSecret: process.env.OBLODAI_WEBHOOK_SECRET_PREV || undefined, // during rotation
+        },
+      );
+      // A rehearsal never moves money: acknowledge it and stop.
+      if (isTest) return void res.writeHead(200).end();
+      // A retry or resend of a state already handled (the key comes from the signed body).
+      if (eventKey !== undefined && seenEvents.has(eventKey)) return void res.writeHead(200).end();
+      if (eventKey !== undefined) seenEvents.add(eventKey);
+      // A type from a newer gateway is acknowledged and skipped.
+      if (isKnownEvent(event) && event.type === "payment" && event.status === "paid") {
         paidOrders.add(event.order_id ?? event.uuid);
       }
       res.writeHead(200).end();
@@ -373,13 +383,15 @@ then freshness, then the body — so the freshness window is never an oracle for
 caller. An empty `secret` is a `ConfigError`, never a verification against the empty key.
 `toleranceSec` defaults to 300 and `0` disables the freshness check.
 
-- **Deduplicate on `eventId`** (`X-Webhook-Event-Id`): it names the state and is the same for every
-  retry and every resend of it. `id` (`X-Webhook-Id`) names one delivery and changes on a resend
-  (`webhooks.resendPayment`, a sandbox replay) — keyed on it, a resent `invoice.paid` is processed twice.
+- **Deduplicate on `eventKey`** (`type:objectId:sequence`, built from the signed body): it names the
+  state and is the same for every retry and every resend of it. The `X-Webhook-Id` /
+  `X-Webhook-Event-Id` / `X-Webhook-Event` / `X-Webhook-Test` headers are **not signed** — a replay
+  can carry any values there — so they are reported only under `unverified` and must never decide
+  whether a delivery is processed.
 - **Order with `event.sequence`**: `isStaleEvent(event, lastSequence)`, keeping the last sequence per
   object — `objectId(event)`, the id field the contract names for the event's kind.
-- **Rehearsals** are signed like live ones and carry `test: true` (and `X-Webhook-Test: true`);
-  `verifyWebhookDelivery(...).isTest` reports it.
+- **Rehearsals** are signed like live ones and carry `test: true` in the signed body;
+  `verifyWebhookDelivery(...).isTest` reports it (from the body only). Always acknowledge and ignore them.
 - **Unknown event types** from a newer gateway are returned verbatim as `UnknownWebhookEvent` rather
   than thrown — call `isKnownEvent(event)` before switching on `type`.
 - **Rotation**: after `webhooks.rotateSecret()`, keep passing `previousSecret` for at least 26 hours.
@@ -484,7 +496,7 @@ const payment = raw.parse(); // what getInfo() returns
 console.log(payment.status);
 ```
 
-Hooks see every attempt (signature and admin token redacted), with the call's `X-Request-ID` and the
+Hooks see every attempt (signature and credential headers redacted, claim tokens and signed-link parameters masked in the URL), with the call's `X-Request-ID` and the
 route's `operationId` — enough for metrics and tracing without a dependency.
 
 ## Configuration
@@ -507,8 +519,8 @@ console.log(JSON.stringify(oblodai)); // redacted: the secret never prints
 | ---------------------- | -------------------------------------- | ------------------------------------------------------------------- |
 | `publicId` / `secret`  | `OBLODAI_PUBLIC_ID` / `OBLODAI_SECRET` | The merchant's one API key; both or neither                         |
 | `baseUrl`              | `https://api.oblodai.com`              | API origin; a path prefix is preserved                              |
-| `allowInsecureBaseUrl` | `false`                                | Permit a plain-`http://` base URL that is not loopback              |
-| `adminToken`           | `OBLODAI_ADMIN_TOKEN`                  | Self-hosted onboarding token; `sandbox.onboardStore` only           |
+| `allowInsecureBaseUrl` | `false`                                | Permit a plain-`http://` base URL (loopback included)               |
+| `adminToken`           | `OBLODAI_ADMIN_TOKEN`                  | Deprecated and ignored (never sent); a one-time warning is logged   |
 | `timeout`              | `30`                                   | Per-attempt timeout, seconds                                        |
 | `deadline`             | `90`                                   | Budget for the whole call, retries included, seconds                |
 | `retry`                | see above                              | `{ maxRetries, baseDelayMs, maxDelayMs, maxRetryAfterMs }`          |
@@ -521,10 +533,10 @@ console.log(JSON.stringify(oblodai)); // redacted: the secret never prints
 | ------------------------ | ----------------------------------------------------------------- |
 | `OBLODAI_PUBLIC_ID`      | Public id of the merchant's API key (live or sandbox)             |
 | `OBLODAI_SECRET`         | Its secret                                                        |
-| `OBLODAI_ADMIN_TOKEN`    | Onboarding admin token of a self-hosted gateway                   |
+| `OBLODAI_ADMIN_TOKEN`    | Deprecated and ignored (never sent)                               |
 | `OBLODAI_BASE_URL`       | API origin                                                        |
 | `OBLODAI_LOG`            | `debug` \| `info` \| `warn` \| `error` — enables a console logger |
-| `OBLODAI_ALLOW_INSECURE` | `1` permits a non-loopback plain-`http://` base URL               |
+| `OBLODAI_ALLOW_INSECURE` | `1` permits a plain-`http://` base URL (loopback included)        |
 
 Headers the SDK owns (`Accept`, `Content-Type`, `User-Agent`, `X-Public-Id`, `X-Signature`,
 `X-Timestamp`, `Idempotency-Key`, `X-Admin-Token`) always win over yours; a header value with CR/LF

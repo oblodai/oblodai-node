@@ -5,3 +5,7 @@ node_modules/
 dist/
 
 .doc-snippets/
+
+# local credentials
+.env*
+!.env.example

@@ -33,6 +33,8 @@ export type SdkErrorCode =
   | "sdk.bad_amount"
   | "sdk.float_amount"
   | "sdk.bad_body"
+  | "sdk.body_too_large"
+  | "sdk.operator_channel_unsupported"
   | "sdk.lro_unresolved";
 
 export type AnyErrorCode =
@@ -59,7 +61,43 @@ export interface OblodaiErrorInit {
   cause?: unknown;
 }
 
+/**
+ * Cross-bundle identity. The package ships more than one bundle (the main entry and `/webhooks`,
+ * each as ESM and CJS), and each bundle carries its own copy of these classes — so a plain
+ * prototype check would say a `SignatureError` thrown by `/webhooks` is not a `SignatureError` of
+ * the main entry. Every instance therefore carries the brands of its class chain under a global
+ * symbol, and `instanceof` on any SDK error class accepts an instance of the same-named class from
+ * any bundle.
+ */
+const BRANDS = Symbol.for("oblodai.sdk.error.brands");
+const BRAND = Symbol.for("oblodai.sdk.error.brand");
+
+function brandsOf(ctor: unknown): string[] {
+  const out: string[] = [];
+  for (
+    let c = ctor as { [BRAND]?: string } | null;
+    c && c !== Error;
+    c = Object.getPrototypeOf(c)
+  ) {
+    if (Object.hasOwn(c, BRAND) && typeof c[BRAND] === "string") out.push(c[BRAND]);
+  }
+  return out;
+}
+
+function brand(ctor: object, name: string): void {
+  Object.defineProperty(ctor, BRAND, { value: name, enumerable: false });
+}
+
 export class OblodaiError extends Error {
+  /** `instanceof` that also recognizes the same class from another bundle of this package. */
+  static override [Symbol.hasInstance](value: unknown): boolean {
+    if (Function.prototype[Symbol.hasInstance].call(this, value)) return true;
+    if (value === null || typeof value !== "object") return false;
+    const own = Object.hasOwn(this, BRAND) ? (this as { [BRAND]?: unknown })[BRAND] : undefined;
+    const brands = (value as { [BRANDS]?: unknown })[BRANDS];
+    return typeof own === "string" && Array.isArray(brands) && brands.includes(own);
+  }
+
   /** Stable machine code (`family.reason`), e.g. `payout.insufficient_funds`. Autocompletes; unknown codes still type. */
   readonly code: AnyErrorCode;
   /** HTTP status, or 0 when no response was received. */
@@ -94,6 +132,7 @@ export class OblodaiError extends Error {
     this.details = init.details;
     this.synthetic = init.synthetic ?? false;
     Object.defineProperty(this, "raw", { value: init.raw, enumerable: false, writable: false });
+    Object.defineProperty(this, BRANDS, { value: brandsOf(new.target), enumerable: false });
     // An uncaught error prints its stack, whose first line is `name: message` — make it the same
     // line a log shows for `String(err)`, so the code and request id are never lost.
     if (typeof this.stack === "string") {
@@ -217,6 +256,23 @@ export class SignatureError extends OblodaiError {
     super({ code, message, httpStatus: 0, retryable: false });
   }
 }
+
+brand(OblodaiError, "OblodaiError");
+brand(TransportError, "TransportError");
+brand(ConfigError, "ConfigError");
+brand(ApiError, "ApiError");
+brand(ValidationError, "ValidationError");
+brand(AuthenticationError, "AuthenticationError");
+brand(PermissionError, "PermissionError");
+brand(NotFoundError, "NotFoundError");
+brand(ConflictError, "ConflictError");
+brand(IdempotencyConflictError, "IdempotencyConflictError");
+brand(RateLimitError, "RateLimitError");
+brand(UnavailableError, "UnavailableError");
+brand(InternalError, "InternalError");
+brand(ContractError, "ContractError");
+brand(WebhookPayloadError, "WebhookPayloadError");
+brand(SignatureError, "SignatureError");
 
 /** Statuses a response without an envelope may carry transiently (LB/proxy/timeouts). */
 const TRANSIENT_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);

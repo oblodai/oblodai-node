@@ -62,6 +62,10 @@ describe("examples", () => {
     globalThis.fetch = realFetch;
     vi.stubEnv("OBLODAI_WEBHOOK_SECRET", "whsec_demo");
     const { app } = await import("../../examples/webhook-express.js");
+    const paid: string[] = [];
+    vi.mocked(console.log).mockImplementation((msg: unknown, orderId?: unknown) => {
+      if (msg === "order paid") paid.push(String(orderId));
+    });
     const server = app.listen(0, "127.0.0.1");
     await new Promise((r) => server.once("listening", r));
     try {
@@ -74,10 +78,10 @@ describe("examples", () => {
         sequence: 1,
       });
       const ts = Math.floor(Date.now() / 1000);
-      const send = (signature: string) =>
+      const send = (signature: string, payload = body) =>
         fetch(url, {
           method: "POST",
-          body,
+          body: payload,
           headers: {
             "content-type": "application/json",
             [HEADER_WEBHOOK_TIMESTAMP]: String(ts),
@@ -87,6 +91,18 @@ describe("examples", () => {
         });
       expect((await send(signWebhook("whsec_demo", ts, body))).status).toBe(200);
       expect((await send(signWebhook("forged", ts, body))).status).toBe(400);
+      expect(paid).toEqual(["o-1"]);
+      // A rehearsal delivery for another real order: signed, acknowledged, never fulfilled.
+      const testBody = JSON.stringify({
+        type: "payment",
+        uuid: "u-2",
+        order_id: "o-2",
+        status: "paid",
+        sequence: 0,
+        test: true,
+      });
+      expect((await send(signWebhook("whsec_demo", ts, testBody), testBody)).status).toBe(200);
+      expect(paid).toEqual(["o-1"]);
     } finally {
       server.close();
     }

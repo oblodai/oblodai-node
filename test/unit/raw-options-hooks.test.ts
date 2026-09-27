@@ -16,8 +16,8 @@ const creds = {
   baseUrl: "https://api.test",
   retry: { baseDelayMs: 1, maxDelayMs: 2 },
 };
-const list = (items: unknown[], hasPages: boolean, offset = 0) =>
-  ok({ items, paginate: { total: 3, per_page: 2, offset, has_pages: hasPages } });
+const list = (items: unknown[], hasPages: boolean, offset = 0, total = 3) =>
+  ok({ items, paginate: { total, per_page: 2, offset, has_pages: hasPages } });
 
 describe("withRawResponse (spec §3.5)", () => {
   it("gives status, headers and request id; parse() gives the usual result", async () => {
@@ -170,7 +170,7 @@ describe("pages (spec §3.7)", () => {
   });
 
   it("is lazy, and the first page is fetched once however it is consumed", async () => {
-    const { fetch, calls } = mockFetch([list([1, 2], false)]);
+    const { fetch, calls } = mockFetch([list([1, 2], false, 0, 2)]);
     const page = new Oblodai({ ...creds, fetch }).payments.listHistory();
     expect(calls).toHaveLength(0);
     const first = await page;

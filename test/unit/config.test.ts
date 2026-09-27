@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveConfig } from "../../src/config.js";
+import { ConfigError } from "../../src/core/errors.js";
 import {
   addAmounts,
   compareAmounts,
@@ -18,14 +19,32 @@ describe("config", () => {
     expect(cfg.credentials?.secret).toBe("s");
     expect(cfg.baseUrl).toBe("https://x.test");
   });
-  it("refuses plain http except for localhost or when allowed", () => {
+  it("refuses plain http unless explicitly allowed — loopback included", () => {
     expect(() => resolveConfig({ baseUrl: "http://api.oblodai.com" }, {})).toThrow(/https/);
-    expect(resolveConfig({ baseUrl: "http://localhost:8095" }, {}).baseUrl).toBe(
-      "http://localhost:8095",
-    );
+    expect(() => resolveConfig({ baseUrl: "http://localhost:8095" }, {})).toThrow(/https/);
+    expect(() => resolveConfig({ baseUrl: "http://127.0.0.1:8095" }, {})).toThrow(/https/);
+    expect(
+      resolveConfig({ baseUrl: "http://localhost:8095", allowInsecureBaseUrl: true }, {}).baseUrl,
+    ).toBe("http://localhost:8095");
     expect(
       resolveConfig({ baseUrl: "http://10.0.0.1", allowInsecureBaseUrl: true }, {}).baseUrl,
     ).toBe("http://10.0.0.1");
+    expect(
+      resolveConfig({ baseUrl: "http://10.0.0.1" }, { OBLODAI_ALLOW_INSECURE: "1" }).baseUrl,
+    ).toBe("http://10.0.0.1");
+  });
+  it("refuses a base URL with user:password@ and never echoes it", () => {
+    for (const baseUrl of ["https://user:hunter2@api.test", "https://hunter2@api.test"]) {
+      let err: unknown;
+      try {
+        resolveConfig({ baseUrl }, {});
+      } catch (e) {
+        err = e;
+      }
+      expect(err, baseUrl).toBeInstanceOf(ConfigError);
+      expect(String(err)).toMatch(/credentials/);
+      expect(String(err)).not.toContain("hunter2");
+    }
   });
   it("refuses half a key pair", () => {
     expect(() => resolveConfig({ publicId: "pk" }, {})).toThrow(/together/);

@@ -7,6 +7,7 @@ import {
   HEADER_TIMESTAMP,
   signRequest,
 } from "./signing.js";
+import { MAX_BODY } from "../generated/signing.js";
 import { ConfigError } from "./errors.js";
 import { protectSecrets } from "./secrets.js";
 
@@ -46,8 +47,6 @@ export interface BuildInput {
   ts: number;
   userAgent: string;
   extraHeaders?: Record<string, string>;
-  /** Sent as `X-Admin-Token`; the transport supplies it on `onboard` routes only. */
-  adminToken?: string;
   /** Sent as `X-Request-ID`, replacing a caller header of that name. */
   requestId?: string;
 }
@@ -61,6 +60,7 @@ export interface BuiltRequest {
   requestUri: string;
 }
 
+/** Never sent by the SDK (see `ClientOptions.adminToken`); reserved so a caller header of that name is dropped. */
 export const HEADER_ADMIN_TOKEN = "X-Admin-Token";
 
 /**
@@ -138,10 +138,6 @@ export function buildRequest(input: BuildInput): BuiltRequest {
   const hasBody = route.method !== "GET";
   if (hasBody) headers["Content-Type"] = "application/json";
   if (input.idempotencyKey) headers[HEADER_IDEMPOTENCY_KEY] = input.idempotencyKey;
-  if (input.adminToken) {
-    assertHeaderValue(HEADER_ADMIN_TOKEN, input.adminToken);
-    headers[HEADER_ADMIN_TOKEN] = input.adminToken;
-  }
 
   if (route.auth === "key") {
     if (!input.credentials) {
@@ -188,7 +184,7 @@ export function fillPath(template: string, params: Record<string, string | numbe
     if (v === "" || v === "." || v === ".." || v.includes("/")) {
       throw new ConfigError(
         "sdk.bad_path_param",
-        `path parameter "${name}" for ${template} must be a non-empty single segment (got ${JSON.stringify(v)})`,
+        `path parameter "${name}" for ${template} must be a non-empty single segment (got ${/^(token|code|passcode)$/i.test(name) ? "[redacted]" : JSON.stringify(v)})`,
         name,
       );
     }
@@ -228,13 +224,18 @@ export function rejectFloatAmounts(value: unknown, path = ""): void {
   }
 }
 
-/** Serialize a request body once; `undefined` values vanish, a missing POST body becomes `{}`. */
+/**
+ * Serialize a request body once; `undefined` values vanish, a missing POST body becomes `{}`.
+ * A body larger than the core reads (`MAX_BODY`, from the contract) is refused here, before it is
+ * signed or sent: the core would cut it off and answer with a confusing parse error.
+ */
 export function serializeBody(body: unknown, method: string): string {
   if (method === "GET") return "";
   if (body === undefined || body === null) return "{}";
   rejectFloatAmounts(body);
+  let text: string;
   try {
-    return JSON.stringify(body);
+    text = JSON.stringify(body);
   } catch (err) {
     throw new ConfigError(
       "sdk.bad_body",
@@ -242,4 +243,13 @@ export function serializeBody(body: unknown, method: string): string {
       "body",
     );
   }
+  const size = Buffer.byteLength(text, "utf8");
+  if (size > MAX_BODY) {
+    throw new ConfigError(
+      "sdk.body_too_large",
+      `request body is ${size} bytes; the gateway reads at most ${MAX_BODY}`,
+      "body",
+    );
+  }
+  return text;
 }

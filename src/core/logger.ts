@@ -45,7 +45,8 @@ export function consoleLogger(level: "debug" | "info" | "warn" | "error" = "warn
   };
 }
 
-const SENSITIVE = /secret|signature|passcode|token|authorization|password|api[-_]?key/i;
+const SENSITIVE =
+  /secret|signature|passcode|token|authorization|password|api[-_]?key|device[-_]?code|claim[-_]?url|^sig$/i;
 
 /**
  * Wrap a logger so its fields are redacted before it sees them. The SDK does this once, around the

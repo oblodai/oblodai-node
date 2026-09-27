@@ -59,10 +59,11 @@ export function isKnownEvent(event: AnyWebhookEvent): event is WebhookEvent {
  *   TIMESTAMP: <unix seconds>
  *   SIGNATURE: `signWebhook(secret, ts, rawBody)` — hex HMAC-SHA256 over the contract's canonical
  *   SIGNATURE_PREV: same, with the previous secret — only during a rotation overlap
- *   EVENT: invoice.<status> | payout.<status> | wallet.paid | … (`WEBHOOK_EVENTS`)
- *   ID: the delivery — identical across its retries, but a resend is a new delivery
- *   EVENT_ID: the state — identical across retries AND resends of it; deduplicate on it
- *   EVENT_TIME: unix seconds when the state change committed (order events by it)
+ *   EVENT: invoice.<status> | payout.<status> | wallet.paid | … (`WEBHOOK_EVENTS`), not signed
+ *   ID, EVENT_ID, EVENT_TIME, TEST: advisory and NOT signed — see `UnverifiedDeliveryHeaders`
+ *
+ * Deduplicate on `eventKey` (signed), order by the body's `sequence` (signed), and ignore
+ * `test: true` bodies (signed).
  *
  * Always verify over the raw request bytes; a re-serialized parse will not match.
  *
@@ -87,28 +88,45 @@ export interface VerifyWebhookOptions {
   now?: () => number;
 }
 
-/** A verified delivery: the event plus the advisory headers worth keeping. */
-export interface WebhookDeliveryInfo {
-  /** Use `isKnownEvent(event)` before switching on `type`: a newer core may send a type this release does not model. */
-  event: AnyWebhookEvent;
-  /**
-   * `HEADER_WEBHOOK_ID` — the delivery: identical across its retries, but a resend
-   * (`webhooks.resendPayment`, a sandbox replay) is a new delivery with a new id. Not a dedup key.
-   */
-  id?: string;
-  /**
-   * `HEADER_WEBHOOK_EVENT_ID` — the state the delivery carries: identical for the original, every retry
-   * and every resend of the same state, different once the state changes. Deduplicate on it.
-   */
+/**
+ * What the delivery's headers said beyond the signature. NONE of these are covered by the MAC (the
+ * core signs `<timestamp>.<body>` only): anyone who captured an authentic delivery can replay it
+ * with different values here. Log and trace with them; never deduplicate, order or skip on them.
+ */
+export interface UnverifiedDeliveryHeaders {
+  /** `HEADER_WEBHOOK_ID` — the delivery attempt chain (identical across retries of one delivery). */
+  deliveryId?: string;
+  /** `HEADER_WEBHOOK_EVENT_ID` — the core's id for the state the delivery carries. */
   eventId?: string;
   /** `HEADER_WEBHOOK_EVENT` — `invoice.<status>`, `payout.<status>`, … (every name: `WEBHOOK_EVENTS`). */
   eventType?: string;
   /** `HEADER_WEBHOOK_EVENT_TIME` — unix seconds when the state change committed. */
   eventTime?: number;
-  /** `HEADER_WEBHOOK_TIMESTAMP` — unix seconds when this attempt was sent. */
+  /** `HEADER_WEBHOOK_TEST` said `true`. Use `isTest` (from the signed body) instead. */
+  test: boolean;
+}
+
+/** A verified delivery: the event, the signed dedupe key and test flag, and the unsigned headers. */
+export interface WebhookDeliveryInfo {
+  /** Use `isKnownEvent(event)` before switching on `type`: a newer core may send a type this release does not model. */
+  event: AnyWebhookEvent;
+  /**
+   * The deduplication key, derived from the signed body only: `type:objectId:sequence`
+   * (see {@link eventKey}). Identical for the original, every retry and every resend of the same
+   * state; different once the state changes. Undefined for an event kind this release does not
+   * model, or a body without an object id or `sequence` — acknowledge such a delivery, do not act.
+   */
+  eventKey?: string;
+  /** `HEADER_WEBHOOK_TIMESTAMP` — unix seconds when this attempt was sent (covered by the MAC). */
   sentAt: number;
-  /** A rehearsal delivery (`HEADER_WEBHOOK_TEST: true` / body `test: true`): signed like a live one, but no money moved. */
+  /**
+   * A rehearsal delivery: the signed body says `test: true`. Signed like a live one, but no money
+   * moved — ALWAYS acknowledge and ignore it. Taken from the body only: the rehearsal header (`HEADER_WEBHOOK_TEST`) is
+   * not signed, so it can neither make a live delivery look like a test nor the other way round.
+   */
   isTest: boolean;
+  /** Header values the signature does not cover. Diagnostics only. */
+  unverified: UnverifiedDeliveryHeaders;
 }
 
 /**
@@ -138,7 +156,10 @@ export function verifyWebhook(
   return verifyWebhookDelivery(rawBody, headers, options).event;
 }
 
-/** Like `verifyWebhook`, and also returns the delivery and event ids, event type and times from the headers. */
+/**
+ * Like `verifyWebhook`, and also returns the signed dedupe key (`eventKey`), the signed test flag,
+ * the send time, and — under `unverified` — the header values the signature does not cover.
+ */
 export function verifyWebhookDelivery(
   rawBody: string | Uint8Array,
   headers: WebhookHeaders,
@@ -208,21 +229,42 @@ export function verifyWebhookDelivery(
   // --- 4. body ---
   const eventTimeRaw = headerValue(headers, HEADER_WEBHOOK_EVENT_TIME);
   const event = parseWebhook(rawBody);
+  const key = eventKey(event);
   return {
     event,
-    isTest: isTrueHeader(headerValue(headers, HEADER_WEBHOOK_TEST)) || isTestEvent(event),
-    id: headerValue(headers, HEADER_WEBHOOK_ID),
-    eventId: headerValue(headers, HEADER_WEBHOOK_EVENT_ID),
-    eventType: headerValue(headers, HEADER_WEBHOOK_EVENT),
-    eventTime: eventTimeRaw && /^\d+$/.test(eventTimeRaw.trim()) ? Number(eventTimeRaw) : undefined,
+    ...(key !== undefined ? { eventKey: key } : {}),
+    isTest: isTestEvent(event),
     sentAt: ts,
+    unverified: {
+      deliveryId: headerValue(headers, HEADER_WEBHOOK_ID),
+      eventId: headerValue(headers, HEADER_WEBHOOK_EVENT_ID),
+      eventType: headerValue(headers, HEADER_WEBHOOK_EVENT),
+      eventTime:
+        eventTimeRaw && /^\d+$/.test(eventTimeRaw.trim()) ? Number(eventTimeRaw) : undefined,
+      test: isTrueHeader(headerValue(headers, HEADER_WEBHOOK_TEST)),
+    },
   };
+}
+
+/**
+ * The deduplication key of a delivery, from the signed body only: `<type>:<objectId>:<sequence>`
+ * (`payment:3c4e…:6`). Every retry and resend of one state carries the same key; the next state
+ * of the object carries a higher `sequence` and so a new key. Undefined when the body has no object
+ * id (`objectId`) or no integer `sequence` — such a delivery cannot be deduplicated safely.
+ */
+export function eventKey(event: object | null | undefined): string | undefined {
+  const id = objectId(event);
+  const sequence = (event as { sequence?: unknown } | null | undefined)?.sequence;
+  if (id === undefined || typeof sequence !== "number" || !Number.isInteger(sequence)) {
+    return undefined;
+  }
+  return `${(event as { type: string }).type}:${id}:${sequence}`;
 }
 
 // isTestEvent and isStaleEvent take any event (`object`): an event kind whose model lacks `test` or
 // `sequence` still passes, so a new kind in the contract never stops a receiver from compiling.
 
-/** True for rehearsal deliveries (`webhooks.test`, sandbox) — never act on them as if money moved. */
+/** True for rehearsal deliveries (signed body `test: true`) — never act on them as if money moved. */
 export function isTestEvent(event: object | null | undefined): boolean {
   return (event as { test?: unknown } | null | undefined)?.test === true;
 }

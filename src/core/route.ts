@@ -6,7 +6,8 @@ export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 /**
  * Which credential the core's gate expects: `public` is unsigned, `key` is signed with the
- * merchant's one API key, `onboard` carries the gateway's admin token (`X-Admin-Token`).
+ * merchant's one API key, `onboard` is operator-only (the operator HMAC channel, which the SDK does
+ * not implement: such a route is refused with `sdk.operator_channel_unsupported` before any request).
  */
 export type RouteAuth = "public" | "key" | "onboard";
 
