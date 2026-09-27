@@ -1362,8 +1362,10 @@ export interface PaymentInfoResult {
    */
   rate_expires_at: string;
   /**
-   * How much of the paid amount has been refunded: none, partial or full (cancelled and failed
-   * refunds are not counted).
+   * How much of what can be refunded has been refunded: none, partial or full — full once refunds
+   * reach the refund ceiling (what was paid without the payer surcharge, and without the commission
+   * when the customer bears it, getRefundFeeConfig), so nothing more can be refunded. Cancelled and
+   * failed refunds are not counted.
    */
   refund_status?: OpenEnum<RefundRollup>;
   /** Refunds for this payment. */
