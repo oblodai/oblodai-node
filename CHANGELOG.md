@@ -9,8 +9,10 @@ All notable changes to this package are documented here. The format follows
 ### Security
 
 - **Breaking — webhooks:** `verifyWebhookDelivery` no longer reports the unsigned delivery headers
-  as if they were verified. The new `eventKey` (`type:objectId:sequence`, also exported as the
-  `eventKey(event)` helper) is built from the signed body and is the deduplication key; `isTest`
+  as if they were verified. The new `eventKey` (also exported as the `eventKey(event)` helper)
+  is built from the signed body and is the deduplication key: dedupe on `event_id` (fallback
+  `type:id:sequence` for a delivery from an older core without it; `WEBHOOK_EVENT_ID_FIELD` names
+  the field). Webhook models gain the optional `event_id`; `isTest`
   now comes from the signed body's `test` only. `id`, `eventId`, `eventType` and `eventTime` moved
   to `unverified.deliveryId` / `unverified.eventId` / `unverified.eventType` /
   `unverified.eventTime`, next to `unverified.test` (the `X-Webhook-Test` header). A captured

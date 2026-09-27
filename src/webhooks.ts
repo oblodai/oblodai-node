@@ -10,6 +10,7 @@ import {
   HEADER_WEBHOOK_TEST,
   HEADER_WEBHOOK_TIMESTAMP,
   SKEW_SECONDS,
+  WEBHOOK_EVENT_ID_FIELD,
 } from "./generated/signing.js";
 import { ConfigError, OblodaiError, SignatureError, WebhookPayloadError } from "./core/errors.js";
 import { signWebhook } from "./core/signing.js";
@@ -31,6 +32,7 @@ export interface UnknownWebhookEvent {
   uuid?: string;
   sequence?: number;
   event_at?: string;
+  event_id?: string;
   test?: boolean;
   [field: string]: unknown;
 }
@@ -62,8 +64,8 @@ export function isKnownEvent(event: AnyWebhookEvent): event is WebhookEvent {
  *   EVENT: invoice.<status> | payout.<status> | wallet.paid | … (`WEBHOOK_EVENTS`), not signed
  *   ID, EVENT_ID, EVENT_TIME, TEST: advisory and NOT signed — see `UnverifiedDeliveryHeaders`
  *
- * Deduplicate on `eventKey` (signed), order by the body's `sequence` (signed), and ignore
- * `test: true` bodies (signed).
+ * Deduplicate on `eventKey` (the signed body's `event_id`, fallback `type:id:sequence`), order by
+ * the body's `sequence` (signed), and ignore `test: true` bodies (signed).
  *
  * Always verify over the raw request bytes; a re-serialized parse will not match.
  *
@@ -96,7 +98,7 @@ export interface VerifyWebhookOptions {
 export interface UnverifiedDeliveryHeaders {
   /** `HEADER_WEBHOOK_ID` — the delivery attempt chain (identical across retries of one delivery). */
   deliveryId?: string;
-  /** `HEADER_WEBHOOK_EVENT_ID` — the core's id for the state the delivery carries. */
+  /** `HEADER_WEBHOOK_EVENT_ID` — the core's id for the state the delivery carries. Use `eventKey` (from the signed body's `event_id`) instead. */
   eventId?: string;
   /** `HEADER_WEBHOOK_EVENT` — `invoice.<status>`, `payout.<status>`, … (every name: `WEBHOOK_EVENTS`). */
   eventType?: string;
@@ -111,10 +113,11 @@ export interface WebhookDeliveryInfo {
   /** Use `isKnownEvent(event)` before switching on `type`: a newer core may send a type this release does not model. */
   event: AnyWebhookEvent;
   /**
-   * The deduplication key, derived from the signed body only: `type:objectId:sequence`
-   * (see {@link eventKey}). Identical for the original, every retry and every resend of the same
-   * state; different once the state changes. Undefined for an event kind this release does not
-   * model, or a body without an object id or `sequence` — acknowledge such a delivery, do not act.
+   * The deduplication key, derived from the signed body only (see {@link eventKey}): the body's
+   * `event_id` (`WEBHOOK_EVENT_ID_FIELD`), fallback `type:objectId:sequence` for a delivery from an
+   * older core without it. Identical for the original, every retry and every resend of the same
+   * state; different once the state changes. Undefined when the body has no `event_id` and no
+   * object id or `sequence` — acknowledge such a delivery, do not act.
    */
   eventKey?: string;
   /** `HEADER_WEBHOOK_TIMESTAMP` — unix seconds when this attempt was sent (covered by the MAC). */
@@ -247,12 +250,17 @@ export function verifyWebhookDelivery(
 }
 
 /**
- * The deduplication key of a delivery, from the signed body only: `<type>:<objectId>:<sequence>`
- * (`payment:3c4e…:6`). Every retry and resend of one state carries the same key; the next state
- * of the object carries a higher `sequence` and so a new key. Undefined when the body has no object
- * id (`objectId`) or no integer `sequence` — such a delivery cannot be deduplicated safely.
+ * The deduplication key of a delivery, from the signed body only: its `event_id` (the field
+ * `WEBHOOK_EVENT_ID_FIELD` names) — the same for every retry and every resend of one state, new once
+ * the state changes (a resend raises `sequence` but keeps `event_id`). A delivery from an older core
+ * without `event_id` falls back to `<type>:<objectId>:<sequence>` (`payment:3c4e…:6`). Undefined when
+ * neither is present — such a delivery cannot be deduplicated safely. Never taken from a header.
  */
 export function eventKey(event: object | null | undefined): string | undefined {
+  if (isRecord(event)) {
+    const signedId = event[WEBHOOK_EVENT_ID_FIELD];
+    if (typeof signedId === "string" && signedId !== "") return signedId;
+  }
   const id = objectId(event);
   const sequence = (event as { sequence?: unknown } | null | undefined)?.sequence;
   if (id === undefined || typeof sequence !== "number" || !Number.isInteger(sequence)) {

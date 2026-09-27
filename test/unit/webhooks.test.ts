@@ -9,7 +9,11 @@ import {
 } from "../../src/webhooks.js";
 import { SignatureError } from "../../src/core/errors.js";
 import { signWebhook } from "../../src/core/signing.js";
-import { WEBHOOK_SAMPLES_SECRET, loadWebhookSamples } from "../support/fixtures.js";
+import {
+  WEBHOOK_SAMPLES_PREVIOUS_SECRET,
+  WEBHOOK_SAMPLES_SECRET,
+  loadWebhookSamples,
+} from "../support/fixtures.js";
 import {
   HEADER_WEBHOOK_EVENT,
   HEADER_WEBHOOK_EVENT_ID,
@@ -18,10 +22,11 @@ import {
   HEADER_WEBHOOK_SIGNATURE_PREV,
   HEADER_WEBHOOK_TIMESTAMP,
   SKEW_SECONDS,
+  WEBHOOK_EVENT_ID_FIELD,
 } from "../../src/generated/signing.js";
 
-// The samples were delivered by the core's real dispatcher to the recorder, signed with the
-// endpoint secret in force at that moment — the one returned by the rotate-secret call.
+// The samples were delivered by the core's real dispatcher to the recorder (an older core: no
+// `event_id` in the body) and re-signed with a fake secret, so no captured secret is published.
 const samples = loadWebhookSamples();
 const secret = WEBHOOK_SAMPLES_SECRET;
 
@@ -35,7 +40,15 @@ describe("verifyWebhook against real deliveries", () => {
         now: () => ts,
       });
       expect(objectId(event)).toBe(s.body.uuid);
+      // An old-core delivery without event_id: the dedupe key falls back to type:id:sequence.
+      expect(s.body[WEBHOOK_EVENT_ID_FIELD]).toBeUndefined();
       expect(eventKey).toBe(`${s.body.type}:${s.body.uuid}:${s.body.sequence}`);
+      if (s.headers[HEADER_WEBHOOK_SIGNATURE_PREV] !== undefined) {
+        // A receiver still on the previous secret verifies the Prev header.
+        expect(
+          verifyWebhook(raw, s.headers, { secret: WEBHOOK_SAMPLES_PREVIOUS_SECRET, now: () => ts }),
+        ).toBeDefined();
+      }
       expect(unverified.deliveryId).toBe(s.headers[HEADER_WEBHOOK_ID]);
       expect(unverified.eventId).toBe(s.headers[HEADER_WEBHOOK_EVENT_ID]);
       expect(unverified.eventType).toBe(s.headers[HEADER_WEBHOOK_EVENT]);
@@ -147,6 +160,39 @@ describe("verifyWebhook rules", () => {
     );
     expect(original.eventKey).toBeDefined();
     expect(replayed.eventKey).toBe(original.eventKey);
+  });
+
+  it("dedupes on the signed event_id: a resend (same event_id, higher sequence) is the same key", () => {
+    const eventId = "7f1c5a2e-9b1d-5c3e-8a4f-0d2b6e9c1a33";
+    const deliver = (fields: Record<string, unknown>, headerEventId: string) => {
+      const raw = JSON.stringify({
+        type: "payment",
+        uuid: "u1",
+        order_id: "o",
+        status: "paid",
+        ...fields,
+      });
+      return verifyWebhookDelivery(
+        raw,
+        {
+          [HEADER_WEBHOOK_TIMESTAMP]: String(ts),
+          [HEADER_WEBHOOK_SIGNATURE]: signWebhook("whsec", ts, raw),
+          [HEADER_WEBHOOK_EVENT_ID]: headerEventId,
+        },
+        { secret: "whsec", now: () => ts },
+      );
+    };
+    const original = deliver({ sequence: 6, [WEBHOOK_EVENT_ID_FIELD]: eventId }, eventId);
+    const resend = deliver({ sequence: 9, [WEBHOOK_EVENT_ID_FIELD]: eventId }, "e-forged");
+    expect(original.eventKey).toBe(eventId);
+    expect(resend.eventKey).toBe(original.eventKey);
+    expect(resend.unverified.eventId).toBe("e-forged");
+    // A new state gets a new event_id and so a new key.
+    const next = deliver({ sequence: 10, [WEBHOOK_EVENT_ID_FIELD]: "other-state" }, eventId);
+    expect(next.eventKey).toBe("other-state");
+    // An older core without event_id: fallback type:id:sequence from the body, never the header.
+    const old = deliver({ sequence: 6 }, eventId);
+    expect(old.eventKey).toBe("payment:u1:6");
   });
 
   it("parses the discriminated union and detects stale sequences", () => {

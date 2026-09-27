@@ -573,6 +573,15 @@ export interface ConversionWebhook {
   document_url: string;
   /** When the event happened, UTC with milliseconds (ISO 8601). */
   event_at: string;
+  /**
+   * The id of the object state this body carries — signed, and the key to deduplicate on: the same
+   * for every retry and every resend (/v1/payment/resend) of the same state, different as soon as
+   * the state changes (sequence, by contrast, grows on a resend). Always equal to the
+   * X-Webhook-Event-Id header, which is not signed — prefer this field. Always sent by current
+   * cores; a delivery from an older core may lack it — then deduplicate on type:id:sequence from
+   * the body.
+   */
+  event_id?: string;
   /** Conversion fee, in percent. */
   fee_percent: string;
   /** Source currency. */
@@ -602,7 +611,8 @@ export interface ConversionWebhook {
   /**
    * Present only on a rehearsal (/v1/test-webhook/*, /v1/payment/testing-webhook) and always true —
    * inside the signature. A live event never carries this field: your handler must ignore a body
-   * with test: true even if the signature is valid.
+   * with test: true even if the signature is valid. This field, not the unsigned X-Webhook-Test
+   * header, is what marks a rehearsal.
    */
   test?: boolean;
   /** Target currency. */
@@ -1900,6 +1910,15 @@ export interface PaymentWebhook {
   currency: string;
   /** When the event happened, UTC with milliseconds (ISO 8601). */
   event_at: string;
+  /**
+   * The id of the object state this body carries — signed, and the key to deduplicate on: the same
+   * for every retry and every resend (/v1/payment/resend) of the same state, different as soon as
+   * the state changes (sequence, by contrast, grows on a resend). Always equal to the
+   * X-Webhook-Event-Id header, which is not signed — prefer this field. Always sent by current
+   * cores; a delivery from an older core may lack it — then deduplicate on type:id:sequence from
+   * the body.
+   */
+  event_id?: string;
   /** true — the status is final, the payment will not change any further. */
   is_final: boolean;
   /** The network the money arrived on. */
@@ -1932,7 +1951,8 @@ export interface PaymentWebhook {
   /**
    * Present only on a rehearsal (/v1/test-webhook/*, /v1/payment/testing-webhook) and always true —
    * inside the signature. A live event never carries this field: your handler must ignore a body
-   * with test: true even if the signature is valid.
+   * with test: true even if the signature is valid. This field, not the unsigned X-Webhook-Test
+   * header, is what marks a rehearsal.
    */
   test?: boolean;
   /** The hash of the transaction the payment arrived with (empty until there is a payment). */
@@ -2652,6 +2672,15 @@ export interface PayoutWebhook {
   /** When the event happened, UTC with milliseconds (ISO 8601). */
   event_at: string;
   /**
+   * The id of the object state this body carries — signed, and the key to deduplicate on: the same
+   * for every retry and every resend (/v1/payment/resend) of the same state, different as soon as
+   * the state changes (sequence, by contrast, grows on a resend). Always equal to the
+   * X-Webhook-Event-Id header, which is not signed — prefer this field. Always sent by current
+   * cores; a delivery from an older core may lack it — then deduplicate on type:id:sequence from
+   * the body.
+   */
+  event_id?: string;
+  /**
    * Who paid the network fee: gateway — the gateway absorbed it (commission = 0); merchant — the
    * debit amount was increased by the fee, the recipient gets the full requested amount
    * (is_subtract=true, a payout link with fee_bearer=merchant); recipient — the fee was withheld
@@ -2697,7 +2726,8 @@ export interface PayoutWebhook {
   /**
    * Present only on a rehearsal (/v1/test-webhook/*, /v1/payment/testing-webhook) and always true —
    * inside the signature. A live event never carries this field: your handler must ignore a body
-   * with test: true even if the signature is valid.
+   * with test: true even if the signature is valid. This field, not the unsigned X-Webhook-Test
+   * header, is what marks a rehearsal.
    */
   test?: boolean;
   /** The blockchain transaction hash (appears after sending). */
@@ -3884,6 +3914,15 @@ export interface WalletWebhook {
   currency: string;
   /** When the event happened, UTC with milliseconds (ISO 8601). */
   event_at: string;
+  /**
+   * The id of the object state this body carries — signed, and the key to deduplicate on: the same
+   * for every retry and every resend (/v1/payment/resend) of the same state, different as soon as
+   * the state changes (sequence, by contrast, grows on a resend). Always equal to the
+   * X-Webhook-Event-Id header, which is not signed — prefer this field. Always sent by current
+   * cores; a delivery from an older core may lack it — then deduplicate on type:id:sequence from
+   * the body.
+   */
+  event_id?: string;
   /** true — the status is final. */
   is_final: boolean;
   /** Blockchain network. */
@@ -3904,7 +3943,8 @@ export interface WalletWebhook {
   /**
    * Present only on a rehearsal (/v1/test-webhook/*, /v1/payment/testing-webhook) and always true —
    * inside the signature. A live event never carries this field: your handler must ignore a body
-   * with test: true even if the signature is valid.
+   * with test: true even if the signature is valid. This field, not the unsigned X-Webhook-Test
+   * header, is what marks a rehearsal.
    */
   test?: boolean;
   /** The deposit transaction hash. */

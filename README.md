@@ -383,8 +383,9 @@ then freshness, then the body — so the freshness window is never an oracle for
 caller. An empty `secret` is a `ConfigError`, never a verification against the empty key.
 `toleranceSec` defaults to 300 and `0` disables the freshness check.
 
-- **Deduplicate on `eventKey`** (`type:objectId:sequence`, built from the signed body): it names the
-  state and is the same for every retry and every resend of it. The `X-Webhook-Id` /
+- **Deduplicate on `eventKey`** — the signed body's `event_id` (fallback `type:objectId:sequence`
+  for a delivery from an older core without it): it names the state and is the same for every retry
+  and every resend of it (a resend raises `sequence` but keeps `event_id`). The `X-Webhook-Id` /
   `X-Webhook-Event-Id` / `X-Webhook-Event` / `X-Webhook-Test` headers are **not signed** — a replay
   can carry any values there — so they are reported only under `unverified` and must never decide
   whether a delivery is processed.

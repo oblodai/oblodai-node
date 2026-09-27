@@ -10,8 +10,8 @@ import {
 } from "@oblodai-npm/sdk/webhooks";
 
 export const app = express();
-// delivery.eventKey: `type:objectId:sequence` from the SIGNED body — the same for retries AND
-// resends of a state. Never key on the X-Webhook-* id headers: they are not signed. Use your
+// delivery.eventKey: the SIGNED body's `event_id` (fallback `type:objectId:sequence` from an older
+// core) — the same for retries AND resends of a state. Never key on the X-Webhook-* id headers: they are not signed. Use your
 // database in production.
 const seenEvents = new Set<string>();
 const lastSequence = new Map<string, number>(); // per object id

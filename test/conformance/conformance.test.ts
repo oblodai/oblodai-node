@@ -21,6 +21,7 @@ import type { HttpMethod, RouteSpec } from "../../src/core/route.js";
 import { Transport } from "../../src/core/transport.js";
 import {
   isKnownEvent,
+  objectId,
   parseWebhook,
   verifyWebhook,
   verifyWebhookDelivery,
@@ -197,12 +198,18 @@ describe.skipIf(!found)("conformance", () => {
   describe("webhook deliveries", () => {
     const deliverySuite = found ? suite("webhook_delivery") : { fields: {}, checks: [] };
     const {
+      signing: deliverySigning,
       vectors: deliveries,
       names: deliveryNames,
       testHeader,
     } = found
       ? source(deliverySuite)
-      : { vectors: [] as Json[], names: {} as Record<string, string>, testHeader: "" };
+      : {
+          signing: {} as Json,
+          vectors: [] as Json[],
+          names: {} as Record<string, string>,
+          testHeader: "",
+        };
     const camel = (snake: string) => snake.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
 
     it.skipIf(!found)("has a delivery of every event this release knows", () => {
@@ -233,6 +240,25 @@ describe.skipIf(!found)("conformance", () => {
       expect(delivery.isTest, "isTest comes from the signed body only").toBe(
         JSON.parse(d.payload as string).test === true,
       );
+      // The dedupe key is the signed body field the spec names (dedupe_key.field_pointer), else
+      // the fallback type:id:sequence — never a header.
+      const body = JSON.parse(d.payload as string);
+      if (deliverySuite.dedupe_key) {
+        const field: string = pointer(
+          { "x-oblodai-signing": deliverySigning },
+          deliverySuite.dedupe_key.field_pointer,
+        );
+        expect(field, "dedupe_key.field_pointer").toBeTruthy();
+        expect(deliverySuite.dedupe_key.fallback).toBe("type:id:sequence");
+        const want =
+          typeof body[field] === "string" && body[field] !== ""
+            ? body[field]
+            : `${body.type}:${objectId(delivery.event)}:${body.sequence}`;
+        expect(delivery.eventKey, "dedupe key from the signed body").toBe(want);
+      }
+      if (deliverySuite.fields_unverified !== undefined) {
+        expect(deliverySuite.fields_unverified).toBe(true);
+      }
       expect(isKnownEvent(delivery.event)).toBe(true);
       expect(delivery.event.type).toBe(d.kind);
       expect(WEBHOOK_EVENTS[d.kind as keyof typeof WEBHOOK_EVENTS]).toContain(d.event);

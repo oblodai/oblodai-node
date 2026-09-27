@@ -18,9 +18,14 @@ export interface WebhookSample {
   raw?: string;
 }
 
-/** The endpoint secret in force when the samples were recorded (the rotate-secret answer). */
-export const WEBHOOK_SAMPLES_SECRET =
-  "0000000000000000000000000000000000000000000000000000000000000000";
+/**
+ * A fake endpoint secret: the recorded deliveries keep their captured bytes and headers but are
+ * re-signed with it (and `Signature-Prev` with `WEBHOOK_SAMPLES_PREVIOUS_SECRET`), so no captured
+ * secret is published.
+ */
+export const WEBHOOK_SAMPLES_SECRET = "0".repeat(64);
+/** The fake previous secret the recorded `Signature-Prev` headers are re-signed with. */
+export const WEBHOOK_SAMPLES_PREVIOUS_SECRET = "1".repeat(64);
 
 /**
  * The samples keep the header names they were recorded under; each maps to its role's current name
