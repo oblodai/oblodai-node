@@ -21,6 +21,7 @@ export const WEBHOOK_EVENTS: Readonly<Record<KnownEventKind, readonly string[]>>
     "invoice.expired",
     "invoice.paid",
     "invoice.paid_over",
+    "invoice.reversed",
     "invoice.select",
     "invoice.under_review",
     "invoice.wrong_amount",
@@ -43,8 +44,8 @@ export type ConversionEvent = ConversionWebhook & { type: "conversion" };
 
 /**
  * A `payment` delivery (events `invoice.cancelled`, `invoice.confirm_check`, `invoice.created`,
- * `invoice.expired`, `invoice.paid`, `invoice.paid_over`, `invoice.select`, `invoice.under_review`,
- * `invoice.wrong_amount`).
+ * `invoice.expired`, `invoice.paid`, `invoice.paid_over`, `invoice.reversed`, `invoice.select`,
+ * `invoice.under_review`, `invoice.wrong_amount`).
  */
 export type PaymentEvent = PaymentWebhook & { type: "payment" };
 

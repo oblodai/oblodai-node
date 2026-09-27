@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isKnownEvent } from "../../src/webhooks.js";
+import { WEBHOOK_EVENTS } from "../../src/generated/events.js";
+import { WebhookEventName } from "../../src/generated/enums.js";
 import {
   isStaleEvent,
   objectId,
@@ -205,6 +207,18 @@ describe("verifyWebhook rules", () => {
     const alien = parseWebhook('{"type":"alien","uuid":"x"}');
     expect(alien.type).toBe("alien");
     expect(isKnownEvent(alien)).toBe(false);
+  });
+
+  it("knows invoice.reversed as a payment event and keeps reversal optional", () => {
+    expect(WebhookEventName.INVOICE_REVERSED).toBe("invoice.reversed");
+    expect(WEBHOOK_EVENTS.payment).toContain("invoice.reversed");
+    // A core before invoice.reversed does not send `reversal`: absent reads as false.
+    const older = parseWebhook(body);
+    expect(older.type === "payment" && older.reversal).toBeUndefined();
+    const reversed = parseWebhook(
+      JSON.stringify({ ...JSON.parse(body), status: "expired", reversal: true, txid: "" }),
+    );
+    expect(reversed.type === "payment" && reversed.reversal).toBe(true);
   });
 
   it("reads the object id from the field the contract declares for the kind", () => {

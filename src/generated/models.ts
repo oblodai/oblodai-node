@@ -1896,10 +1896,11 @@ export interface PaymentViewList {
 }
 
 /**
- * Sent when a payment moves to paid, paid_over, wrong_amount, expired or under_review, and when it
- * rolls back from them (a chain reorganization). The current status — any value from the vocabulary
- * — can be requested again: POST /v1/payment/resend. Match it to the order by order_id/uuid and to
- * the blockchain by txid and network.
+ * Sent when a payment moves to paid, paid_over, wrong_amount, expired, cancelled or under_review. A
+ * chain reorganization that removes a counted deposit is sent as invoice.reversed (reversal = true,
+ * txid empty) with the status after it. The current status — any value from the vocabulary — can be
+ * requested again: POST /v1/payment/resend. Match it to the order by order_id/uuid and to the
+ * blockchain by txid and network.
  */
 export interface PaymentWebhook {
   /** Your data passed when creating the payment, as is. */
@@ -1941,6 +1942,12 @@ export interface PaymentWebhook {
   payer_currency: string;
   /** How much was actually received (confirmed), in payer_currency. */
   payment_amount: string;
+  /**
+   * true — a chain reorganization removed a previously counted deposit (event invoice.reversed);
+   * status and payment_amount are the state after it, txid is empty. Absent = false: cores before
+   * this version do not send the field; newer cores always send it.
+   */
+  reversal?: boolean;
   /**
    * The global event number: within one object a higher number is newer, a lower one is a late
    * delivery and must be discarded. Always 0 on a rehearsal (test: true).
@@ -3065,7 +3072,8 @@ export interface RefundBatchItem {
   order_id?: string;
   /**
    * An optional refund idempotency key: distinguishes two different refunds with the same (payment,
-   * address, amount); a retry with the same value is deduplicated. This is not order_id.
+   * address, amount); a retry with the same value returns the refund already made, also when amount
+   * is omitted. This is not order_id.
    */
   reference: string;
   /** Payment id. Either uuid or order_id is required. */
@@ -3101,8 +3109,11 @@ export interface RefundCalculation {
   /** What the buyer paid in total, including the network surcharge. */
   amount_paid: string;
   /**
-   * The Oblodai commission withheld from the refund: the payment's commission when
-   * commission_bearer is customer, 0 when it is merchant (you then pay it from your balance).
+   * What is withheld from the refund besides the surcharge: with commission_bearer customer, the
+   * Oblodai commission as it was taken from each deposit (rounded up on each), plus the cost of
+   * collecting a swept deposit when there was one — together, what the payment did not credit you;
+   * 0 with merchant (you then pay the commission from your balance). amount_paid − surcharge −
+   * commission = refundable.
    */
   commission: string;
   /**
@@ -3144,7 +3155,8 @@ export interface RefundCalculation {
   remaining: string;
   /**
    * The payer's network surcharge inside amount_paid: the cost of accepting the deposit, never
-   * refunded from your balance.
+   * refunded from your balance. Counted per deposit, as the deposits were credited (rounded up on
+   * each), so amount_paid − surcharge − commission = refundable.
    */
   surcharge: string;
   /** The payment id. */
@@ -3190,7 +3202,8 @@ export interface RefundRequest {
   order_id?: string;
   /**
    * An optional refund idempotency key: distinguishes two different refunds with the same (payment,
-   * address, amount); a retry with the same value is deduplicated. This is not order_id.
+   * address, amount); a retry with the same value returns the refund already made, also when amount
+   * is omitted. This is not order_id.
    */
   reference?: string;
   /** Payment id. Either uuid or order_id is required. */
